@@ -563,6 +563,7 @@
 
       <div class="master-controls">
         <button class="play-button" id="masterPlay">▶</button>
+        <button class="regen-button" id="regenAll">🔄 Regenerar Todos</button>
 
         <div class="control-group">
           <label class="control-label">Tempo (BPM)</label>
@@ -1080,6 +1081,12 @@
           document.getElementById('masterVolumeValue').textContent = e.target.value;
         });
       }
+
+      // Botón global para regenerar todos los loops
+      const regenAllButton = document.getElementById('regenAll');
+      if (regenAllButton) {
+        regenAllButton.addEventListener('click', regenerateAllLoops);
+      }
     }
 
     // Toggle play/stop
@@ -1186,6 +1193,30 @@
       setTimeout(() => {
         btn.style.transform = '';
       }, 300);
+    }
+
+    // Regenerar todos los loops
+    function regenerateAllLoops() {
+      // Regenera patrón y notas de todos los canales sin alterar el sintetizador ni su tipo
+      for (let i = 0; i < NUM_LOOPS; i++) {
+        if (audioInitialized) {
+          regenerateLoop(i);
+        } else {
+          const loop = loops[i];
+          if (!loop) continue;
+          const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]];
+          const baseNote = 36 + Math.floor(Math.random() * 24);
+          loop.scale = scale;
+          loop.baseNote = baseNote;
+          loop.pattern = generatePattern(loop.length);
+          loop.notes = generateNotes(scale, baseNote, loop.length);
+          const btn = document.querySelector(`.loop-button[data-id="${i}"]`);
+          if (btn) {
+            btn.style.transform = 'scale(1.2) rotate(180deg)';
+            setTimeout(() => { btn.style.transform = ''; }, 300);
+          }
+        }
+      }
     }
 
     // Animación de beat
@@ -1628,19 +1659,3 @@
 </body>
 
 </html>
-
-// Event listeners adicionales para aplicar cambios en tiempo real
-const synthTypeSelectRT = document.getElementById('synthTypeSelect');
-if (synthTypeSelectRT) synthTypeSelectRT.addEventListener('change', applyChangesInRealTime);
-
-const oscillatorTypeSelectRT = document.getElementById('oscillatorType');
-if (oscillatorTypeSelectRT) oscillatorTypeSelectRT.addEventListener('change', applyChangesInRealTime);
-
-const fmHarmonicityRT = document.getElementById('harmonicity');
-if (fmHarmonicityRT) fmHarmonicityRT.addEventListener('input', applyChangesInRealTime);
-
-const fmModIndexRT = document.getElementById('modulationIndex');
-if (fmModIndexRT) fmModIndexRT.addEventListener('input', applyChangesInRealTime);
-
-const amHarmonicityRT = document.getElementById('amHarmonicity');
-if (amHarmonicityRT) amHarmonicityRT.addEventListener('input', applyChangesInRealTime);
