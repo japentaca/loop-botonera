@@ -7,6 +7,17 @@
       </div>
       
       <div class="synth-controls">
+        <!-- Selector de Tipo de Sintetizador -->
+        <div class="control-section">
+          <h4>Tipo de Sintetizador</h4>
+          <select class="scale-select" :value="synthStore.tempSynthConfig.synthType" @change="synthStore.updateSynthType($event.target.value)">
+            <option value="PolySynth">PolySynth</option>
+            <option value="AMSynth">AMSynth</option>
+            <option value="FMSynth">FMSynth</option>
+          </select>
+          <p class="help-text">{{ synthStore.getSynthTypeDescription(synthStore.tempSynthConfig.synthType) }}</p>
+        </div>
+
         <!-- Tipo de Oscilador -->
         <div class="control-section">
           <h4>Oscilador</h4>
@@ -81,7 +92,7 @@
         </div>
 
         <!-- Modulación (para FM/AM) -->
-        <div class="control-section">
+        <div class="control-section" v-if="synthStore.tempSynthConfig.synthType === 'AMSynth' || synthStore.tempSynthConfig.synthType === 'FMSynth'">
           <h4>Modulación</h4>
           <div class="modulation-controls">
             <div class="mod-param">
@@ -97,7 +108,7 @@
               <span>{{ synthStore.tempSynthConfig.harmonicity }}</span>
             </div>
             
-            <div class="mod-param">
+            <div class="mod-param" v-if="synthStore.tempSynthConfig.synthType === 'FMSynth'">
               <label>Índice de Modulación</label>
               <input 
                 type="range" 

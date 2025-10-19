@@ -297,3 +297,82 @@ export function useChords() {
     generateChordProgression
   }
 }
+
+export function useMusic() {
+  const { scales, getRandomScale, getScale, generateScaleNotes } = useScales()
+  const { generateRhythmPattern, generateMelodyPattern, generateEuclideanPattern, generateSwingPattern } = usePatterns()
+  const { midiToNoteName, noteNameToMidi } = useNoteUtils()
+
+  // Funciones para escalas consonantes y disonantes
+  const getConsonantScale = (currentScale = null, recentScales = []) => {
+    const consonantScales = ['major', 'lydian', 'mixolydian', 'pentatonic', 'minor']
+    const available = consonantScales.filter(scale => 
+      scale !== currentScale && !recentScales.includes(scale)
+    )
+    return available.length > 0 ? 
+      available[Math.floor(Math.random() * available.length)] : 'major'
+  }
+
+  const getDissonantScale = (currentScale = null, recentScales = []) => {
+    const dissonantScales = ['diminished', 'wholeTone', 'chromatic', 'phrygian', 'locrian']
+    const available = dissonantScales.filter(scale => 
+      scale !== currentScale && !recentScales.includes(scale)
+    )
+    return available.length > 0 ? 
+      available[Math.floor(Math.random() * available.length)] : 'diminished'
+  }
+
+  const getRelatedScale = (targetScale, currentScale = null, recentScales = []) => {
+    // Relaciones armónicas comunes
+    const relations = {
+      'major': ['lydian', 'mixolydian', 'minor', 'pentatonic'],
+      'minor': ['dorian', 'phrygian', 'harmonicMinor', 'major'],
+      'dorian': ['minor', 'mixolydian', 'major', 'pentatonic'],
+      'phrygian': ['minor', 'harmonicMinor', 'diminished'],
+      'lydian': ['major', 'mixolydian', 'wholeTone'],
+      'mixolydian': ['major', 'dorian', 'lydian'],
+      'pentatonic': ['major', 'dorian', 'mixolydian']
+    }
+    
+    const related = relations[targetScale] || ['major', 'minor', 'dorian']
+    const available = related.filter(scale => 
+      scale !== currentScale && !recentScales.includes(scale)
+    )
+    return available.length > 0 ? 
+      available[Math.floor(Math.random() * available.length)] : getRandomScale().name
+  }
+
+  // Función para cuantizar notas a una escala
+  const quantizeToScale = (notes, targetScale, baseNote) => {
+    const targetIntervals = scales[targetScale] || scales.major
+    
+    return notes.map(note => {
+      // Calcular la distancia desde la nota base
+      const distance = note - baseNote
+      const octave = Math.floor(distance / 12)
+      const relativePitch = distance % 12
+      
+      // Encontrar el intervalo más cercano en la escala objetivo
+      let closestInterval = targetIntervals[0]
+      let minDistance = Math.abs(relativePitch - closestInterval)
+      
+      targetIntervals.forEach(interval => {
+        const distance = Math.abs(relativePitch - interval)
+        if (distance < minDistance) {
+          minDistance = distance
+          closestInterval = interval
+        }
+      })
+      
+      // Devolver la nota cuantizada
+      return baseNote + closestInterval + (octave * 12)
+    })
+  }
+
+  return {
+    getConsonantScale,
+    getDissonantScale,
+    getRelatedScale,
+    quantizeToScale
+  }
+}

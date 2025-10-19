@@ -190,20 +190,43 @@ export function useSynthesizer() {
     const synthConfig = { ...defaultConfig, ...config }
     
     switch (config.type) {
-      case 'AMSynth':
-        return new Tone.AMSynth({
+      case 'AMSynth': {
+        const amEnvelope = {
+          attack: synthConfig.envelope?.attack ?? 0.03,
+          decay: synthConfig.envelope?.decay ?? 0.3,
+          sustain: synthConfig.envelope?.sustain ?? 0.6,
+          release: synthConfig.envelope?.release ?? 0.6
+        }
+        return new Tone.PolySynth(Tone.AMSynth, {
           ...synthConfig,
-          harmonicity: config.harmonicity || 3,
-          modulation: { type: synthConfig.oscillator.type }
+          envelope: amEnvelope,
+          harmonicity: (typeof config.harmonicity === 'number') ? config.harmonicity : 2,
+          modulation: { type: synthConfig.oscillator.type },
+          modulationEnvelope: {
+            attack: amEnvelope.attack,
+            decay: amEnvelope.decay,
+            sustain: 0.85,
+            release: amEnvelope.release
+          },
+          volume: 6
         })
+      }
       
-      case 'FMSynth':
-        return new Tone.FMSynth({
+      case 'FMSynth': {
+        const fmEnvelope = {
+          attack: synthConfig.envelope?.attack ?? 0.03,
+          decay: synthConfig.envelope?.decay ?? 0.3,
+          sustain: synthConfig.envelope?.sustain ?? 0.6,
+          release: synthConfig.envelope?.release ?? 0.7
+        }
+        return new Tone.PolySynth(Tone.FMSynth, {
           ...synthConfig,
-          harmonicity: config.harmonicity || 3,
-          modulationIndex: config.modulationIndex || 10,
+          envelope: fmEnvelope,
+          harmonicity: (typeof config.harmonicity === 'number') ? config.harmonicity : 2,
+          modulationIndex: (typeof config.modulationIndex === 'number') ? config.modulationIndex : 10,
           modulation: { type: synthConfig.oscillator.type }
         })
+      }
       
       case 'PluckSynth':
         return new Tone.PluckSynth({

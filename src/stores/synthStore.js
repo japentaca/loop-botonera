@@ -11,6 +11,7 @@ export const useSynthStore = defineStore('synth', () => {
   
   // Configuración temporal del sintetizador
   const tempSynthConfig = ref({
+    synthType: 'PolySynth',
     oscillatorType: 'sine',
     envelope: {
       attack: 0.01,
@@ -18,7 +19,7 @@ export const useSynthStore = defineStore('synth', () => {
       sustain: 0.5,
       release: 0.8
     },
-    harmonicity: 3,
+    harmonicity: 2,
     modulationIndex: 10
   })
 
@@ -50,6 +51,7 @@ export const useSynthStore = defineStore('synth', () => {
       
       // Tomar snapshot de la configuración original del loop
       originalSynthConfig.value = {
+        synthType: loop.synthModel || 'PolySynth',
         oscillatorType: loop.synthType || 'sine',
         envelope: { ...loop.envelope },
         harmonicity: loop.harmonicity || 3,
@@ -81,6 +83,7 @@ export const useSynthStore = defineStore('synth', () => {
       const loopId = currentLoopId.value
       if (originalSynthConfig.value) {
         const cfg = {
+          type: originalSynthConfig.value.synthType || 'PolySynth',
           oscillator: { type: originalSynthConfig.value.oscillatorType },
           envelope: { ...originalSynthConfig.value.envelope },
           harmonicity: originalSynthConfig.value.harmonicity,
@@ -109,17 +112,35 @@ export const useSynthStore = defineStore('synth', () => {
         if (currentLoopId.value === null) return
         const audioStore = useAudioStore()
         const loopId = currentLoopId.value
+        const selectedType = tempSynthConfig.value.synthType || 'PolySynth'
+
         const cfg = {
+          type: selectedType,
           oscillator: { type: tempSynthConfig.value.oscillatorType },
           envelope: { ...tempSynthConfig.value.envelope },
-          harmonicity: tempSynthConfig.value.harmonicity,
-          modulationIndex: tempSynthConfig.value.modulationIndex
+          harmonicity: selectedType !== 'PolySynth' ? tempSynthConfig.value.harmonicity : undefined,
+          modulationIndex: selectedType === 'FMSynth' ? tempSynthConfig.value.modulationIndex : undefined
         }
         audioStore.updateLoopSynth(loopId, cfg)
       } catch (e) {
         console.error('Error aplicando cambios del synth (debounce):', e)
       }
     }, 300)
+  }
+
+  // Actualizar tipo de síntesis manualmente y ajustar valores
+  const updateSynthType = (type) => {
+    tempSynthConfig.value.synthType = type
+    if (type === 'AMSynth') {
+      if (typeof tempSynthConfig.value.harmonicity !== 'number') tempSynthConfig.value.harmonicity = 3
+      tempSynthConfig.value.modulationIndex = undefined
+    } else if (type === 'FMSynth') {
+      if (typeof tempSynthConfig.value.harmonicity !== 'number') tempSynthConfig.value.harmonicity = 3
+      if (typeof tempSynthConfig.value.modulationIndex !== 'number') tempSynthConfig.value.modulationIndex = 10
+    } else { // PolySynth u otros
+      tempSynthConfig.value.modulationIndex = undefined
+    }
+    scheduleApplySynthDebounced()
   }
 
   // Actualizar tipo de oscilador
@@ -163,6 +184,15 @@ export const useSynthStore = defineStore('synth', () => {
       // Crear sintetizador temporal para preview
       const tempSynth = createSynthFromConfig(tempSynthConfig.value)
 
+      // Asegurar que el preview suene, sin tocar la cadena del loop
+      try {
+        if (typeof tempSynth.toDestination === 'function') {
+          tempSynth.toDestination()
+        } else {
+          tempSynth.connect(Tone.getContext().destination)
+        }
+      } catch {}
+      
       const DEBUG_VERBOSE = false
       const ctxState = Tone.context?.state
       const transportState = Tone.Transport?.state
@@ -177,7 +207,8 @@ export const useSynthStore = defineStore('synth', () => {
       
       // Limpiar después de un tiempo
       setTimeout(() => {
-        tempSynth.dispose()
+        try { tempSynth.disconnect() } catch {}
+        try { tempSynth.dispose() } catch {}
       }, 2000)
     } catch (error) {
       console.error('Error en preview:', error)
@@ -189,34 +220,23 @@ export const useSynthStore = defineStore('synth', () => {
   const applySynthConfig = () => {
     if (currentLoopId.value === null) return
     
-    const audioStore = useAudioStore()
-    const loopsArr = Array.isArray(audioStore.loops) ? audioStore.loops : audioStore.loops?.value
-    const loop = loopsArr?.[currentLoopId.value]
-    
-    if (!loop) return
-
     try {
-      // Desconectar sintetizador anterior
-      if (loop.synth) {
-        try { loop.synth.disconnect() } catch {}
-        try { loop.synth.dispose() } catch {}
+      const audioStore = useAudioStore()
+      const loopId = currentLoopId.value
+      const selectedType = tempSynthConfig.value.synthType || 'PolySynth'
+
+      // Pasar SIEMPRE por audioStore.updateLoopSynth para unificar reemplazo
+      const cfg = {
+        type: selectedType,
+        oscillator: { type: tempSynthConfig.value.oscillatorType },
+        envelope: { ...tempSynthConfig.value.envelope },
+        harmonicity: selectedType !== 'PolySynth' ? tempSynthConfig.value.harmonicity : undefined,
+        modulationIndex: selectedType === 'FMSynth' ? tempSynthConfig.value.modulationIndex : undefined
       }
 
-      // Crear nuevo sintetizador
-      const newSynth = createSynthFromConfig(tempSynthConfig.value)
+      audioStore.updateLoopSynth(loopId, cfg)
       
-      // Reconectar a la cadena de audio
-      if (loop.panner) newSynth.connect(loop.panner)
-      if (loop.delaySend) newSynth.connect(loop.delaySend)
-      if (loop.reverbSend) newSynth.connect(loop.reverbSend)
-      
-      // Actualizar loop
-      loop.synth = newSynth
-      loop.synthType = tempSynthConfig.value.oscillatorType
-      loop.envelope = { ...tempSynthConfig.value.envelope }
-      loop.harmonicity = tempSynthConfig.value.harmonicity
-      loop.modulationIndex = tempSynthConfig.value.modulationIndex
-      
+      // audioStore.updateLoopSynth ya sincroniza los campos del loop
       closeSynthEditor()
     } catch (error) {
       console.error('Error al aplicar configuración:', error)
@@ -233,19 +253,27 @@ export const useSynthStore = defineStore('synth', () => {
     let synth
 
     // Crear el tipo de sintetizador apropiado
-    switch (config.synthType || 'PolySynth') {
+    const resolvedType = config.synthType || 'PolySynth'
+    switch (resolvedType) {
       case 'AMSynth':
-        synth = new Tone.AMSynth({
+        synth = new Tone.PolySynth(Tone.AMSynth, {
           ...synthConfig,
           harmonicity: config.harmonicity,
           modulation: {
             type: config.oscillatorType
-          }
+          },
+          modulationEnvelope: {
+            attack: synthConfig.envelope?.attack ?? 0.03,
+            decay: synthConfig.envelope?.decay ?? 0.3,
+            sustain: 0.85,
+            release: synthConfig.envelope?.release ?? 0.6
+          },
+          volume: 6
         })
         break
       
       case 'FMSynth':
-        synth = new Tone.FMSynth({
+        synth = new Tone.PolySynth(Tone.FMSynth, {
           ...synthConfig,
           harmonicity: config.harmonicity,
           modulationIndex: config.modulationIndex,
@@ -282,6 +310,18 @@ export const useSynthStore = defineStore('synth', () => {
 
 
 
+  // Helper: descripción del tipo de sintetizador
+  const getSynthTypeDescription = (type) => {
+    switch (type) {
+      case 'AMSynth':
+        return 'Síntesis AM - modulación de amplitud con harmonicidad'
+      case 'FMSynth':
+        return 'Síntesis FM - modulación de frecuencia con harmonicidad e índice'
+      default:
+        return 'Sintetizador polifónico básico con envolvente ADSR'
+    }
+  }
+
   return {
     // Estado
     isModalOpen,
@@ -293,6 +333,7 @@ export const useSynthStore = defineStore('synth', () => {
     // Funciones
     openSynthEditor,
     closeSynthEditor,
+    updateSynthType,
     updateOscillatorType,
     updateEnvelopeParam,
     updateHarmonicity,
@@ -300,6 +341,7 @@ export const useSynthStore = defineStore('synth', () => {
     previewSynth,
     applySynthConfig,
     cancelSynthChanges,
-    createSynthFromConfig
+    createSynthFromConfig,
+    getSynthTypeDescription
   }
 })
