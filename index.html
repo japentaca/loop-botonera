@@ -566,7 +566,7 @@
 
         <div class="control-group">
           <label class="control-label">Tempo (BPM)</label>
-          <input type="range" id="tempoSlider" min="60" max="200" value="120" step="1">
+          <input type="range" id="tempoSlider" min="10" max="200" value="120" step="1">
           <div class="value-display"><span id="tempoValue">120</span> BPM</div>
         </div>
 
@@ -989,20 +989,46 @@
       const synthTypeSelect = document.getElementById('synthTypeSelect');
       if (synthTypeSelect) synthTypeSelect.addEventListener('change', () => { updateSynthControls(); applyChangesInRealTime(); });
       
+      // Antirrebote para cambios de audio en ADSR (1s)
+      const debounce = (fn, delay) => {
+        let timer;
+        return (...args) => {
+          clearTimeout(timer);
+          timer = setTimeout(() => fn(...args), delay);
+        };
+      };
+      const debouncedApplyChanges = debounce(applyChangesInRealTime, 1000);
+
       const envelopeAttack = document.getElementById('envelopeAttack');
-      if (envelopeAttack) envelopeAttack.addEventListener('input', () => { updateEnvelopeDisplay(); applyChangesInRealTime(); });
+      if (envelopeAttack) envelopeAttack.addEventListener('input', () => { updateEnvelopeDisplay(); debouncedApplyChanges(); });
       
       const envelopeDecay = document.getElementById('envelopeDecay');
-      if (envelopeDecay) envelopeDecay.addEventListener('input', () => { updateEnvelopeDisplay(); applyChangesInRealTime(); });
+      if (envelopeDecay) envelopeDecay.addEventListener('input', () => { updateEnvelopeDisplay(); debouncedApplyChanges(); });
       
       const envelopeSustain = document.getElementById('envelopeSustain');
-      if (envelopeSustain) envelopeSustain.addEventListener('input', () => { updateEnvelopeDisplay(); applyChangesInRealTime(); });
+      if (envelopeSustain) envelopeSustain.addEventListener('input', () => { updateEnvelopeDisplay(); debouncedApplyChanges(); });
       
       const envelopeRelease = document.getElementById('envelopeRelease');
-      if (envelopeRelease) envelopeRelease.addEventListener('input', () => { updateEnvelopeDisplay(); applyChangesInRealTime(); });
+      if (envelopeRelease) envelopeRelease.addEventListener('input', () => { updateEnvelopeDisplay(); debouncedApplyChanges(); });
       
       const oscillatorTypeSelect = document.getElementById('oscillatorType');
       if (oscillatorTypeSelect) oscillatorTypeSelect.addEventListener('change', applyChangesInRealTime);
+
+      // Controles FM/AM con antirrebote (1s)
+      const fmHarmonicitySlider = document.getElementById('harmonicity');
+      if (fmHarmonicitySlider) fmHarmonicitySlider.addEventListener('input', () => {
+        const hv = document.getElementById('harmonicityValue');
+        if (hv) hv.textContent = fmHarmonicitySlider.value;
+        debouncedApplyChanges();
+      });
+      const fmModIndexSlider = document.getElementById('modulationIndex');
+      if (fmModIndexSlider) fmModIndexSlider.addEventListener('input', debouncedApplyChanges);
+      const amHarmonicitySlider = document.getElementById('amHarmonicity');
+      if (amHarmonicitySlider) amHarmonicitySlider.addEventListener('input', () => {
+        const ahv = document.getElementById('amHarmValue');
+        if (ahv) ahv.textContent = amHarmonicitySlider.value;
+        debouncedApplyChanges();
+      });
       
       const previewButton = document.getElementById('previewButton');
       if (previewButton) previewButton.addEventListener('click', previewSynth);
