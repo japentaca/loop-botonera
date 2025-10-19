@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loop Synth Machine</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #e0e0e0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 25px;
+      margin-bottom: 30px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      background: linear-gradient(45deg, #00d9ff, #7b2ff7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-align: center;
+    }
+
+    .master-controls {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 180px;
+    }
+
+    .control-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #00d9ff;
+    }
+
+    .play-button {
+      width: 80px;
+      height: 80px;
+      border: none;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00d9ff, #7b2ff7);
+      color: white;
+      font-size: 32px;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 4px 20px rgba(0, 217, 255, 0.4);
+    }
+
+    .play-button:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 30px rgba(0, 217, 255, 0.6);
+    }
+
+    .play-button.playing {
+      background: linear-gradient(135deg, #ff0080, #ff8c00);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.1);
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00d9ff, #7b2ff7);
+      cursor: pointer;
+      box-shadow: 0 2px 10px rgba(0, 217, 255, 0.5);
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00d9ff, #7b2ff7);
+      cursor: pointer;
+      border: none;
+    }
+
+    .value-display {
+      font-size: 14px;
+      font-weight: bold;
+      color: #00d9ff;
+    }
+
+    .loop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .loop-card {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      padding: 20px;
+      transition: all 0.3s;
+    }
+
+    .loop-card:hover {
+      border-color: rgba(0, 217, 255, 0.3);
+      box-shadow: 0 8px 25px rgba(0, 217, 255, 0.2);
+    }
+
+    .loop-card.active {
+      border-color: rgba(0, 217, 255, 0.6);
+      box-shadow: 0 0 30px rgba(0, 217, 255, 0.3);
+    }
+
+    .loop-main {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .loop-button {
+      width: 80px;
+      height: 80px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .loop-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0, 217, 255, 0.3), transparent);
+      transition: left 0.5s;
+    }
+
+    .loop-button:hover {
+      border-color: rgba(0, 217, 255, 0.5);
+      transform: scale(1.05);
+    }
+
+    .loop-button.active {
+      background: linear-gradient(135deg, #00d9ff, #7b2ff7);
+      border-color: #00d9ff;
+      box-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+    }
+
+    .loop-button.active::before {
+      left: 100%;
+    }
+
+    .beat-indicator {
+      position: absolute;
+      bottom: 5px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .beat-progress {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00d9ff, #7b2ff7);
+      transition: width 0.05s linear;
+    }
+
+    .loop-controls {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .mini-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mini-label {
+      font-size: 10px;
+      width: 60px;
+      color: #888;
+    }
+
+    .mini-slider {
+      flex: 1;
+      height: 4px;
+    }
+
+    .mini-value {
+      font-size: 11px;
+      width: 40px;
+      text-align: right;
+      color: #00d9ff;
+    }
+
+    .regen-button {
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .regen-button:hover {
+      background: rgba(0, 217, 255, 0.2);
+      border-color: #00d9ff;
+    }
+
+    .loop-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .edit-button {
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+      flex: 1;
+    }
+
+    .edit-button:hover {
+      background: rgba(123, 47, 247, 0.2);
+      border-color: #7b2ff7;
+    }
+
+    .synth-type-display {
+      font-size: 10px;
+      color: #00d9ff;
+      text-align: center;
+      margin-top: 5px;
+      opacity: 0.7;
+    }
+
+    /* Modal para editor de sintetizador */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(5px);
+    }
+
+    .modal-content {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      margin: 5% auto;
+      padding: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 15px;
+      width: 90%;
+      max-width: 800px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .modal-title {
+      font-size: 24px;
+      background: linear-gradient(45deg, #00d9ff, #7b2ff7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .close-button {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 28px;
+      cursor: pointer;
+      transition: color 0.3s;
+    }
+
+    .close-button:hover {
+      color: #00d9ff;
+    }
+
+    .synth-editor {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+    }
+
+    .editor-section {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 20px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .section-title {
+      font-size: 16px;
+      color: #00d9ff;
+      margin-bottom: 15px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+
+    .control-label {
+      font-size: 12px;
+      color: #ccc;
+      min-width: 80px;
+    }
+
+    .control-select {
+      flex: 1;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 5px;
+      color: white;
+      font-size: 12px;
+    }
+
+    .control-slider {
+      flex: 1;
+      height: 6px;
+    }
+
+    .control-value {
+      font-size: 12px;
+      color: #00d9ff;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 15px;
+      justify-content: flex-end;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .modal-button {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .modal-button-primary {
+      background: linear-gradient(135deg, #00d9ff, #7b2ff7);
+      color: white;
+    }
+
+    .modal-button-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(0, 217, 255, 0.4);
+    }
+
+    .modal-button-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .modal-button-secondary:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .preview-button {
+      background: rgba(123, 47, 247, 0.2);
+      color: white;
+      border: 1px solid #7b2ff7;
+    }
+
+    .preview-button:hover {
+      background: rgba(123, 47, 247, 0.3);
+    }
+
+    .pulse-viz {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transition: all 0.1s;
+    }
+
+    .pulse-dot.active {
+      background: #00d9ff;
+      box-shadow: 0 0 10px #00d9ff;
+      transform: scale(1.3);
+    }
+
+    /* Estilos adicionales para select y option (tema oscuro) */
+    /* Forzamos el estilo del elemento select con clase control-select */
+    select.control-select {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 5px;
+      padding: 8px;
+      font-size: 12px;
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+    }
+
+    select.control-select:focus {
+      outline: none;
+      border-color: #00d9ff;
+      box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.2);
+    }
+
+    /* Estilo de las opciones del desplegable */
+    select.control-select option {
+      background: #1a1a2e;
+      color: white;
+      border: none;
+    }
+
+    /* Nota: algunos navegadores limitan el estilado de options. */
+    /* Este bloque cubre Chrome/Edge moderno en Windows. */
+
+    /* (Opcional) imagen para la flecha del desplegable usando background-image */
+    select.control-select {
+      background-image: linear-gradient(45deg, transparent 50%, #00d9ff 50%),
+                        linear-gradient(135deg, #00d9ff 50%, transparent 50%);
+      background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+      padding-right: 28px; /* espacio para la flecha */
+    }
+
+    /* Ocultar flecha en IE/Edge heredado (no necesario en modernos) */
+    select.control-select::-ms-expand {
+      display: none;
+    }
+
+    .preview-button {
+      background: rgba(123, 47, 247, 0.2);
+      color: white;
+      border: 1px solid #7b2ff7;
+    }
+
+    .preview-button:hover {
+      background: rgba(123, 47, 247, 0.3);
+    }
+
+    .pulse-viz {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transition: all 0.1s;
+    }
+
+    .pulse-dot.active {
+      background: #00d9ff;
+      box-shadow: 0 0 10px #00d9ff;
+      transform: scale(1.3);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">🎹 LOOP SYNTH MACHINE 🎹</div>
+
+      <div class="master-controls">
+        <button class="play-button" id="masterPlay">▶</button>
+        <button class="regen-button" id="regenAll">🔄 Regenerar Todos</button>
+
+        <div class="control-group">
+          <label class="control-label">Tempo (BPM)</label>
+          <input type="range" id="tempoSlider" min="10" max="200" value="120" step="1">
+          <div class="value-display"><span id="tempoValue">120</span> BPM</div>
+        </div>
+
+        <div class="control-group">
+          <label class="control-label">Transposición</label>
+          <input type="range" id="transposeSlider" min="-12" max="12" value="0" step="1">
+          <div class="value-display"><span id="transposeValue">0</span> ST</div>
+        </div>
+
+        <div class="control-group">
+          <label class="control-label">Master Volume</label>
+          <input type="range" id="masterVolume" min="0" max="100" value="70" step="1">
+          <div class="value-display"><span id="masterVolumeValue">70</span>%</div>
+        </div>
+      </div>
+
+      <div class="pulse-viz" id="pulseViz">
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+        <div class="pulse-dot"></div>
+      </div>
+    </div>
+
+    <div class="loop-grid" id="loopGrid"></div>
+  </div>
+
+  <!-- Modal para editor de sintetizador -->
+  <div id="synthEditorModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">🎛️ Editor de Sintetizador</h2>
+        <button class="close-button" onclick="closeSynthEditor()">&times;</button>
+      </div>
+      
+      <div class="synth-editor">
+        <div class="editor-section">
+          <h3 class="section-title">Tipo de Sintetizador</h3>
+          <div class="control-row">
+            <label class="control-label">Sintetizador:</label>
+            <select id="synthTypeSelect" class="control-select" onchange="updateSynthControls()">
+              <option value="Synth">Synth Básico</option>
+              <option value="AMSynth">AM Synth</option>
+              <option value="FMSynth">FM Synth</option>
+              <option value="PluckSynth">Pluck Synth</option>
+              <option value="MembraneSynth">Membrane Synth</option>
+            </select>
+          </div>
+          
+          <div id="basicOscillatorControls">
+            <h3 class="section-title">Oscilador</h3>
+            <div class="control-row">
+              <label class="control-label">Forma de onda:</label>
+              <select id="oscillatorType" class="control-select">
+                <option value="sine">Sine (Senoidal)</option>
+                <option value="triangle">Triangle (Triangular)</option>
+                <option value="square">Square (Cuadrada)</option>
+                <option value="sawtooth">Sawtooth (Sierra)</option>
+                <option value="fmsquare">FM Square</option>
+                <option value="pwm">PWM (Pulse Width Modulation)</option>
+                <option value="pulse">Pulse (Pulso)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="editor-section">
+          <h3 class="section-title">Envolvente ADSR</h3>
+          <div class="control-row">
+            <label class="control-label">Attack (A):</label>
+            <input type="range" id="envelopeAttack" class="control-slider" min="0.001" max="2" step="0.01" value="0.005">
+            <span class="control-value" id="attackValue">0.005s</span>
+          </div>
+          <div class="control-row">
+            <label class="control-label">Decay (D):</label>
+            <input type="range" id="envelopeDecay" class="control-slider" min="0.001" max="2" step="0.01" value="0.1">
+            <span class="control-value" id="decayValue">0.1s</span>
+          </div>
+          <div class="control-row">
+            <label class="control-label">Sustain (S):</label>
+            <input type="range" id="envelopeSustain" class="control-slider" min="0" max="1" step="0.01" value="0.3">
+            <span class="control-value" id="sustainValue">0.3</span>
+          </div>
+          <div class="control-row">
+            <label class="control-label">Release (R):</label>
+            <input type="range" id="envelopeRelease" class="control-slider" min="0.001" max="3" step="0.01" value="0.8">
+            <span class="control-value" id="releaseValue">0.8s</span>
+          </div>
+        </div>
+
+        <div id="fmControls" class="editor-section" style="display: none;">
+          <h3 class="section-title">FM Controls</h3>
+          <div class="control-row">
+            <label class="control-label">Modulation Index:</label>
+            <input type="range" id="modulationIndex" class="control-slider" min="0" max="100" step="1" value="10">
+            <span class="control-value" id="modIndexValue">10</span>
+          </div>
+          <div class="control-row">
+            <label class="control-label">Harmonicity:</label>
+            <input type="range" id="harmonicity" class="control-slider" min="0.1" max="4" step="0.1" value="1">
+            <span class="control-value" id="harmonicityValue">1</span>
+          </div>
+        </div>
+
+        <div id="amControls" class="editor-section" style="display: none;">
+          <h3 class="section-title">AM Controls</h3>
+          <div class="control-row">
+            <label class="control-label">Harmonicity:</label>
+            <input type="range" id="amHarmonicity" class="control-slider" min="0.1" max="4" step="0.1" value="1">
+            <span class="control-value" id="amHarmValue">1</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="modal-button preview-button" onclick="previewSynth()">🔊 Preview</button>
+        <button class="modal-button modal-button-secondary" onclick="cancelSynthEditor()">Cancelar</button>
+        <button class="modal-button modal-button-primary" onclick="applySynthChanges()">Aplicar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <script>
+    // Variables globales
+    let audioInitialized = false;
+    let isPlaying = false;
+    let currentPulse = 0;
+    let tempo = 120;
+    let transpose = 0;
+    let masterVol = 0.7;
+
+    const loops = [];
+    const NUM_LOOPS = 8;
+    let currentEditingLoop = null;
+    // Cambiado: variable para el sintetizador de preview, evitando conflicto con la función
+    var previewSynthInstance = null;
+    // Estado original para restaurar al cancelar
+    var originalSynthState = {};
+
+    let delay, reverb, masterGain;
+
+    const scales = {
+      minor: [0, 2, 3, 5, 7, 8, 10],
+      major: [0, 2, 4, 5, 7, 9, 11],
+      pentatonic: [0, 2, 4, 7, 9],
+      blues: [0, 3, 5, 6, 7, 10],
+      dorian: [0, 2, 3, 5, 7, 9, 10],
+      phrygian: [0, 1, 3, 5, 7, 8, 10]
+    };
+
+    const scaleNames = Object.keys(scales);
+    const synthTypes = ['sine', 'triangle', 'square', 'sawtooth'];
+
+    // Sincronizar delay con tempo
+    function updateDelayTime() {
+      if (!audioInitialized || !delay) return;
+      // Usamos figura musical '8n' convertida a segundos para el tempo actual
+      const seconds = Tone.Time('8n').toSeconds();
+      if (delay.delayTime && delay.delayTime.value !== seconds) {
+        delay.delayTime.value = seconds;
+      }
+    }
+
+    // Inicializar audio
+    async function initAudio() {
+      if (audioInitialized) return;
+
+      try {
+        await Tone.start();
+        console.log('Audio iniciado');
+
+        // Crear cadena de efectos
+        masterGain = new Tone.Gain(masterVol).toDestination();
+        delay = new Tone.PingPongDelay("8n", 0.4).connect(masterGain);
+        reverb = new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain);
+
+        await reverb.generate();
+
+        // Configurar transporte
+        Tone.Transport.bpm.value = tempo;
+        updateDelayTime();
+
+        // Crear loops
+        for (let i = 0; i < NUM_LOOPS; i++) {
+          loops.push(createLoop(i));
+        }
+
+        // Programar reloj
+        Tone.Transport.scheduleRepeat((time) => {
+          currentPulse = (currentPulse + 1) % 16;
+
+          Tone.Draw.schedule(() => {
+            updatePulseViz();
+          }, time);
+
+          // Ejecutar loops activos
+          loops.forEach(loop => {
+            if (loop.active && loop.pattern[currentPulse % loop.length]) {
+              playNote(loop, time, currentPulse % loop.length);
+            }
+          });
+        }, "16n");
+
+        audioInitialized = true;
+      } catch (error) {
+        console.error('Error al inicializar audio:', error);
+      }
+    }
+
+    // Crear loop
+    function createLoop(id) {
+      const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]];
+      const baseNote = 36 + Math.floor(Math.random() * 24);
+      // Oscilador por defecto: sinoidal pura
+      const synthType = 'sine';
+      
+      // Configuración por defecto
+      const envelope = {
+        attack: 0.005,
+        decay: 0.1,
+        sustain: 0.3,
+        release: 0.8
+      };
+
+      // Crear sintetizador con configuración inicial (clase Synth con oscilador seno)
+      const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'sine' },
+        envelope: envelope
+      });
+
+      // Crear panner por canal e insertar entre synth y master
+      const initialPan = (id / (NUM_LOOPS - 1)) * 2 - 1; // -1..1
+      const panner = new Tone.Panner(initialPan).connect(masterGain);
+      synth.connect(panner);
+
+      const delaySend = new Tone.Gain(0).connect(delay);
+      const reverbSend = new Tone.Gain(0).connect(reverb);
+      synth.connect(delaySend);
+      synth.connect(reverbSend);
+
+      const length = 8;
+
+      return {
+        id: id,
+        active: false,
+        synth: synth,
+        panner: panner,
+        pan: initialPan,
+        delaySend: delaySend,
+        reverbSend: reverbSend,
+        length: length,
+        pattern: generatePattern(length),
+        notes: generateNotes(scale, baseNote, length),
+        scale: scale,
+        baseNote: baseNote,
+        synthType: synthType,
+        oscillatorType: synthType,
+        envelope: envelope,
+        volume: 0.5,
+        delayAmount: 0,
+        reverbAmount: 0
+      };
+    }
+
+    // Generar patrón
+    function generatePattern(length) {
+      const pattern = [];
+      const density = 0.3 + Math.random() * 0.4;
+      for (let i = 0; i < length; i++) {
+        pattern.push(Math.random() < density);
+      }
+      if (!pattern.some(x => x)) pattern[0] = true;
+      return pattern;
+    }
+
+    // Generar notas
+    function generateNotes(scale, baseNote, length) {
+      const notes = [];
+      for (let i = 0; i < length; i++) {
+        const octave = Math.floor(Math.random() * 2);
+        const noteIndex = Math.floor(Math.random() * scale.length);
+        notes.push(baseNote + scale[noteIndex] + (octave * 12));
+      }
+      return notes;
+    }
+
+    // Tocar nota
+    function playNote(loop, time, noteIndex) {
+      try {
+        const midiNote = loop.notes[noteIndex] + transpose;
+        const freq = Tone.Frequency(midiNote, "midi").toFrequency();
+
+        loop.synth.volume.value = Tone.gainToDb(loop.volume);
+        loop.synth.triggerAttackRelease(freq, "16n", time);
+
+        Tone.Draw.schedule(() => {
+          animateBeat(loop.id);
+        }, time);
+      } catch (error) {
+        console.error('Error al tocar nota:', error);
+      }
+    }
+
+    // Crear interfaz
+    function createUI() {
+      const grid = document.getElementById('loopGrid');
+
+      for (let i = 0; i < NUM_LOOPS; i++) {
+        const card = document.createElement('div');
+        card.className = 'loop-card';
+        card.id = `loop-${i}`;
+
+        card.innerHTML = `
+                    <div class="loop-main">
+                        <button class="loop-button" data-id="${i}">
+                            L${i + 1}
+                            <div class="beat-indicator">
+                                <div class="beat-progress" id="beat-${i}"></div>
+                            </div>
+                        </button>
+                        <div class="synth-type-display" id="synth-type-${i}">Synth</div>
+                        <div class="loop-controls">
+                            <div class="mini-control">
+                                <span class="mini-label">Tamaño</span>
+                                <input type="range" class="mini-slider mini-length" data-id="${i}" data-param="length" min="0" max="7" step="1" value="1">
+                                <span class="mini-value" id="length-${i}">8</span>
+                            </div>
+                            <div class="mini-control">
+                                <span class="mini-label">Delay</span>
+                                <input type="range" class="mini-slider" data-id="${i}" data-param="delay" min="0" max="100" value="0">
+                                <span class="mini-value" id="delay-${i}">0%</span>
+                            </div>
+                            <div class="mini-control">
+                                <span class="mini-label">Reverb</span>
+                                <input type="range" class="mini-slider" data-id="${i}" data-param="reverb" min="0" max="100" value="0">
+                                <span class="mini-value" id="reverb-${i}">0%</span>
+                            </div>
+                            <div class="mini-control">
+                                <span class="mini-label">Volumen</span>
+                                <input type="range" class="mini-slider" data-id="${i}" data-param="volume" min="0" max="100" value="50">
+                                <span class="mini-value" id="volume-${i}">50%</span>
+                            </div>
+                            <div class="mini-control">
+                                <span class="mini-label">Pan</span>
+                                <input type="range" class="mini-slider" data-id="${i}" data-param="pan" min="-100" max="100" step="1" value="${Math.round(((i/(NUM_LOOPS-1))*2 - 1)*100)}">
+                                <span class="mini-value" id="pan-${i}">${Math.round(((i/(NUM_LOOPS-1))*2 - 1)*100)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="loop-actions">
+                        <button class="edit-button" data-id="${i}">🎛️ Editar Synth</button>
+                        <button class="regen-button" data-id="${i}">🔄 Regenerar Loop</button>
+                    </div>
+                `;
+
+        grid.appendChild(card);
+      }
+
+      attachEventListeners();
+    }
+
+    // Event listeners
+    function attachEventListeners() {
+      document.getElementById('masterPlay').addEventListener('click', togglePlay);
+
+      document.querySelectorAll('.loop-button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = parseInt(e.currentTarget.dataset.id);
+          toggleLoop(id);
+        });
+      });
+
+      document.querySelectorAll('.mini-slider').forEach(slider => {
+        slider.addEventListener('input', (e) => {
+          const id = parseInt(e.target.dataset.id);
+          const param = e.target.dataset.param;
+          const value = parseInt(e.target.value);
+          updateLoopParam(id, param, value);
+        });
+      });
+
+      // Listeners para selects de tamaño
+      document.querySelectorAll('.mini-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+          const id = parseInt(e.target.dataset.id);
+          const param = e.target.dataset.param;
+          const value = parseInt(e.target.value);
+          updateLoopParam(id, param, value);
+        });
+      });
+
+      document.querySelectorAll('.regen-button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = parseInt(e.currentTarget.dataset.id);
+          regenerateLoop(id);
+        });
+      });
+
+      // Event listeners para el editor de sintetizador
+      document.querySelectorAll('.edit-button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = parseInt(e.currentTarget.dataset.id);
+          openSynthEditor(id);
+        });
+      });
+
+      // Controles del modal (verificar que existan los elementos)
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      if (synthTypeSelect) synthTypeSelect.addEventListener('change', () => { updateSynthControls(); applyChangesInRealTime(); });
+      
+      // Antirrebote para cambios de audio en ADSR (1s)
+      const debounce = (fn, delay) => {
+        let timer;
+        return (...args) => {
+          clearTimeout(timer);
+          timer = setTimeout(() => fn(...args), delay);
+        };
+      };
+      const debouncedApplyChanges = debounce(applyChangesInRealTime, 1000);
+
+      const envelopeAttack = document.getElementById('envelopeAttack');
+      if (envelopeAttack) envelopeAttack.addEventListener('input', () => { updateEnvelopeDisplay(); debouncedApplyChanges(); });
+      
+      const envelopeDecay = document.getElementById('envelopeDecay');
+      if (envelopeDecay) envelopeDecay.addEventListener('input', () => { updateEnvelopeDisplay(); debouncedApplyChanges(); });
+      
+      const envelopeSustain = document.getElementById('envelopeSustain');
+      if (envelopeSustain) envelopeSustain.addEventListener('input', () => { updateEnvelopeDisplay(); debouncedApplyChanges(); });
+      
+      const envelopeRelease = document.getElementById('envelopeRelease');
+      if (envelopeRelease) envelopeRelease.addEventListener('input', () => { updateEnvelopeDisplay(); debouncedApplyChanges(); });
+      
+      const oscillatorTypeSelect = document.getElementById('oscillatorType');
+      if (oscillatorTypeSelect) oscillatorTypeSelect.addEventListener('change', applyChangesInRealTime);
+
+      // Controles FM/AM con antirrebote (1s)
+      const fmHarmonicitySlider = document.getElementById('harmonicity');
+      if (fmHarmonicitySlider) fmHarmonicitySlider.addEventListener('input', () => {
+        const hv = document.getElementById('harmonicityValue');
+        if (hv) hv.textContent = fmHarmonicitySlider.value;
+        debouncedApplyChanges();
+      });
+      const fmModIndexSlider = document.getElementById('modulationIndex');
+      if (fmModIndexSlider) fmModIndexSlider.addEventListener('input', debouncedApplyChanges);
+      const amHarmonicitySlider = document.getElementById('amHarmonicity');
+      if (amHarmonicitySlider) amHarmonicitySlider.addEventListener('input', () => {
+        const ahv = document.getElementById('amHarmValue');
+        if (ahv) ahv.textContent = amHarmonicitySlider.value;
+        debouncedApplyChanges();
+      });
+      
+      const previewButton = document.getElementById('previewButton');
+      if (previewButton) previewButton.addEventListener('click', previewSynth);
+      
+      const applyButton = document.getElementById('applyButton');
+      if (applyButton) applyButton.addEventListener('click', () => { applySynthChanges(); closeSynthEditor(); });
+      
+      const cancelButton = document.getElementById('cancelButton');
+      if (cancelButton) cancelButton.addEventListener('click', cancelSynthEditor);
+      
+      // Cerrar modal al hacer clic fuera
+      const synthEditorModal = document.getElementById('synthEditorModal');
+      if (synthEditorModal) {
+        synthEditorModal.addEventListener('click', (e) => {
+          if (e.target.id === 'synthEditorModal') {
+            closeSynthEditor();
+          }
+        });
+      }
+
+      // Controles principales
+      const tempoSlider = document.getElementById('tempoSlider');
+      if (tempoSlider) {
+        tempoSlider.addEventListener('input', (e) => {
+          tempo = parseInt(e.target.value);
+          if (audioInitialized) {
+            Tone.Transport.bpm.value = tempo;
+            updateDelayTime();
+          }
+          document.getElementById('tempoValue').textContent = tempo;
+        });
+      }
+
+      const transposeSlider = document.getElementById('transposeSlider');
+      if (transposeSlider) {
+        transposeSlider.addEventListener('input', (e) => {
+          transpose = parseInt(e.target.value);
+          document.getElementById('transposeValue').textContent = transpose;
+        });
+      }
+
+      const masterVolume = document.getElementById('masterVolume');
+      if (masterVolume) {
+        masterVolume.addEventListener('input', (e) => {
+          masterVol = parseInt(e.target.value) / 100;
+          if (audioInitialized && masterGain) {
+            masterGain.gain.value = masterVol;
+          }
+          document.getElementById('masterVolumeValue').textContent = e.target.value;
+        });
+      }
+
+      // Botón global para regenerar todos los loops
+      const regenAllButton = document.getElementById('regenAll');
+      if (regenAllButton) {
+        regenAllButton.addEventListener('click', regenerateAllLoops);
+      }
+    }
+
+    // Toggle play/stop
+    async function togglePlay() {
+      const btn = document.getElementById('masterPlay');
+
+      if (!isPlaying) {
+        await initAudio();
+        Tone.Transport.start();
+        isPlaying = true;
+        btn.textContent = '⏸';
+        btn.classList.add('playing');
+      } else {
+        Tone.Transport.pause();
+        isPlaying = false;
+        btn.textContent = '▶';
+        btn.classList.remove('playing');
+      }
+    }
+
+    // Toggle loop
+    function toggleLoop(id) {
+      if (!audioInitialized) return;
+
+      const loop = loops[id];
+      loop.active = !loop.active;
+
+      const btn = document.querySelector(`.loop-button[data-id="${id}"]`);
+      const card = document.getElementById(`loop-${id}`);
+
+      if (loop.active) {
+        btn.classList.add('active');
+        card.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+        card.classList.remove('active');
+      }
+    }
+
+    // Actualizar parámetro
+    function updateLoopParam(id, param, value) {
+      if (!audioInitialized) return;
+
+      const loop = loops[id];
+
+      switch (param) {
+        case 'length':
+          const allowedSizes = [4, 8, 12, 16, 32, 48, 64, 128];
+          const index = Math.max(0, Math.min(allowedSizes.length - 1, value));
+          const lengthValue = allowedSizes[index];
+          loop.length = lengthValue;
+          loop.pattern = generatePattern(lengthValue);
+          loop.notes = generateNotes(loop.scale, loop.baseNote, lengthValue);
+          document.getElementById(`length-${id}`).textContent = lengthValue;
+          break;
+        case 'delay':
+          loop.delayAmount = value / 100;
+          loop.delaySend.gain.value = loop.delayAmount;
+          document.getElementById(`delay-${id}`).textContent = value + '%';
+          break;
+        case 'reverb':
+          loop.reverbAmount = value / 100;
+          loop.reverbSend.gain.value = loop.reverbAmount;
+          document.getElementById(`reverb-${id}`).textContent = value + '%';
+          break;
+        case 'volume':
+          loop.volume = value / 100;
+          document.getElementById(`volume-${id}`).textContent = value + '%';
+          break;
+        case 'pan':
+          const clamped = Math.max(-100, Math.min(100, value));
+          const pan = clamped / 100;
+          if (loop.panner && loop.panner.pan) {
+            loop.panner.pan.value = pan;
+          }
+          loop.pan = pan;
+          const panDisplay = document.getElementById(`pan-${id}`);
+          if (panDisplay) panDisplay.textContent = clamped + '%';
+          break;
+      }
+    }
+
+    // Regenerar loop
+    function regenerateLoop(id) {
+      if (!audioInitialized) return;
+
+      const loop = loops[id];
+
+      const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]];
+      const baseNote = 36 + Math.floor(Math.random() * 24);
+
+      // Solo cambiar estructura: patrón y notas, sin tocar el oscilador ni el tipo
+      loop.scale = scale;
+      loop.baseNote = baseNote;
+      loop.pattern = generatePattern(loop.length);
+      loop.notes = generateNotes(scale, baseNote, loop.length);
+
+      // No modificar loop.synthType ni loop.synth (mantener sonido actual)
+      // loop.synthType permanece igual
+      // loop.synth y su oscilador no se tocan
+
+      const btn = document.querySelector(`.loop-button[data-id="${id}"]`);
+      btn.style.transform = 'scale(1.2) rotate(180deg)';
+      setTimeout(() => {
+        btn.style.transform = '';
+      }, 300);
+    }
+
+    // Regenerar todos los loops
+    function regenerateAllLoops() {
+      // Regenera patrón y notas de todos los canales sin alterar el sintetizador ni su tipo
+      for (let i = 0; i < NUM_LOOPS; i++) {
+        if (audioInitialized) {
+          regenerateLoop(i);
+        } else {
+          const loop = loops[i];
+          if (!loop) continue;
+          const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]];
+          const baseNote = 36 + Math.floor(Math.random() * 24);
+          loop.scale = scale;
+          loop.baseNote = baseNote;
+          loop.pattern = generatePattern(loop.length);
+          loop.notes = generateNotes(scale, baseNote, loop.length);
+          const btn = document.querySelector(`.loop-button[data-id="${i}"]`);
+          if (btn) {
+            btn.style.transform = 'scale(1.2) rotate(180deg)';
+            setTimeout(() => { btn.style.transform = ''; }, 300);
+          }
+        }
+      }
+    }
+
+    // Animación de beat
+    function animateBeat(id) {
+      const progress = document.getElementById(`beat-${id}`);
+      if (progress) {
+        progress.style.width = '100%';
+        setTimeout(() => {
+          progress.style.width = '0%';
+        }, 100);
+      }
+    }
+
+    // Visualización de pulso
+    function updatePulseViz() {
+      const dots = document.querySelectorAll('.pulse-dot');
+      dots.forEach((dot, i) => {
+        if (i === currentPulse) {
+          dot.classList.add('active');
+        } else {
+          dot.classList.remove('active');
+        }
+      });
+    }
+
+    // Inicializar UI
+    createUI();
+    
+    // Inicializar visualización de tipos de sintetizador
+    for (let i = 0; i < NUM_LOOPS; i++) {
+      if (loops[i] && loops[i].synthType) {
+        updateSynthTypeDisplay(i, loops[i].synthType);
+      }
+    }
+
+    // Funciones del editor de sintetizador
+    function openSynthEditor(loopId) {
+      if (!audioInitialized) {
+        alert('Por favor, inicia el audio primero haciendo clic en el botón de play principal.');
+        return;
+      }
+
+      currentEditingLoop = loopId;
+      // Guardar estado original al abrir el editor
+      saveCurrentSynthState(loopId);
+      const loop = loops[loopId];
+      
+      // Cargar configuración actual
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      const oscillatorType = document.getElementById('oscillatorType');
+      
+      if (synthTypeSelect) synthTypeSelect.value = loop.synthType || 'Synth';
+      if (oscillatorType) oscillatorType.value = loop.oscillatorType || 'sine';
+      
+      // Cargar envolvente actual
+      const envelope = loop.envelope || { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.8 };
+      
+      const envelopeAttack = document.getElementById('envelopeAttack');
+      const envelopeDecay = document.getElementById('envelopeDecay');
+      const envelopeSustain = document.getElementById('envelopeSustain');
+      const envelopeRelease = document.getElementById('envelopeRelease');
+      
+      if (envelopeAttack) envelopeAttack.value = envelope.attack;
+      if (envelopeDecay) envelopeDecay.value = envelope.decay;
+      if (envelopeSustain) envelopeSustain.value = envelope.sustain;
+      if (envelopeRelease) envelopeRelease.value = envelope.release;
+      
+      // Actualizar valores mostrados
+      updateEnvelopeDisplay();
+      
+      updateSynthControls();
+      
+      // Mostrar modal
+      const modal = document.getElementById('synthEditorModal');
+      if (modal) modal.style.display = 'block';
+    }
+
+    function closeSynthEditor() {
+      const modal = document.getElementById('synthEditorModal');
+      if (modal) modal.style.display = 'none';
+      currentEditingLoop = null;
+      
+      // Limpiar sintetizador de preview
+      if (previewSynthInstance) {
+        previewSynthInstance.dispose();
+        previewSynthInstance = null;
+      }
+    }
+
+    // Actualiza visibilidad de controles según tipo de sintetizador
+    function updateSynthControls() {
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      const fmControls = document.getElementById('fmControls');
+      const amControls = document.getElementById('amControls');
+      const basicOscControls = document.getElementById('basicOscillatorControls');
+      if (!synthTypeSelect) return;
+      const synthType = synthTypeSelect.value;
+      if (fmControls) fmControls.style.display = 'none';
+      if (amControls) amControls.style.display = 'none';
+      if (basicOscControls) basicOscControls.style.display = 'block';
+      switch (synthType) {
+        case 'FMSynth':
+          if (fmControls) fmControls.style.display = 'block';
+          break;
+        case 'AMSynth':
+          if (amControls) amControls.style.display = 'block';
+          break;
+        case 'PluckSynth':
+        case 'MembraneSynth':
+          if (basicOscControls) basicOscControls.style.display = 'none';
+          break;
+      }
+    }
+
+    // Mostrar valores actuales de ADSR
+    function updateEnvelopeDisplay() {
+      const attackElement = document.getElementById('attackValue');
+      const attackSlider = document.getElementById('envelopeAttack');
+      if (attackElement && attackSlider) attackElement.textContent = attackSlider.value + 's';
+
+      const decayElement = document.getElementById('decayValue');
+      const decaySlider = document.getElementById('envelopeDecay');
+      if (decayElement && decaySlider) decayElement.textContent = decaySlider.value + 's';
+
+      const sustainElement = document.getElementById('sustainValue');
+      const sustainSlider = document.getElementById('envelopeSustain');
+      if (sustainElement && sustainSlider) sustainElement.textContent = sustainSlider.value;
+
+      const releaseElement = document.getElementById('releaseValue');
+      const releaseSlider = document.getElementById('envelopeRelease');
+      if (releaseElement && releaseSlider) releaseElement.textContent = releaseSlider.value + 's';
+    }
+
+    // Guardar estado actual del sintetizador al abrir
+    function saveCurrentSynthState(loopId) {
+      const loop = loops[loopId];
+      if (!loop) return;
+      originalSynthState = {
+        synthType: loop.synthType || 'Synth',
+        oscillatorType: loop.oscillatorType || 'sine',
+        envelope: loop.envelope ? { ...loop.envelope } : { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.8 }
+      };
+    }
+
+    // Cancelar edición y restaurar valores originales
+    function cancelSynthEditor() {
+      if (currentEditingLoop === null) return;
+      const loop = loops[currentEditingLoop];
+      if (!loop || !originalSynthState) { closeSynthEditor(); return; }
+
+      // Restaurar valores del loop
+      loop.synthType = originalSynthState.synthType;
+      loop.oscillatorType = originalSynthState.oscillatorType;
+      loop.envelope = { ...originalSynthState.envelope };
+
+      // Actualizar UI
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      const oscillatorTypeSelect = document.getElementById('oscillatorType');
+      const envelopeAttack = document.getElementById('envelopeAttack');
+      const envelopeDecay = document.getElementById('envelopeDecay');
+      const envelopeSustain = document.getElementById('envelopeSustain');
+      const envelopeRelease = document.getElementById('envelopeRelease');
+
+      if (synthTypeSelect) synthTypeSelect.value = originalSynthState.synthType;
+      if (oscillatorTypeSelect) oscillatorTypeSelect.value = originalSynthState.oscillatorType;
+      if (envelopeAttack) envelopeAttack.value = originalSynthState.envelope.attack;
+      if (envelopeDecay) envelopeDecay.value = originalSynthState.envelope.decay;
+      if (envelopeSustain) envelopeSustain.value = originalSynthState.envelope.sustain;
+      if (envelopeRelease) envelopeRelease.value = originalSynthState.envelope.release;
+
+      updateEnvelopeDisplay();
+      updateSynthControls();
+
+      // Cerrar modal
+      closeSynthEditor();
+    }
+    function previewSynth() {
+      if (!audioInitialized) return;
+      // Limpiar preview anterior
+      if (previewSynthInstance) {
+        previewSynthInstance.dispose();
+      }
+      
+      // Obtener elementos y valores de forma segura
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      const oscillatorTypeSelect = document.getElementById('oscillatorType');
+      const attackSlider = document.getElementById('envelopeAttack');
+      const decaySlider = document.getElementById('envelopeDecay');
+      const sustainSlider = document.getElementById('envelopeSustain');
+      const releaseSlider = document.getElementById('envelopeRelease');
+      
+      if (!synthTypeSelect || !attackSlider || !decaySlider || !sustainSlider || !releaseSlider) return;
+      
+      const synthType = synthTypeSelect.value;
+      const oscillatorType = oscillatorTypeSelect ? oscillatorTypeSelect.value : 'sine';
+      const attack = parseFloat(attackSlider.value);
+      const decay = parseFloat(decaySlider.value);
+      const sustain = parseFloat(sustainSlider.value);
+      const release = parseFloat(releaseSlider.value);
+      
+      // Crear configuración base
+      const synthConfig = {
+        envelope: { attack, decay, sustain, release }
+      };
+      
+      // Agregar configuración específica según el tipo
+      switch (synthType) {
+        case 'Synth':
+        case 'AMSynth':
+        case 'FMSynth':
+          synthConfig.oscillator = { type: oscillatorType };
+          break;
+      }
+      
+      // Crear sintetizador de preview
+      try {
+        switch (synthType) {
+          case 'Synth':
+            previewSynthInstance = new Tone.Synth(synthConfig).toDestination();
+            break;
+          case 'AMSynth':
+            const amHarmonicity = parseFloat(document.getElementById('amHarmonicity').value);
+            previewSynthInstance = new Tone.AMSynth({
+              ...synthConfig,
+              harmonicity: amHarmonicity
+            }).toDestination();
+            break;
+          case 'FMSynth':
+            const modulationIndex = parseFloat(document.getElementById('modulationIndex').value);
+            const fmHarmonicity = parseFloat(document.getElementById('harmonicity').value);
+            previewSynthInstance = new Tone.FMSynth({
+              ...synthConfig,
+              modulationIndex: modulationIndex,
+              harmonicity: fmHarmonicity
+            }).toDestination();
+            break;
+          case 'PluckSynth':
+            previewSynthInstance = new Tone.PluckSynth(synthConfig).toDestination();
+            break;
+          case 'MembraneSynth':
+            previewSynthInstance = new Tone.MembraneSynth(synthConfig).toDestination();
+            break;
+        }
+        
+        // Tocar una nota de preview
+        const now = Tone.now();
+        previewSynthInstance.triggerAttackRelease('C4', '8n', now);
+        
+      } catch (error) {
+        console.error('Error al crear preview:', error);
+      }
+    }
+
+    function applySynthChanges() {
+      if (currentEditingLoop === null) return;
+      
+      // Obtener elementos de forma segura
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      const oscillatorTypeSelect = document.getElementById('oscillatorType');
+      const attackSlider = document.getElementById('envelopeAttack');
+      const decaySlider = document.getElementById('envelopeDecay');
+      const sustainSlider = document.getElementById('envelopeSustain');
+      const releaseSlider = document.getElementById('envelopeRelease');
+      
+      if (!synthTypeSelect || !attackSlider || !decaySlider || !sustainSlider || !releaseSlider) return;
+      
+      const loop = loops[currentEditingLoop];
+      const synthType = synthTypeSelect.value;
+      const oscillatorType = oscillatorTypeSelect ? oscillatorTypeSelect.value : 'sine';
+      const attack = parseFloat(attackSlider.value);
+      const decay = parseFloat(decaySlider.value);
+      const sustain = parseFloat(sustainSlider.value);
+      const release = parseFloat(releaseSlider.value);
+      
+      // Guardar configuración
+      loop.synthType = synthType;
+      loop.oscillatorType = oscillatorType;
+      loop.envelope = { attack, decay, sustain, release };
+      
+      // Crear nueva configuración para el sintetizador
+      const synthConfig = {
+        envelope: { attack, decay, sustain, release }
+      };
+      
+      // Agregar configuración específica
+      switch (synthType) {
+        case 'Synth':
+        case 'AMSynth':
+        case 'FMSynth':
+          synthConfig.oscillator = { type: oscillatorType };
+          break;
+      }
+      
+      // Actualizar el sintetizador existente
+      try {
+        // Desconectar el sintetizador actual
+        loop.synth.disconnect();
+        
+        // Crear nuevo sintetizador según el tipo seleccionado
+        switch (synthType) {
+          case 'Synth':
+            loop.synth = new Tone.PolySynth(Tone.Synth, synthConfig);
+            break;
+          case 'AMSynth':
+            const amHarmonicity = parseFloat(document.getElementById('amHarmonicity').value);
+            synthConfig.harmonicity = amHarmonicity;
+            loop.synth = new Tone.PolySynth(Tone.AMSynth, synthConfig);
+            break;
+          case 'FMSynth':
+            const modulationIndex = parseFloat(document.getElementById('modulationIndex').value);
+            const fmHarmonicity = parseFloat(document.getElementById('harmonicity').value);
+            synthConfig.modulationIndex = modulationIndex;
+            synthConfig.harmonicity = fmHarmonicity;
+            loop.synth = new Tone.PolySynth(Tone.FMSynth, synthConfig);
+            break;
+          case 'PluckSynth':
+            loop.synth = new Tone.PolySynth(Tone.PluckSynth, synthConfig);
+            break;
+          case 'MembraneSynth':
+            loop.synth = new Tone.PolySynth(Tone.MembraneSynth, synthConfig);
+            break;
+        }
+        
+        // Reconectar a la cadena de efectos
+        loop.synth.connect(loop.panner);
+        loop.synth.connect(loop.delaySend);
+        loop.synth.connect(loop.reverbSend);
+        
+        // Actualizar la visualización del tipo de sintetizador
+        updateSynthTypeDisplay(currentEditingLoop, synthType);
+        
+      } catch (error) {
+        console.error('Error al aplicar cambios:', error);
+      }
+      
+      closeSynthEditor();
+    }
+
+    // Aplica cambios en tiempo real sin cerrar el modal
+    function applyChangesInRealTime() {
+      if (currentEditingLoop === null) return;
+      
+      // Obtener elementos de forma segura
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      const oscillatorTypeSelect = document.getElementById('oscillatorType');
+      const attackSlider = document.getElementById('envelopeAttack');
+      const decaySlider = document.getElementById('envelopeDecay');
+      const sustainSlider = document.getElementById('envelopeSustain');
+      const releaseSlider = document.getElementById('envelopeRelease');
+      
+      if (!synthTypeSelect || !attackSlider || !decaySlider || !sustainSlider || !releaseSlider) return;
+      
+      const loop = loops[currentEditingLoop];
+      const synthType = synthTypeSelect.value;
+      const oscillatorType = oscillatorTypeSelect ? oscillatorTypeSelect.value : 'sine';
+      const attack = parseFloat(attackSlider.value);
+      const decay = parseFloat(decaySlider.value);
+      const sustain = parseFloat(sustainSlider.value);
+      const release = parseFloat(releaseSlider.value);
+      
+      // Guardar configuración
+      loop.synthType = synthType;
+      loop.oscillatorType = oscillatorType;
+      loop.envelope = { attack, decay, sustain, release };
+      
+      // Crear nueva configuración para el sintetizador
+      const synthConfig = {
+        envelope: { attack, decay, sustain, release }
+      };
+      
+      // Agregar configuración específica
+      switch (synthType) {
+        case 'Synth':
+        case 'AMSynth':
+        case 'FMSynth':
+          synthConfig.oscillator = { type: oscillatorType };
+          break;
+      }
+      
+      // Actualizar el sintetizador existente
+      try {
+        // Desconectar el sintetizador actual
+        if (loop.synth) {
+          loop.synth.disconnect();
+        }
+        
+        // Crear nuevo sintetizador según el tipo seleccionado
+        switch (synthType) {
+          case 'Synth':
+            loop.synth = new Tone.PolySynth(Tone.Synth, synthConfig);
+            break;
+          case 'AMSynth':
+            const amHarmonicity = parseFloat(document.getElementById('amHarmonicity').value);
+            synthConfig.harmonicity = amHarmonicity;
+            loop.synth = new Tone.PolySynth(Tone.AMSynth, synthConfig);
+            break;
+          case 'FMSynth':
+            const modulationIndex = parseFloat(document.getElementById('modulationIndex').value);
+            const fmHarmonicity = parseFloat(document.getElementById('harmonicity').value);
+            synthConfig.modulationIndex = modulationIndex;
+            synthConfig.harmonicity = fmHarmonicity;
+            loop.synth = new Tone.PolySynth(Tone.FMSynth, synthConfig);
+            break;
+          case 'PluckSynth':
+            loop.synth = new Tone.PolySynth(Tone.PluckSynth, synthConfig);
+            break;
+          case 'MembraneSynth':
+            loop.synth = new Tone.PolySynth(Tone.MembraneSynth, synthConfig);
+            break;
+        }
+        
+        // Reconectar a la cadena de efectos
+        loop.synth.connect(loop.panner);
+        loop.synth.connect(loop.delaySend);
+        loop.synth.connect(loop.reverbSend);
+        
+        // Actualizar la visualización del tipo de sintetizador
+        updateSynthTypeDisplay(currentEditingLoop, synthType);
+        
+      } catch (error) {
+        console.error('Error al aplicar cambios en tiempo real:', error);
+      }
+    }
+
+    function updateSynthTypeDisplay(loopId, synthType) {
+      const typeDisplay = document.getElementById(`synth-type-${loopId}`);
+      if (!typeDisplay) return;
+      
+      const typeNames = {
+        'Synth': 'Synth',
+        'AMSynth': 'AM',
+        'FMSynth': 'FM',
+        'PluckSynth': 'Pluck',
+        'MembraneSynth': 'Membrane'
+      };
+      
+      typeDisplay.textContent = typeNames[synthType] || synthType;
+    }
+  </script>
+</body>
+
+</html>
