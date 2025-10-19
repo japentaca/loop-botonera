@@ -476,6 +476,83 @@
       box-shadow: 0 0 10px #00d9ff;
       transform: scale(1.3);
     }
+
+    /* Estilos adicionales para select y option (tema oscuro) */
+    /* Forzamos el estilo del elemento select con clase control-select */
+    select.control-select {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 5px;
+      padding: 8px;
+      font-size: 12px;
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+    }
+
+    select.control-select:focus {
+      outline: none;
+      border-color: #00d9ff;
+      box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.2);
+    }
+
+    /* Estilo de las opciones del desplegable */
+    select.control-select option {
+      background: #1a1a2e;
+      color: white;
+      border: none;
+    }
+
+    /* Nota: algunos navegadores limitan el estilado de options. */
+    /* Este bloque cubre Chrome/Edge moderno en Windows. */
+
+    /* (Opcional) imagen para la flecha del desplegable usando background-image */
+    select.control-select {
+      background-image: linear-gradient(45deg, transparent 50%, #00d9ff 50%),
+                        linear-gradient(135deg, #00d9ff 50%, transparent 50%);
+      background-position: calc(100% - 18px) 50%, calc(100% - 12px) 50%;
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+      padding-right: 28px; /* espacio para la flecha */
+    }
+
+    /* Ocultar flecha en IE/Edge heredado (no necesario en modernos) */
+    select.control-select::-ms-expand {
+      display: none;
+    }
+
+    .preview-button {
+      background: rgba(123, 47, 247, 0.2);
+      color: white;
+      border: 1px solid #7b2ff7;
+    }
+
+    .preview-button:hover {
+      background: rgba(123, 47, 247, 0.3);
+    }
+
+    .pulse-viz {
+      display: flex;
+      gap: 4px;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      transition: all 0.1s;
+    }
+
+    .pulse-dot.active {
+      background: #00d9ff;
+      box-shadow: 0 0 10px #00d9ff;
+      transform: scale(1.3);
+    }
   </style>
 </head>
 
@@ -507,7 +584,6 @@
       </div>
 
       <div class="pulse-viz" id="pulseViz">
-        <div class="pulse-dot"></div>
         <div class="pulse-dot"></div>
         <div class="pulse-dot"></div>
         <div class="pulse-dot"></div>
@@ -618,7 +694,7 @@
 
       <div class="modal-actions">
         <button class="modal-button preview-button" onclick="previewSynth()">🔊 Preview</button>
-        <button class="modal-button modal-button-secondary" onclick="closeSynthEditor()">Cancelar</button>
+        <button class="modal-button modal-button-secondary" onclick="cancelSynthEditor()">Cancelar</button>
         <button class="modal-button modal-button-primary" onclick="applySynthChanges()">Aplicar Cambios</button>
       </div>
     </div>
@@ -639,11 +715,11 @@
     let currentEditingLoop = null;
     // Cambiado: variable para el sintetizador de preview, evitando conflicto con la función
     var previewSynthInstance = null;
-    
-    // Efectos globales
+    // Estado original para restaurar al cancelar
+    var originalSynthState = {};
+
     let delay, reverb, masterGain;
 
-    // Escalas musicales
     const scales = {
       minor: [0, 2, 3, 5, 7, 8, 10],
       major: [0, 2, 4, 5, 7, 9, 11],
@@ -656,6 +732,16 @@
     const scaleNames = Object.keys(scales);
     const synthTypes = ['sine', 'triangle', 'square', 'sawtooth'];
 
+    // Sincronizar delay con tempo
+    function updateDelayTime() {
+      if (!audioInitialized || !delay) return;
+      // Usamos figura musical '8n' convertida a segundos para el tempo actual
+      const seconds = Tone.Time('8n').toSeconds();
+      if (delay.delayTime && delay.delayTime.value !== seconds) {
+        delay.delayTime.value = seconds;
+      }
+    }
+
     // Inicializar audio
     async function initAudio() {
       if (audioInitialized) return;
@@ -666,13 +752,14 @@
 
         // Crear cadena de efectos
         masterGain = new Tone.Gain(masterVol).toDestination();
-        delay = new Tone.FeedbackDelay("8n", 0.4).connect(masterGain);
+        delay = new Tone.PingPongDelay("8n", 0.4).connect(masterGain);
         reverb = new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain);
 
         await reverb.generate();
 
         // Configurar transporte
         Tone.Transport.bpm.value = tempo;
+        updateDelayTime();
 
         // Crear loops
         for (let i = 0; i < NUM_LOOPS; i++) {
@@ -705,7 +792,8 @@
     function createLoop(id) {
       const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]];
       const baseNote = 36 + Math.floor(Math.random() * 24);
-      const synthType = synthTypes[Math.floor(Math.random() * synthTypes.length)];
+      // Oscilador por defecto: sinoidal pura
+      const synthType = 'sine';
       
       // Configuración por defecto
       const envelope = {
@@ -715,13 +803,16 @@
         release: 0.8
       };
 
-      // Crear sintetizador con configuración inicial
+      // Crear sintetizador con configuración inicial (clase Synth con oscilador seno)
       const synth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: synthType },
+        oscillator: { type: 'sine' },
         envelope: envelope
       });
 
-      synth.connect(masterGain);
+      // Crear panner por canal e insertar entre synth y master
+      const initialPan = (id / (NUM_LOOPS - 1)) * 2 - 1; // -1..1
+      const panner = new Tone.Panner(initialPan).connect(masterGain);
+      synth.connect(panner);
 
       const delaySend = new Tone.Gain(0).connect(delay);
       const reverbSend = new Tone.Gain(0).connect(reverb);
@@ -734,6 +825,8 @@
         id: id,
         active: false,
         synth: synth,
+        panner: panner,
+        pan: initialPan,
         delaySend: delaySend,
         reverbSend: reverbSend,
         length: length,
@@ -810,7 +903,7 @@
                         <div class="loop-controls">
                             <div class="mini-control">
                                 <span class="mini-label">Tamaño</span>
-                                <input type="range" class="mini-slider" data-id="${i}" data-param="length" min="4" max="16" value="8" step="4">
+                                <input type="range" class="mini-slider mini-length" data-id="${i}" data-param="length" min="0" max="7" step="1" value="1">
                                 <span class="mini-value" id="length-${i}">8</span>
                             </div>
                             <div class="mini-control">
@@ -827,6 +920,11 @@
                                 <span class="mini-label">Volumen</span>
                                 <input type="range" class="mini-slider" data-id="${i}" data-param="volume" min="0" max="100" value="50">
                                 <span class="mini-value" id="volume-${i}">50%</span>
+                            </div>
+                            <div class="mini-control">
+                                <span class="mini-label">Pan</span>
+                                <input type="range" class="mini-slider" data-id="${i}" data-param="pan" min="-100" max="100" step="1" value="${Math.round(((i/(NUM_LOOPS-1))*2 - 1)*100)}">
+                                <span class="mini-value" id="pan-${i}">${Math.round(((i/(NUM_LOOPS-1))*2 - 1)*100)}%</span>
                             </div>
                         </div>
                     </div>
@@ -862,6 +960,16 @@
         });
       });
 
+      // Listeners para selects de tamaño
+      document.querySelectorAll('.mini-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+          const id = parseInt(e.target.dataset.id);
+          const param = e.target.dataset.param;
+          const value = parseInt(e.target.value);
+          updateLoopParam(id, param, value);
+        });
+      });
+
       document.querySelectorAll('.regen-button').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const id = parseInt(e.currentTarget.dataset.id);
@@ -879,28 +987,31 @@
 
       // Controles del modal (verificar que existan los elementos)
       const synthTypeSelect = document.getElementById('synthTypeSelect');
-      if (synthTypeSelect) synthTypeSelect.addEventListener('change', updateSynthControls);
+      if (synthTypeSelect) synthTypeSelect.addEventListener('change', () => { updateSynthControls(); applyChangesInRealTime(); });
       
       const envelopeAttack = document.getElementById('envelopeAttack');
-      if (envelopeAttack) envelopeAttack.addEventListener('input', updateEnvelopeDisplay);
+      if (envelopeAttack) envelopeAttack.addEventListener('input', () => { updateEnvelopeDisplay(); applyChangesInRealTime(); });
       
       const envelopeDecay = document.getElementById('envelopeDecay');
-      if (envelopeDecay) envelopeDecay.addEventListener('input', updateEnvelopeDisplay);
+      if (envelopeDecay) envelopeDecay.addEventListener('input', () => { updateEnvelopeDisplay(); applyChangesInRealTime(); });
       
       const envelopeSustain = document.getElementById('envelopeSustain');
-      if (envelopeSustain) envelopeSustain.addEventListener('input', updateEnvelopeDisplay);
+      if (envelopeSustain) envelopeSustain.addEventListener('input', () => { updateEnvelopeDisplay(); applyChangesInRealTime(); });
       
       const envelopeRelease = document.getElementById('envelopeRelease');
-      if (envelopeRelease) envelopeRelease.addEventListener('input', updateEnvelopeDisplay);
+      if (envelopeRelease) envelopeRelease.addEventListener('input', () => { updateEnvelopeDisplay(); applyChangesInRealTime(); });
+      
+      const oscillatorTypeSelect = document.getElementById('oscillatorType');
+      if (oscillatorTypeSelect) oscillatorTypeSelect.addEventListener('change', applyChangesInRealTime);
       
       const previewButton = document.getElementById('previewButton');
       if (previewButton) previewButton.addEventListener('click', previewSynth);
       
       const applyButton = document.getElementById('applyButton');
-      if (applyButton) applyButton.addEventListener('click', applySynthChanges);
+      if (applyButton) applyButton.addEventListener('click', () => { applySynthChanges(); closeSynthEditor(); });
       
       const cancelButton = document.getElementById('cancelButton');
-      if (cancelButton) cancelButton.addEventListener('click', closeSynthEditor);
+      if (cancelButton) cancelButton.addEventListener('click', cancelSynthEditor);
       
       // Cerrar modal al hacer clic fuera
       const synthEditorModal = document.getElementById('synthEditorModal');
@@ -919,6 +1030,7 @@
           tempo = parseInt(e.target.value);
           if (audioInitialized) {
             Tone.Transport.bpm.value = tempo;
+            updateDelayTime();
           }
           document.getElementById('tempoValue').textContent = tempo;
         });
@@ -989,10 +1101,13 @@
 
       switch (param) {
         case 'length':
-          loop.length = value;
-          loop.pattern = generatePattern(value);
-          loop.notes = generateNotes(loop.scale, loop.baseNote, value);
-          document.getElementById(`length-${id}`).textContent = value;
+          const allowedSizes = [4, 8, 12, 16, 32, 48, 64, 128];
+          const index = Math.max(0, Math.min(allowedSizes.length - 1, value));
+          const lengthValue = allowedSizes[index];
+          loop.length = lengthValue;
+          loop.pattern = generatePattern(lengthValue);
+          loop.notes = generateNotes(loop.scale, loop.baseNote, lengthValue);
+          document.getElementById(`length-${id}`).textContent = lengthValue;
           break;
         case 'delay':
           loop.delayAmount = value / 100;
@@ -1008,6 +1123,16 @@
           loop.volume = value / 100;
           document.getElementById(`volume-${id}`).textContent = value + '%';
           break;
+        case 'pan':
+          const clamped = Math.max(-100, Math.min(100, value));
+          const pan = clamped / 100;
+          if (loop.panner && loop.panner.pan) {
+            loop.panner.pan.value = pan;
+          }
+          loop.pan = pan;
+          const panDisplay = document.getElementById(`pan-${id}`);
+          if (panDisplay) panDisplay.textContent = clamped + '%';
+          break;
       }
     }
 
@@ -1019,17 +1144,16 @@
 
       const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]];
       const baseNote = 36 + Math.floor(Math.random() * 24);
-      const synthType = synthTypes[Math.floor(Math.random() * synthTypes.length)];
 
+      // Solo cambiar estructura: patrón y notas, sin tocar el oscilador ni el tipo
       loop.scale = scale;
       loop.baseNote = baseNote;
       loop.pattern = generatePattern(loop.length);
       loop.notes = generateNotes(scale, baseNote, loop.length);
-      loop.synthType = synthType;
 
-      loop.synth.set({
-        oscillator: { type: synthType }
-      });
+      // No modificar loop.synthType ni loop.synth (mantener sonido actual)
+      // loop.synthType permanece igual
+      // loop.synth y su oscilador no se tocan
 
       const btn = document.querySelector(`.loop-button[data-id="${id}"]`);
       btn.style.transform = 'scale(1.2) rotate(180deg)';
@@ -1079,6 +1203,8 @@
       }
 
       currentEditingLoop = loopId;
+      // Guardar estado original al abrir el editor
+      saveCurrentSynthState(loopId);
       const loop = loops[loopId];
       
       // Cargar configuración actual
@@ -1103,6 +1229,7 @@
       
       // Actualizar valores mostrados
       updateEnvelopeDisplay();
+      
       updateSynthControls();
       
       // Mostrar modal
@@ -1122,22 +1249,17 @@
       }
     }
 
+    // Actualiza visibilidad de controles según tipo de sintetizador
     function updateSynthControls() {
       const synthTypeSelect = document.getElementById('synthTypeSelect');
       const fmControls = document.getElementById('fmControls');
       const amControls = document.getElementById('amControls');
       const basicOscControls = document.getElementById('basicOscillatorControls');
-      
       if (!synthTypeSelect) return;
-      
       const synthType = synthTypeSelect.value;
-      
-      // Ocultar todos los controles específicos
       if (fmControls) fmControls.style.display = 'none';
       if (amControls) amControls.style.display = 'none';
       if (basicOscControls) basicOscControls.style.display = 'block';
-      
-      // Mostrar controles según el tipo de sintetizador
       switch (synthType) {
         case 'FMSynth':
           if (fmControls) fmControls.style.display = 'block';
@@ -1152,27 +1274,70 @@
       }
     }
 
+    // Mostrar valores actuales de ADSR
     function updateEnvelopeDisplay() {
       const attackElement = document.getElementById('attackValue');
       const attackSlider = document.getElementById('envelopeAttack');
       if (attackElement && attackSlider) attackElement.textContent = attackSlider.value + 's';
-      
+
       const decayElement = document.getElementById('decayValue');
       const decaySlider = document.getElementById('envelopeDecay');
       if (decayElement && decaySlider) decayElement.textContent = decaySlider.value + 's';
-      
+
       const sustainElement = document.getElementById('sustainValue');
       const sustainSlider = document.getElementById('envelopeSustain');
       if (sustainElement && sustainSlider) sustainElement.textContent = sustainSlider.value;
-      
+
       const releaseElement = document.getElementById('releaseValue');
       const releaseSlider = document.getElementById('envelopeRelease');
       if (releaseElement && releaseSlider) releaseElement.textContent = releaseSlider.value + 's';
     }
 
+    // Guardar estado actual del sintetizador al abrir
+    function saveCurrentSynthState(loopId) {
+      const loop = loops[loopId];
+      if (!loop) return;
+      originalSynthState = {
+        synthType: loop.synthType || 'Synth',
+        oscillatorType: loop.oscillatorType || 'sine',
+        envelope: loop.envelope ? { ...loop.envelope } : { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.8 }
+      };
+    }
+
+    // Cancelar edición y restaurar valores originales
+    function cancelSynthEditor() {
+      if (currentEditingLoop === null) return;
+      const loop = loops[currentEditingLoop];
+      if (!loop || !originalSynthState) { closeSynthEditor(); return; }
+
+      // Restaurar valores del loop
+      loop.synthType = originalSynthState.synthType;
+      loop.oscillatorType = originalSynthState.oscillatorType;
+      loop.envelope = { ...originalSynthState.envelope };
+
+      // Actualizar UI
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      const oscillatorTypeSelect = document.getElementById('oscillatorType');
+      const envelopeAttack = document.getElementById('envelopeAttack');
+      const envelopeDecay = document.getElementById('envelopeDecay');
+      const envelopeSustain = document.getElementById('envelopeSustain');
+      const envelopeRelease = document.getElementById('envelopeRelease');
+
+      if (synthTypeSelect) synthTypeSelect.value = originalSynthState.synthType;
+      if (oscillatorTypeSelect) oscillatorTypeSelect.value = originalSynthState.oscillatorType;
+      if (envelopeAttack) envelopeAttack.value = originalSynthState.envelope.attack;
+      if (envelopeDecay) envelopeDecay.value = originalSynthState.envelope.decay;
+      if (envelopeSustain) envelopeSustain.value = originalSynthState.envelope.sustain;
+      if (envelopeRelease) envelopeRelease.value = originalSynthState.envelope.release;
+
+      updateEnvelopeDisplay();
+      updateSynthControls();
+
+      // Cerrar modal
+      closeSynthEditor();
+    }
     function previewSynth() {
       if (!audioInitialized) return;
-      
       // Limpiar preview anterior
       if (previewSynthInstance) {
         previewSynthInstance.dispose();
@@ -1241,7 +1406,7 @@
         
         // Tocar una nota de preview
         const now = Tone.now();
-        previewSynth.triggerAttackRelease('C4', '8n', now);
+        previewSynthInstance.triggerAttackRelease('C4', '8n', now);
         
       } catch (error) {
         console.error('Error al crear preview:', error);
@@ -1319,7 +1484,7 @@
         }
         
         // Reconectar a la cadena de efectos
-        loop.synth.connect(masterGain);
+        loop.synth.connect(loop.panner);
         loop.synth.connect(loop.delaySend);
         loop.synth.connect(loop.reverbSend);
         
@@ -1331,6 +1496,92 @@
       }
       
       closeSynthEditor();
+    }
+
+    // Aplica cambios en tiempo real sin cerrar el modal
+    function applyChangesInRealTime() {
+      if (currentEditingLoop === null) return;
+      
+      // Obtener elementos de forma segura
+      const synthTypeSelect = document.getElementById('synthTypeSelect');
+      const oscillatorTypeSelect = document.getElementById('oscillatorType');
+      const attackSlider = document.getElementById('envelopeAttack');
+      const decaySlider = document.getElementById('envelopeDecay');
+      const sustainSlider = document.getElementById('envelopeSustain');
+      const releaseSlider = document.getElementById('envelopeRelease');
+      
+      if (!synthTypeSelect || !attackSlider || !decaySlider || !sustainSlider || !releaseSlider) return;
+      
+      const loop = loops[currentEditingLoop];
+      const synthType = synthTypeSelect.value;
+      const oscillatorType = oscillatorTypeSelect ? oscillatorTypeSelect.value : 'sine';
+      const attack = parseFloat(attackSlider.value);
+      const decay = parseFloat(decaySlider.value);
+      const sustain = parseFloat(sustainSlider.value);
+      const release = parseFloat(releaseSlider.value);
+      
+      // Guardar configuración
+      loop.synthType = synthType;
+      loop.oscillatorType = oscillatorType;
+      loop.envelope = { attack, decay, sustain, release };
+      
+      // Crear nueva configuración para el sintetizador
+      const synthConfig = {
+        envelope: { attack, decay, sustain, release }
+      };
+      
+      // Agregar configuración específica
+      switch (synthType) {
+        case 'Synth':
+        case 'AMSynth':
+        case 'FMSynth':
+          synthConfig.oscillator = { type: oscillatorType };
+          break;
+      }
+      
+      // Actualizar el sintetizador existente
+      try {
+        // Desconectar el sintetizador actual
+        if (loop.synth) {
+          loop.synth.disconnect();
+        }
+        
+        // Crear nuevo sintetizador según el tipo seleccionado
+        switch (synthType) {
+          case 'Synth':
+            loop.synth = new Tone.PolySynth(Tone.Synth, synthConfig);
+            break;
+          case 'AMSynth':
+            const amHarmonicity = parseFloat(document.getElementById('amHarmonicity').value);
+            synthConfig.harmonicity = amHarmonicity;
+            loop.synth = new Tone.PolySynth(Tone.AMSynth, synthConfig);
+            break;
+          case 'FMSynth':
+            const modulationIndex = parseFloat(document.getElementById('modulationIndex').value);
+            const fmHarmonicity = parseFloat(document.getElementById('harmonicity').value);
+            synthConfig.modulationIndex = modulationIndex;
+            synthConfig.harmonicity = fmHarmonicity;
+            loop.synth = new Tone.PolySynth(Tone.FMSynth, synthConfig);
+            break;
+          case 'PluckSynth':
+            loop.synth = new Tone.PolySynth(Tone.PluckSynth, synthConfig);
+            break;
+          case 'MembraneSynth':
+            loop.synth = new Tone.PolySynth(Tone.MembraneSynth, synthConfig);
+            break;
+        }
+        
+        // Reconectar a la cadena de efectos
+        loop.synth.connect(loop.panner);
+        loop.synth.connect(loop.delaySend);
+        loop.synth.connect(loop.reverbSend);
+        
+        // Actualizar la visualización del tipo de sintetizador
+        updateSynthTypeDisplay(currentEditingLoop, synthType);
+        
+      } catch (error) {
+        console.error('Error al aplicar cambios en tiempo real:', error);
+      }
     }
 
     function updateSynthTypeDisplay(loopId, synthType) {
@@ -1351,3 +1602,19 @@
 </body>
 
 </html>
+
+// Event listeners adicionales para aplicar cambios en tiempo real
+const synthTypeSelectRT = document.getElementById('synthTypeSelect');
+if (synthTypeSelectRT) synthTypeSelectRT.addEventListener('change', applyChangesInRealTime);
+
+const oscillatorTypeSelectRT = document.getElementById('oscillatorType');
+if (oscillatorTypeSelectRT) oscillatorTypeSelectRT.addEventListener('change', applyChangesInRealTime);
+
+const fmHarmonicityRT = document.getElementById('harmonicity');
+if (fmHarmonicityRT) fmHarmonicityRT.addEventListener('input', applyChangesInRealTime);
+
+const fmModIndexRT = document.getElementById('modulationIndex');
+if (fmModIndexRT) fmModIndexRT.addEventListener('input', applyChangesInRealTime);
+
+const amHarmonicityRT = document.getElementById('amHarmonicity');
+if (amHarmonicityRT) amHarmonicityRT.addEventListener('input', applyChangesInRealTime);
