@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
 import * as Tone from 'tone'
 import { useSynthesizer } from '../composables/useAudio'
+import { useScales } from '../composables/useMusic'
 
 export const useAudioStore = defineStore('audio', () => {
   // Estado reactivo
@@ -12,6 +13,8 @@ export const useAudioStore = defineStore('audio', () => {
   const transpose = ref(0)
   const masterVol = ref(0.7)
   const loops = ref([])
+  const delayDivision = ref('8n')
+  const currentScale = ref('major') // Escala actual seleccionada
   
   // Derivados para UI
   const currentBeat = computed(() => currentPulse.value % 16)
@@ -42,18 +45,11 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Referencias de audio
   let delay, reverb, masterGain
+  let _feedbackResetTimer = null
 
   // Constantes
   const NUM_LOOPS = 8
-  const scales = {
-    minor: [0, 2, 3, 5, 7, 8, 10],
-    major: [0, 2, 4, 5, 7, 9, 11],
-    pentatonic: [0, 2, 4, 7, 9],
-    blues: [0, 3, 5, 6, 7, 10],
-    dorian: [0, 2, 3, 5, 7, 9, 10],
-    phrygian: [0, 1, 3, 5, 7, 8, 10]
-  }
-  const scaleNames = Object.keys(scales)
+  const { scales, scaleNames, scaleNamesSpanish } = useScales()
   const synthTypes = ['sine', 'triangle', 'square', 'sawtooth']
 
   // Funciones auxiliares
@@ -82,7 +78,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Crear loop básico sin audio (para mostrar en UI)
   const createBasicLoop = (id) => {
-    const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]]
+    const scale = scales[currentScale.value]
     const baseNote = 36 + Math.floor(Math.random() * 24)
     const synthType = 'sine'
     const length = 16
@@ -116,7 +112,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const createLoop = (id) => {
-    const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]]
+    const scale = scales[currentScale.value]
     const baseNote = 36 + Math.floor(Math.random() * 24)
     const synthType = 'sine'
     const length = 16
@@ -177,10 +173,27 @@ export const useAudioStore = defineStore('audio', () => {
     }
   }
 
-  // Sincronizar delay con tempo
+  // Reset suave del feedback para re-fasear el delay
+  const softResetDelayFeedback = () => {
+    if (!audioInitialized.value || !delay) return
+    try {
+      const original = delay.feedback?.value ?? 0.4
+      // Reducir feedback a cero temporalmente
+      if (delay.feedback) delay.feedback.value = 0
+      if (_feedbackResetTimer) clearTimeout(_feedbackResetTimer)
+      const holdMs = Tone.Time('16n').toMilliseconds()
+      _feedbackResetTimer = setTimeout(() => {
+        try {
+          if (delay?.feedback) delay.feedback.value = original
+        } catch {}
+      }, Math.max(10, holdMs))
+    } catch {}
+  }
+
+  // Sincronizar delay con tempo según división seleccionada
   const updateDelayTime = () => {
     if (!audioInitialized.value || !delay) return
-    const seconds = Tone.Time('8n').toSeconds()
+    const seconds = Tone.Time(delayDivision.value).toSeconds()
     if (delay.delayTime && delay.delayTime.value !== seconds) {
       delay.delayTime.value = seconds
     }
@@ -196,7 +209,7 @@ export const useAudioStore = defineStore('audio', () => {
       // Crear cadena de efectos
       masterGain = markRaw(new Tone.Gain(masterVol.value).toDestination())
       if (!BYPASS_EFFECTS_FOR_TEST) {
-        delay = markRaw(new Tone.PingPongDelay("8n", 0.4).connect(masterGain))
+        delay = markRaw(new Tone.PingPongDelay(delayDivision.value, 0.4).connect(masterGain))
         reverb = markRaw(new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain))
         await reverb.generate()
       } else {
@@ -383,6 +396,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (audioInitialized.value) {
       Tone.Transport.bpm.value = t
       updateDelayTime()
+      softResetDelayFeedback()
     }
   }
 
@@ -401,12 +415,44 @@ export const useAudioStore = defineStore('audio', () => {
     transpose.value = Number(value)
   }
 
+  // Cambiar escala actual y regenerar todos los loops
+  const updateScale = (newScale) => {
+    if (!scales[newScale]) return
+    currentScale.value = newScale
+    
+    // Regenerar todos los loops con la nueva escala
+    if (audioInitialized.value) {
+      regenerateAllLoops()
+    } else {
+      // Si no está inicializado, solo actualizar la configuración básica
+      for (let i = 0; i < NUM_LOOPS; i++) {
+        const loop = loops.value[i]
+        const scale = scales[newScale]
+        const baseNote = 36 + Math.floor(Math.random() * 24)
+        
+        loop.scale = scale
+        loop.baseNote = baseNote
+        loop.pattern = generatePattern(loop.length)
+        loop.notes = generateNotes(scale, baseNote, loop.length)
+      }
+    }
+  }
+
+  // Actualizar división del delay (tap division)
+  const updateDelayDivision = (division) => {
+    const allowed = ['16n', '8n', '4n', '2n', '8t', '4t', '2t']
+    const div = allowed.includes(division) ? division : '8n'
+    delayDivision.value = div
+    updateDelayTime()
+    softResetDelayFeedback()
+  }
+
   // Regenerar loop
   const regenerateLoop = (id) => {
     if (!audioInitialized.value) return
     const loop = loops.value[id]
     
-    const scale = scales[scaleNames[Math.floor(Math.random() * scaleNames.length)]]
+    const scale = scales[currentScale.value]
     const baseNote = 36 + Math.floor(Math.random() * 24)
     
     loop.scale = scale
@@ -487,6 +533,8 @@ export const useAudioStore = defineStore('audio', () => {
     masterVol,
     masterVolume,
     loops,
+    currentScale,
+    scaleNamesSpanish,
     initAudio,
     togglePlay,
     toggleLoop,
@@ -497,6 +545,9 @@ export const useAudioStore = defineStore('audio', () => {
     updateTempo,
     updateMasterVolume,
     updateTranspose,
+    updateScale,
+    updateDelayDivision,
+    delayDivision,
     scales,
     scaleNames,
     synthTypes

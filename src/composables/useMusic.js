@@ -2,12 +2,73 @@ import { ref, computed } from 'vue'
 
 export function useScales() {
   const scales = {
-    minor: [0, 2, 3, 5, 7, 8, 10],
+    // Escalas diatónicas
     major: [0, 2, 4, 5, 7, 9, 11],
-    pentatonic: [0, 2, 4, 7, 9],
-    blues: [0, 3, 5, 6, 7, 10],
+    minor: [0, 2, 3, 5, 7, 8, 10],
+    
+    // Modos griegos
     dorian: [0, 2, 3, 5, 7, 9, 10],
-    phrygian: [0, 1, 3, 5, 7, 8, 10]
+    phrygian: [0, 1, 3, 5, 7, 8, 10],
+    lydian: [0, 2, 4, 6, 7, 9, 11],
+    mixolydian: [0, 2, 4, 5, 7, 9, 10],
+    locrian: [0, 1, 3, 5, 6, 8, 10],
+    
+    // Escalas menores
+    harmonicMinor: [0, 2, 3, 5, 7, 8, 11],
+    melodicMinor: [0, 2, 3, 5, 7, 9, 11],
+    
+    // Escalas pentatónicas
+    pentatonic: [0, 2, 4, 7, 9],
+    minorPentatonic: [0, 3, 5, 7, 10],
+    
+    // Escalas de blues
+    blues: [0, 3, 5, 6, 7, 10],
+    majorBlues: [0, 2, 3, 4, 7, 9],
+    
+    // Escalas exóticas
+    wholeTone: [0, 2, 4, 6, 8, 10],
+    diminished: [0, 1, 3, 4, 6, 7, 9, 10],
+    
+    // Escalas modales modernas
+    acoustic: [0, 2, 4, 6, 7, 9, 10],
+    altered: [0, 1, 3, 4, 6, 8, 10],
+    
+    // Escalas étnicas
+    hirajoshi: [0, 2, 3, 7, 8],
+    kumoi: [0, 2, 3, 7, 9],
+    pelog: [0, 1, 3, 7, 8],
+    
+    // Escalas adicionales
+    chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    augmented: [0, 3, 4, 7, 8, 11],
+    bebop: [0, 2, 4, 5, 7, 9, 10, 11]
+  }
+
+  // Nombres en español para mostrar en UI
+  const scaleNamesSpanish = {
+    major: 'Mayor natural',
+    minor: 'Menor natural',
+    dorian: 'Dórica',
+    phrygian: 'Frigia',
+    lydian: 'Lidia',
+    mixolydian: 'Mixolidia',
+    locrian: 'Locria',
+    harmonicMinor: 'Menor armónica',
+    melodicMinor: 'Menor melódica',
+    pentatonic: 'Pentatónica mayor',
+    minorPentatonic: 'Pentatónica menor',
+    blues: 'Blues menor',
+    majorBlues: 'Blues mayor',
+    wholeTone: 'Tono entero',
+    diminished: 'Disminuida',
+    acoustic: 'Acústica',
+    altered: 'Alterada',
+    hirajoshi: 'Hirajoshi',
+    kumoi: 'Kumoi',
+    pelog: 'Pelog',
+    chromatic: 'Cromática',
+    augmented: 'Aumentada',
+    bebop: 'Bebop'
   }
 
   const scaleNames = computed(() => Object.keys(scales))
@@ -43,6 +104,7 @@ export function useScales() {
   return {
     scales,
     scaleNames,
+    scaleNamesSpanish,
     getRandomScale,
     getScale,
     generateScaleNotes
