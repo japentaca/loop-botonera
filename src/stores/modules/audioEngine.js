@@ -10,6 +10,7 @@ export const useAudioEngine = () => {
   const audioInitialized = ref(false)
   const isPlaying = ref(false)
   const currentPulse = ref(0)
+  const currentBeat = computed(() => currentPulse.value % 16)
   const tempo = ref(120)
   const masterVol = ref(0.7)
   const delayDivision = ref('8n')
@@ -246,6 +247,7 @@ export const useAudioEngine = () => {
     audioInitialized,
     isPlaying,
     currentPulse,
+    currentBeat,
     tempo,
     masterVol,
     masterVolume,

@@ -8,7 +8,7 @@ export const useEvolutionSystem = () => {
   // Estado de evolución automática
   const autoEvolutionEnabled = ref(false)
   const evolutionInterval = ref(8000) // intervalo en milisegundos
-  const evolutionIntensity = ref(0.3) // intensidad de los cambios (0-1)
+  const evolutionIntensity = ref(0.1) // intensidad de los cambios (0-1), valor por defecto 1 en interfaz
   const creativeModeEnabled = ref(false)
   const lastEvolutionTime = ref(0)
   
@@ -16,7 +16,7 @@ export const useEvolutionSystem = () => {
   const evolutionTypes = ref({
     pattern: true,      // evolucionar patrones rítmicos
     notes: true,        // evolucionar notas/melodías
-    effects: true,      // evolucionar efectos
+    effects: false,     // evolución de efectos deshabilitada - solo aspectos musicales
     volume: false,      // evolucionar volúmenes (puede ser disruptivo)
     tempo: false        // evolucionar tempo (experimental)
   })
@@ -86,31 +86,7 @@ export const useEvolutionSystem = () => {
     return newNotes
   }
 
-  // Generar variación de efectos
-  const evolveEffects = (currentEffects, intensity = evolutionIntensity.value, options = {}) => {
-    if (!evolutionTypes.value.effects) return currentEffects
-    
-    const newEffects = { ...currentEffects }
-    
-    // Opciones para controlar qué efectos se pueden evolucionar
-    const { excludeReverb = false, excludeDelay = false } = options
-    
-    if (Math.random() < mutationProbabilities.value.effectChange * intensity) {
-      // Evolucionar delay solo si no está excluido
-      if (!excludeDelay && newEffects.delayAmount !== undefined) {
-        const change = (Math.random() - 0.5) * 0.3 * intensity
-        newEffects.delayAmount = Math.max(0, Math.min(1, newEffects.delayAmount + change))
-      }
-      
-      // Evolucionar reverb solo si no está excluido
-      if (!excludeReverb && newEffects.reverbAmount !== undefined) {
-        const change = (Math.random() - 0.5) * 0.4 * intensity
-        newEffects.reverbAmount = Math.max(0, Math.min(1, newEffects.reverbAmount + change))
-      }
-    }
-    
-    return newEffects
-  }
+
 
   // Aplicar evolución creativa más experimental
   const applyCreativeEvolution = (loop, availableScales) => {
@@ -165,16 +141,8 @@ export const useEvolutionSystem = () => {
       evolvedLoop.notes = evolveNotes(evolvedLoop.notes, evolvedLoop.scale.notes)
     }
     
-    // Evolución de efectos
-    if (evolutionTypes.value.effects) {
-      const effects = {
-        delayAmount: evolvedLoop.delayAmount,
-        reverbAmount: evolvedLoop.reverbAmount
-      }
-      const evolvedEffects = evolveEffects(effects, evolutionIntensity.value, options)
-      evolvedLoop.delayAmount = evolvedEffects.delayAmount
-      evolvedLoop.reverbAmount = evolvedEffects.reverbAmount
-    }
+    // Los efectos (delay y reverb) no se evolucionan automáticamente
+    // Se mantienen estables para preservar la configuración del usuario
     
     // Evolución de volumen (si está habilitada)
     if (evolutionTypes.value.volume && Math.random() < 0.3) {

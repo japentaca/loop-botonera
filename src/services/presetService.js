@@ -1,6 +1,16 @@
 /**
  * Servicio para gestión de presets en localStorage
  * Maneja operaciones CRUD, validaciones y migración de versiones
+ * 
+ * Estructura de preset:
+ * - globalConfig: configuración global de la aplicación
+ * - loops: array de configuraciones de loops, cada loop contiene:
+ *   - synthType: tipo de sintetizador (PolySynth, AMSynth, FMSynth, etc.)
+ *   - oscillatorType: forma de onda (sine, triangle, square, sawtooth)
+ *   - synthModel: compatibilidad hacia atrás (mismo valor que synthType)
+ *   - envelope: configuración ADSR del sintetizador
+ *   - harmonicity: para sintetizadores AM/FM
+ *   - modulationIndex: para sintetizadores FM
  */
 
 const STORAGE_KEY = 'loopera_presets'

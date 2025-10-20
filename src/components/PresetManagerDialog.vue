@@ -369,9 +369,11 @@ const startEditing = (preset) => {
   editingPresetId.value = preset.id
   editingName.value = preset.name
   nextTick(() => {
-    if (editInput.value) {
+    if (editInput.value && typeof editInput.value.focus === 'function') {
       editInput.value.focus()
-      editInput.value.select()
+      if (typeof editInput.value.select === 'function') {
+        editInput.value.select()
+      }
     }
   })
 }

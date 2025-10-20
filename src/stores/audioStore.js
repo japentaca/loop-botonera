@@ -405,7 +405,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateEvolveIntensity = (intensity) => {
-    const normalizedIntensity = Math.max(0.1, Math.min(1.0, Number(intensity) / 3))
+    const normalizedIntensity = Math.max(0.1, Math.min(1.0, Number(intensity) / 10))
     evolutionSystem.updateEvolutionSettings({ intensity: normalizedIntensity })
   }
 
@@ -477,7 +477,7 @@ export const useAudioStore = defineStore('audio', () => {
     // Estado de evolución automática
     autoEvolve,
     evolveInterval: computed(() => evolutionSystem.evolutionInterval.value / 1000), // convertir a segundos para compatibilidad
-    evolveIntensity: computed(() => evolutionSystem.evolutionIntensity.value * 3), // convertir para compatibilidad
+    evolveIntensity: computed(() => evolutionSystem.evolutionIntensity.value * 10), // convertir para compatibilidad
     measuresSinceEvolve,
     nextEvolveMeasure,
     scaleLocked,

@@ -114,8 +114,9 @@ export const usePresetStore = defineStore('preset', () => {
       isActive: loop.isActive,
       scale: [...loop.scale],
       baseNote: loop.baseNote,
-      synthModel: loop.synthModel,
-      synthType: loop.synthType,
+      // Nomenclatura correcta: synthType es el tipo de sintetizador, oscillatorType es la forma de onda
+      synthType: loop.synthModel || loop.synthType || 'PolySynth', // Tipo de sintetizador
+      oscillatorType: loop.synthType || loop.oscillatorType || 'sine', // Forma de onda
       pattern: [...loop.pattern],
       notes: [...loop.notes],
       length: loop.length,
@@ -136,7 +137,7 @@ export const usePresetStore = defineStore('preset', () => {
   }
 
   // Aplicar preset al estado de la aplicación
-  const applyPresetToState = async (preset) => {
+  const applyPresetToState = async (preset, options = {}) => {
     try {
       // Validar preset antes de aplicar
       if (!validatePreset(preset)) {
@@ -161,8 +162,12 @@ export const usePresetStore = defineStore('preset', () => {
       
       // Configuración de evolución automática
       if (typeof globalConfig.autoEvolve === 'boolean') audioStore.autoEvolve = globalConfig.autoEvolve
-      if (typeof globalConfig.evolveInterval === 'number') audioStore.evolveInterval = globalConfig.evolveInterval
-      if (typeof globalConfig.evolveIntensity === 'number') audioStore.evolveIntensity = globalConfig.evolveIntensity
+      
+      // Solo aplicar valores de evolución si no se especifica preservarlos
+      if (!options.preserveEvolutionSettings) {
+        if (typeof globalConfig.evolveInterval === 'number') audioStore.evolveInterval = globalConfig.evolveInterval
+        if (typeof globalConfig.evolveIntensity === 'number') audioStore.evolveIntensity = globalConfig.evolveIntensity
+      }
       if (typeof globalConfig.momentumMaxLevel === 'number') audioStore.momentumMaxLevel = globalConfig.momentumMaxLevel
       if (typeof globalConfig.scaleLocked === 'boolean') audioStore.scaleLocked = globalConfig.scaleLocked
       
@@ -186,11 +191,36 @@ export const usePresetStore = defineStore('preset', () => {
             if (typeof presetLoop.isActive === 'boolean') loop.isActive = presetLoop.isActive
             if (Array.isArray(presetLoop.scale)) loop.scale = [...presetLoop.scale]
             if (typeof presetLoop.baseNote === 'number') loop.baseNote = presetLoop.baseNote
-            if (typeof presetLoop.synthModel === 'string') loop.synthModel = presetLoop.synthModel
-            if (typeof presetLoop.synthType === 'string') loop.synthType = presetLoop.synthType
+            
+            // Corregir aplicación de tipo de sintetizador y forma de onda
+            // Priorizar la nueva nomenclatura, pero mantener compatibilidad
+            if (typeof presetLoop.synthType === 'string') {
+              loop.synthModel = presetLoop.synthType // Tipo de sintetizador
+            } else if (typeof presetLoop.synthModel === 'string') {
+              loop.synthModel = presetLoop.synthModel // Compatibilidad hacia atrás
+            }
+            
+            if (typeof presetLoop.oscillatorType === 'string') {
+              loop.synthType = presetLoop.oscillatorType // Forma de onda
+            } else if (typeof presetLoop.synthType === 'string' && !presetLoop.oscillatorType) {
+              // Si solo existe synthType en preset antiguo, asumimos que es la forma de onda
+              loop.synthType = presetLoop.synthType
+            }
+            if (typeof presetLoop.length === 'number') {
+              // Si el tamaño cambió, actualizar y regenerar patrón y notas
+              if (loop.length !== presetLoop.length) {
+                loop.length = presetLoop.length
+                // Usar updateLoopParam para regenerar patrón y notas correctamente
+                if (audioStore.updateLoopParam) {
+                  audioStore.updateLoopParam(index, 'length', presetLoop.length)
+                }
+              } else {
+                loop.length = presetLoop.length
+              }
+            }
+            // Aplicar patrón y notas del preset solo después de ajustar el tamaño
             if (Array.isArray(presetLoop.pattern)) loop.pattern = [...presetLoop.pattern]
             if (Array.isArray(presetLoop.notes)) loop.notes = [...presetLoop.notes]
-            if (typeof presetLoop.length === 'number') loop.length = presetLoop.length
             if (typeof presetLoop.delayAmount === 'number') loop.delayAmount = presetLoop.delayAmount
             if (typeof presetLoop.reverbAmount === 'number') loop.reverbAmount = presetLoop.reverbAmount
             if (typeof presetLoop.volume === 'number') loop.volume = presetLoop.volume
@@ -207,10 +237,24 @@ export const usePresetStore = defineStore('preset', () => {
               loop.synthConfig = { ...presetLoop.synthConfig }
             }
 
-            // Actualizar sintetizador si hay configuración específica
-            if (presetLoop.synthConfig && audioStore.updateLoopSynth) {
+            // Actualizar sintetizador con la configuración correcta
+            if (audioStore.updateLoopSynth) {
               try {
-                audioStore.updateLoopSynth(index, presetLoop.synthConfig)
+                // Crear configuración del sintetizador basada en los valores del preset
+                const synthConfig = {
+                  type: loop.synthModel || 'PolySynth', // Tipo de sintetizador
+                  oscillator: { type: loop.synthType || 'sine' }, // Forma de onda
+                  envelope: { ...loop.envelope },
+                  harmonicity: loop.harmonicity,
+                  modulationIndex: loop.modulationIndex
+                }
+                
+                // Si hay configuración específica del sintetizador, usarla
+                if (presetLoop.synthConfig && typeof presetLoop.synthConfig === 'object') {
+                  Object.assign(synthConfig, presetLoop.synthConfig)
+                }
+                
+                audioStore.updateLoopSynth(index, synthConfig)
               } catch (synthError) {
                 console.warn(`Error actualizando sintetizador del loop ${index}:`, synthError)
               }
@@ -562,6 +606,7 @@ export const usePresetStore = defineStore('preset', () => {
 
     // Utilidades
     captureCurrentState,
-    applyPresetToState
+    applyPresetToState,
+    applyStyleModifier: (preset) => applyPresetToState(preset, { preserveEvolutionSettings: true })
   }
 })

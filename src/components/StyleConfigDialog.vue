@@ -51,7 +51,7 @@
                 <input 
                   type="range" 
                   min="1" 
-                  max="3" 
+                  max="10" 
                   step="1"
                   :value="audioStore.evolveIntensity"
                   @input="onEvolveIntensityChange($event.target.value)"
