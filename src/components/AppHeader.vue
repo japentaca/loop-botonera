@@ -44,6 +44,14 @@
           />
           <span class="value-compact">{{ audioStore.masterVolume }}%</span>
         </div>
+        
+        <button 
+          @click="audioStore.applySparseDistribution" 
+          class="sparse-button"
+          title="Distribuir canales activos en el panorama estéreo"
+        >
+          Sparse
+        </button>
       </div>
       
       <!-- Visualizador de pulsos integrado -->

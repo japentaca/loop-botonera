@@ -891,6 +891,41 @@ export const useAudioStore = defineStore('audio', () => {
     adjustAllLoopVolumes()
   }
 
+  // Distribuir canales activos en el panorama estéreo (sparse)
+  const applySparseDistribution = () => {
+    if (!audioInitialized.value) return
+    
+    // Obtener loops activos
+    const activeLoops = loops.value.filter(loop => loop.isActive)
+    
+    if (activeLoops.length === 0) return
+    
+    // Si solo hay un loop activo, centrarlo
+    if (activeLoops.length === 1) {
+      updateLoopParam(activeLoops[0].id, 'pan', 0)
+      return
+    }
+    
+    // Distribuir múltiples loops en el panorama estéreo
+    activeLoops.forEach((loop, index) => {
+      let panValue
+      
+      if (activeLoops.length === 2) {
+        // Dos loops: uno a la izquierda (-0.7) y otro a la derecha (0.7)
+        panValue = index === 0 ? -0.7 : 0.7
+      } else {
+        // Tres o más loops: distribuir uniformemente de -1 a 1
+        panValue = -1 + (2 * index) / (activeLoops.length - 1)
+        // Limitar el rango para evitar extremos muy duros
+        panValue = Math.max(-0.9, Math.min(0.9, panValue))
+      }
+      
+      updateLoopParam(loop.id, 'pan', panValue)
+    })
+    
+    console.log(`Distribución sparse aplicada a ${activeLoops.length} canales activos`)
+  }
+
   // Actualizar configuración del sintetizador de un loop
   const updateLoopSynth = (loopId, synthConfig) => {
     const loop = loops.value?.[loopId]
@@ -975,6 +1010,7 @@ export const useAudioStore = defineStore('audio', () => {
     updateLoopSynth,
     regenerateLoop,
     regenerateAllLoops,
+    applySparseDistribution,
     updateTempo,
     updateMasterVolume,
     updateTranspose,
