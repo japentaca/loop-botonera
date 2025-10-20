@@ -351,7 +351,7 @@ export const useAudioStore = defineStore('audio', () => {
     
     // Resetear contador
     measuresSinceEvolve.value = 0
-    nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value / 1000 * 16)
+    nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value * 16)
     
     const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
     const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
@@ -361,9 +361,16 @@ export const useAudioStore = defineStore('audio', () => {
   const checkEvolve = () => {
     if (!autoEvolve.value || !audioEngine.isPlaying.value) return
     
-    if (evolutionSystem.shouldEvolve()) {
+    // Verificar evolución basada en compases musicales
+    const currentMeasure = Math.floor(audioEngine.currentPulse.value / 16)
+    const targetMeasure = Math.floor(nextEvolveMeasure.value / 16)
+    
+    if (currentMeasure >= targetMeasure) {
       evolveMusic()
-      evolutionSystem.markEvolution()
+      // Calcular próxima evolución: simplemente sumar el intervalo en compases
+      const measuresInterval = evolutionSystem.evolutionInterval.value
+      nextEvolveMeasure.value = audioEngine.currentPulse.value + (measuresInterval * 16)
+      measuresSinceEvolve.value = 0
     }
   }
 
@@ -373,7 +380,11 @@ export const useAudioStore = defineStore('audio', () => {
     autoEvolve.value = true
     evolutionSystem.updateEvolutionSettings({ enabled: true })
     measuresSinceEvolve.value = 0
-    nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value / 1000 * 16)
+    
+    // Calcular próxima evolución: simplemente sumar el intervalo en compases
+    const measuresInterval = evolutionSystem.evolutionInterval.value
+    nextEvolveMeasure.value = audioEngine.currentPulse.value + (measuresInterval * 16)
+    
     evolveStartTime.value = Date.now()
     momentumLevel.value = 0
     
@@ -397,10 +408,11 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateEvolveInterval = (interval) => {
-    const intervalMs = Math.max(4000, Math.min(32000, Number(interval) * 1000))
-    evolutionSystem.updateEvolutionSettings({ interval: intervalMs })
+    const measuresInterval = Math.max(2, Math.min(32, Number(interval))) // límites en compases
+    evolutionSystem.updateEvolutionSettings({ interval: measuresInterval })
     if (autoEvolve.value) {
-      nextEvolveMeasure.value = audioEngine.currentPulse.value + (intervalMs / 1000 * 16)
+      // Recalcular próxima evolución: simplemente sumar el nuevo intervalo en compases
+      nextEvolveMeasure.value = audioEngine.currentPulse.value + (measuresInterval * 16)
     }
   }
 
@@ -476,7 +488,7 @@ export const useAudioStore = defineStore('audio', () => {
     
     // Estado de evolución automática
     autoEvolve,
-    evolveInterval: computed(() => evolutionSystem.evolutionInterval.value / 1000), // convertir a segundos para compatibilidad
+    evolveInterval: computed(() => evolutionSystem.evolutionInterval.value), // intervalo en compases
     evolveIntensity: computed(() => evolutionSystem.evolutionIntensity.value * 10), // convertir para compatibilidad
     measuresSinceEvolve,
     nextEvolveMeasure,

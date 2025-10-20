@@ -139,6 +139,9 @@ export const usePresetStore = defineStore('preset', () => {
   // Aplicar preset al estado de la aplicación
   const applyPresetToState = async (preset, options = {}) => {
     try {
+      console.log(`🚀🚀🚀 INICIANDO applyPresetToState para preset: ${preset.name}`)
+      console.log(`🔍 delayDivision en preset:`, preset.globalConfig?.delayDivision)
+      
       // Validar preset antes de aplicar
       if (!validatePreset(preset)) {
         throw new Error('Preset inválido')
@@ -155,18 +158,18 @@ export const usePresetStore = defineStore('preset', () => {
       const { globalConfig, loops: presetLoops } = preset
 
       // Actualizar configuración global con validación de tipos
-      if (typeof globalConfig.tempo === 'number') audioStore.tempo = globalConfig.tempo
-      if (typeof globalConfig.masterVol === 'number') audioStore.masterVol = globalConfig.masterVol
+      if (typeof globalConfig.tempo === 'number') audioStore.updateTempo(globalConfig.tempo)
+      if (typeof globalConfig.masterVol === 'number') audioStore.updateMasterVolume(globalConfig.masterVol * 100)
       if (typeof globalConfig.currentScale === 'string') audioStore.currentScale = globalConfig.currentScale
-      if (typeof globalConfig.delayDivision === 'string') audioStore.delayDivision = globalConfig.delayDivision
+      // delayDivision se actualiza al final para asegurar que la interfaz se actualice correctamente
       
       // Configuración de evolución automática
       if (typeof globalConfig.autoEvolve === 'boolean') audioStore.autoEvolve = globalConfig.autoEvolve
       
       // Solo aplicar valores de evolución si no se especifica preservarlos
       if (!options.preserveEvolutionSettings) {
-        if (typeof globalConfig.evolveInterval === 'number') audioStore.evolveInterval = globalConfig.evolveInterval
-        if (typeof globalConfig.evolveIntensity === 'number') audioStore.evolveIntensity = globalConfig.evolveIntensity
+        if (typeof globalConfig.evolveInterval === 'number') audioStore.updateEvolveInterval(globalConfig.evolveInterval)
+        if (typeof globalConfig.evolveIntensity === 'number') audioStore.updateEvolveIntensity(globalConfig.evolveIntensity)
       }
       if (typeof globalConfig.momentumMaxLevel === 'number') audioStore.momentumMaxLevel = globalConfig.momentumMaxLevel
       if (typeof globalConfig.scaleLocked === 'boolean') audioStore.scaleLocked = globalConfig.scaleLocked
@@ -285,11 +288,18 @@ export const usePresetStore = defineStore('preset', () => {
       if (audioStore.updateScale && typeof globalConfig.currentScale === 'string') {
         audioStore.updateScale(globalConfig.currentScale)
       }
+      // Aplicar delayDivision al final para asegurar que se actualice correctamente
       if (audioStore.updateDelayDivision && typeof globalConfig.delayDivision === 'string') {
         audioStore.updateDelayDivision(globalConfig.delayDivision)
+        
+        // Esperar múltiples ticks para asegurar que la interfaz se actualice
+        await nextTick()
+        await nextTick()
+        
+        // Forzar una segunda actualización para asegurar que el DOM se actualice
+        audioStore.updateDelayDivision(globalConfig.delayDivision)
+        await nextTick()
       }
-
-      await nextTick()
       
       // Restaurar auto-guardado
       autoSaveEnabled.value = wasAutoSaveEnabled

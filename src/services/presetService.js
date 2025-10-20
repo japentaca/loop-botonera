@@ -86,12 +86,28 @@ export const validatePreset = (preset) => {
  * Migra un preset a la versión actual
  */
 const migratePreset = (preset) => {
-  // Por ahora solo asegurar que tenga la versión actual
-  return {
+  const migratedPreset = {
     ...preset,
     version: CURRENT_VERSION,
     updatedAt: preset.updatedAt || preset.createdAt || new Date().toISOString()
   }
+  
+  // Migrar evolveInterval de milisegundos a compases si es necesario
+  if (migratedPreset.globalConfig && migratedPreset.globalConfig.evolveInterval) {
+    const evolveInterval = migratedPreset.globalConfig.evolveInterval
+    
+    // Si el valor es mayor a 100, probablemente está en milisegundos
+    if (evolveInterval > 100) {
+      // Convertir de milisegundos a compases aproximados
+      // Valores comunes: 8000ms ≈ 8 compases, 4000ms ≈ 4 compases
+      const measuresInterval = Math.round(evolveInterval / 1000)
+      migratedPreset.globalConfig.evolveInterval = Math.max(2, Math.min(32, measuresInterval))
+      
+      console.log(`Migrado evolveInterval de ${evolveInterval}ms a ${migratedPreset.globalConfig.evolveInterval} compases`)
+    }
+  }
+  
+  return migratedPreset
 }
 
 /**

@@ -7,7 +7,7 @@ import { ref, computed } from 'vue'
 export const useEvolutionSystem = () => {
   // Estado de evolución automática
   const autoEvolutionEnabled = ref(false)
-  const evolutionInterval = ref(8000) // intervalo en milisegundos
+  const evolutionInterval = ref(8) // intervalo en compases (4/4)
   const evolutionIntensity = ref(0.1) // intensidad de los cambios (0-1), valor por defecto 1 en interfaz
   const creativeModeEnabled = ref(false)
   const lastEvolutionTime = ref(0)
@@ -196,7 +196,7 @@ export const useEvolutionSystem = () => {
       autoEvolutionEnabled.value = settings.enabled
     }
     if (settings.interval !== undefined) {
-      evolutionInterval.value = Math.max(1000, Math.min(60000, settings.interval))
+      evolutionInterval.value = Math.max(2, Math.min(32, settings.interval)) // límites en compases
     }
     if (settings.intensity !== undefined) {
       evolutionIntensity.value = Math.max(0.1, Math.min(1.0, settings.intensity))
