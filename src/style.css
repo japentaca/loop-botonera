@@ -192,14 +192,56 @@ body {
   cursor: pointer;
 }
 
+/* Estilos globales para todos los componentes select/dropdown de PrimeVue */
+.p-select,
+.p-multiselect,
+.p-dropdown,
 .select-compact {
-  background: #2a2a2a !important;
-  border: 1px solid #666666 !important;
-  border-radius: 4px;
-  color: #e0e0e0;
-  padding: 2px 6px;
-  font-size: 11px;
-  min-width: 80px;
+  background: rgba(26, 26, 26, 0.9) !important;
+  border: 0.8px solid rgba(102, 102, 102, 0.6) !important;
+  border-radius: 8px !important;
+  color: rgb(224, 224, 224) !important;
+  backdrop-filter: blur(10px) !important;
+  box-shadow: rgba(18, 18, 23, 0.05) 0px 1px 2px 0px !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Estilos específicos para select-compact */
+.select-compact {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  min-width: 80px !important;
+}
+
+/* Estados hover para todos los selectores */
+.p-select:hover,
+.p-multiselect:hover,
+.p-dropdown:hover,
+.select-compact:hover {
+  background: rgba(36, 36, 36, 0.95) !important;
+  border: 0.8px solid rgba(122, 122, 122, 0.8) !important;
+  box-shadow: rgba(18, 18, 23, 0.1) 0px 2px 4px 0px !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Estilos para los labels de los selectores */
+.p-select-label,
+.p-multiselect-label,
+.p-dropdown-label {
+  color: rgb(224, 224, 224) !important;
+}
+
+/* Estados focus para todos los selectores */
+.p-select:focus-within,
+.p-multiselect:focus-within,
+.p-dropdown:focus-within,
+.select-compact:focus-within,
+.p-select.p-focus,
+.p-multiselect.p-focus,
+.p-dropdown.p-focus {
+  background: rgba(36, 36, 36, 0.95) !important;
+  border: 0.8px solid rgba(142, 142, 142, 1) !important;
+  box-shadow: 0 0 0 2px rgba(102, 102, 102, 0.3), rgba(18, 18, 23, 0.15) 0px 2px 6px 0px !important;
 }
 
 /* Estilos para el wrapper del control de escala */
