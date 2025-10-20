@@ -39,8 +39,8 @@ export const useAudioStore = defineStore('audio', () => {
   
   // Configuración de gestión de energía sonora
   const energyManagementEnabled = ref(true) // habilitar/deshabilitar gestión automática
-  const maxSonicEnergy = ref(4.0) // límite máximo de energía sonora total
-  const energyReductionFactor = ref(0.8) // factor de reducción cuando se excede el límite
+  const maxSonicEnergy = ref(2.5) // límite máximo de energía sonora total
+  const energyReductionFactor = ref(0.6) // factor de reducción cuando se excede el límite (60%)
   
   // Derivados para UI
   const currentBeat = computed(() => currentPulse.value % 16)
