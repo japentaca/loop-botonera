@@ -52,6 +52,14 @@
         >
           Sparse
         </button>
+        
+        <button 
+          @click="openPresetDialog"
+          class="preset-button-compact"
+          title="Gestionar presets"
+        >
+          💾 Presets
+        </button>
       </div>
       
       <!-- Visualizador de pulsos integrado -->
@@ -148,15 +156,21 @@
     :is-open="isStyleDialogOpen" 
     @close="closeStyleDialog" 
   />
+  
+  <!-- Diálogo de gestión de presets -->
+  <PresetManagerDialog />
 </template>
 
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { useAudioStore } from '../stores/audioStore'
+import { usePresetStore } from '../stores/presetStore'
 import { useScales } from '../composables/useMusic'
 import StyleConfigDialog from './StyleConfigDialog.vue'
+import PresetManagerDialog from './PresetManagerDialog.vue'
 
 const audioStore = useAudioStore()
+const presetStore = usePresetStore()
 const { scales, scaleNames, scaleNamesSpanish } = useScales()
 
 // Obtener las claves de las escalas para el selector
@@ -292,6 +306,11 @@ const openStyleDialog = () => {
 
 const closeStyleDialog = () => {
   isStyleDialogOpen.value = false
+}
+
+// Función para abrir el diálogo de presets
+const openPresetDialog = () => {
+  presetStore.openDialog()
 }
 
 const delayDivisionFriendlyLabel = computed(() => divisionLabelMap[audioStore.delayDivision] || audioStore.delayDivision)

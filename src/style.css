@@ -817,6 +817,34 @@ input[type="range"]::-moz-range-thumb,
   box-shadow: 0 2px 6px rgba(0, 217, 255, 0.3);
 }
 
+/* Estilos para el botón de presets */
+.preset-button-compact {
+  padding: 6px 12px;
+  border: 1px solid #9c88ff;
+  background: rgba(156, 136, 255, 0.2);
+  border-radius: 6px;
+  color: #9c88ff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 8px;
+}
+
+.preset-button-compact:hover {
+  background: linear-gradient(135deg, #9c88ff, #7b2ff7);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(156, 136, 255, 0.4);
+}
+
+.preset-button-compact:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(156, 136, 255, 0.3);
+}
+
 .status-value {
   font-size: 0.9rem;
   font-weight: 500;
