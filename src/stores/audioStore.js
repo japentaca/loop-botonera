@@ -815,6 +815,11 @@ export const useAudioStore = defineStore('audio', () => {
     evolveIntensity.value = Math.max(1, Math.min(3, Number(intensity)))
   }
 
+  const updateMomentumMaxLevel = (level) => {
+    momentumMaxLevel.value = Math.max(1, Math.min(10, Number(level)))
+    console.log(`Nivel máximo de momentum actualizado a: ${momentumMaxLevel.value}`)
+  }
+
   // Control de modos creativos desde la UI
   const setEvolveMode = (mode) => {
     const validModes = ['classic', 'momentum', 'callResponse', 'tensionRelease']
@@ -1001,6 +1006,7 @@ export const useAudioStore = defineStore('audio', () => {
     autoEvolve,
     evolveInterval,
     evolveIntensity,
+    momentumMaxLevel,
     measuresSinceEvolve,
     nextEvolveMeasure,
     initAudio,
@@ -1025,6 +1031,7 @@ export const useAudioStore = defineStore('audio', () => {
     stopAutoEvolve,
     updateEvolveInterval,
     updateEvolveIntensity,
+    updateMomentumMaxLevel,
     evolveMusic,
     // Funciones auxiliares para modos creativos
     setEvolveMode,

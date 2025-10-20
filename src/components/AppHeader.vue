@@ -82,24 +82,15 @@
 
         <div class="control-group-compact">
           <label class="control-label-compact">Escala</label>
-          <div class="scale-control-wrapper">
-            <select 
-              :value="audioStore.currentScale" 
-              @change="onScaleChange($event.target.value)"
-              class="select-compact"
-            >
-              <option v-for="scaleKey in scaleKeys" :key="scaleKey" :value="scaleKey">
-                {{ scaleNamesSpanish[scaleKey] }}
-              </option>
-            </select>
-            <button 
-              @click="toggleScaleLock"
-              :class="['scale-lock-button', { locked: audioStore.scaleLocked }]"
-              :title="audioStore.scaleLocked ? 'Desbloquear escala' : 'Bloquear escala'"
-            >
-              {{ audioStore.scaleLocked ? '🔒' : '🔓' }}
-            </button>
-          </div>
+          <select 
+            :value="audioStore.currentScale" 
+            @change="onScaleChange($event.target.value)"
+            class="select-compact"
+          >
+            <option v-for="scaleKey in scaleKeys" :key="scaleKey" :value="scaleKey">
+              {{ scaleNamesSpanish[scaleKey] }}
+            </option>
+          </select>
         </div>
 
         <div class="control-group-compact">
@@ -124,62 +115,9 @@
         </div>
       </div>
       
-      <!-- Controles de energía sonora -->
-      <div class="energy-controls">
-        <div class="control-group-compact">
-          <label class="control-label-compact">
-            <input 
-              type="checkbox" 
-              :checked="audioStore.energyManagementEnabled"
-              @change="updateEnergyManagement($event.target.checked)"
-              class="checkbox-compact"
-            />
-            Gestión Energía
-          </label>
-        </div>
-        
-        <div class="control-group-compact" v-if="audioStore.energyManagementEnabled">
-          <label class="control-label-compact">Límite</label>
-          <input 
-            type="range" 
-            min="1" 
-            max="8" 
-            step="0.5"
-            :value="audioStore.maxSonicEnergy"
-            @input="updateMaxSonicEnergy($event.target.value)"
-            class="range-compact"
-          />
-          <span class="value-compact">{{ audioStore.maxSonicEnergy.toFixed(1) }}</span>
-        </div>
-        
-        <div class="control-group-compact" v-if="audioStore.energyManagementEnabled">
-          <label class="control-label-compact">Reducción</label>
-          <input 
-            type="range" 
-            min="0.3" 
-            max="1.0" 
-            step="0.1"
-            :value="audioStore.energyReductionFactor"
-            @input="updateEnergyReductionFactor($event.target.value)"
-            class="range-compact"
-          />
-          <span class="value-compact">{{ Math.round(audioStore.energyReductionFactor * 100) }}%</span>
-        </div>
-      </div>
+
       
       <div class="evolution-controls-compact">
-        <!-- MultiSelector para estilos creativos - movido al lado izquierdo -->
-        <div class="control-group-compact evolution-styles">
-          <MultiSelector
-            v-model="selectedEvolutionTypes"
-            :options="evolutionOptions"
-            label="Estilos Creativos"
-            placeholder="Seleccionar estilos..."
-            :max-selections="3"
-            @update:modelValue="onEvolutionTypesChange"
-          />
-        </div>
-        
         <button 
           @click="toggleAutoEvolve" 
           :class="['evolve-button-compact', { active: audioStore.autoEvolve }]"
@@ -187,33 +125,13 @@
           {{ audioStore.autoEvolve ? '⏸' : '▶' }} Auto
         </button>
         
-        <div class="control-group-compact">
-          <label class="control-label-compact">Intervalo</label>
-          <input 
-            type="range" 
-            min="4" 
-            max="32" 
-            step="4"
-            :value="audioStore.evolveInterval"
-            @input="onEvolveIntervalChange($event.target.value)"
-            class="range-compact"
-          />
-          <span class="value-compact">{{ audioStore.evolveInterval }}</span>
-        </div>
-        
-        <div class="control-group-compact">
-          <label class="control-label-compact">Intensidad</label>
-          <input 
-            type="range" 
-            min="1" 
-            max="3" 
-            step="1"
-            :value="audioStore.evolveIntensity"
-            @input="onEvolveIntensityChange($event.target.value)"
-            class="range-compact"
-          />
-          <span class="value-compact">{{ audioStore.evolveIntensity }}</span>
-        </div>
+        <button 
+          @click="openStyleDialog"
+          class="style-config-button-compact"
+          title="Configurar estilos de evolución"
+        >
+          ⚙️ Estilos
+        </button>
         
         <div class="evolve-progress-compact" v-if="audioStore.autoEvolve">
           <div class="progress-bar-compact">
@@ -224,19 +142,28 @@
       </div>
     </div>
   </div>
+
+  <!-- Diálogo de configuración de estilos -->
+  <StyleConfigDialog 
+    :is-open="isStyleDialogOpen" 
+    @close="closeStyleDialog" 
+  />
 </template>
 
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { useAudioStore } from '../stores/audioStore'
 import { useScales } from '../composables/useMusic'
-import MultiSelector from './MultiSelector.vue'
+import StyleConfigDialog from './StyleConfigDialog.vue'
 
 const audioStore = useAudioStore()
 const { scales, scaleNames, scaleNamesSpanish } = useScales()
 
 // Obtener las claves de las escalas para el selector
 const scaleKeys = Object.keys(scales)
+
+// Estado para el diálogo de configuración de estilos
+const isStyleDialogOpen = ref(false)
 
 // Configuración del multiselector de evolución
 const selectedEvolutionTypes = ref([])
@@ -347,11 +274,6 @@ const regenerateAllLoops = () => {
   audioStore.regenerateAllLoops()
 }
 
-const toggleScaleLock = () => {
-  audioStore.toggleScaleLock()
-}
-
-
 // Mapeo de etiquetas amigables para divisiones de delay
 const divisionLabelMap = {
   '16n': '1/16 (semicorchea)',
@@ -363,17 +285,13 @@ const divisionLabelMap = {
   '2t': '1/2t (blanca ternaria)',
 }
 
-// Funciones wrapper para gestión de energía sónica
-const updateEnergyManagement = (value) => {
-  audioStore.updateEnergyManagement(value)
+// Funciones para el diálogo de configuración de estilos
+const openStyleDialog = () => {
+  isStyleDialogOpen.value = true
 }
 
-const updateMaxSonicEnergy = (value) => {
-  audioStore.updateMaxSonicEnergy(parseFloat(value))
-}
-
-const updateEnergyReductionFactor = (value) => {
-  audioStore.updateEnergyReductionFactor(parseFloat(value))
+const closeStyleDialog = () => {
+  isStyleDialogOpen.value = false
 }
 
 const delayDivisionFriendlyLabel = computed(() => divisionLabelMap[audioStore.delayDivision] || audioStore.delayDivision)

@@ -116,6 +116,29 @@ body {
   font-size: 0.7rem;
 }
 
+/* Botón de configuración de estilos */
+.style-config-button-compact {
+  background: linear-gradient(135deg, #00d9ff, #0099cc);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.style-config-button-compact:hover {
+  background: linear-gradient(135deg, #00b8e6, #0088bb);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);
+}
+
 .control-group-compact {
   display: flex;
   align-items: center;
