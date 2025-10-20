@@ -47,10 +47,8 @@ export const usePresetStore = defineStore('preset', () => {
       const loadedPresets = getAllPresets()
       presets.value = loadedPresets
       
-      // Si no hay presets, crear uno por defecto
-      if (loadedPresets.length === 0) {
-        await createDefaultPreset()
-      }
+      // No crear preset automáticamente - solo cargar los existentes
+      console.log(`Cargados ${loadedPresets.length} presets`)
     } catch (error) {
       console.error('Error al cargar presets:', error)
       throw error
@@ -367,8 +365,8 @@ export const usePresetStore = defineStore('preset', () => {
   const saveCurrentPreset = async () => {
     try {
       if (!currentPresetId.value) {
-        // Si no hay preset actual, crear uno nuevo
-        return await createPreset()
+        // Si no hay preset actual, lanzar error para que el componente maneje la solicitud de nombre
+        throw new Error('NO_PRESET_SELECTED')
       }
 
       const audioStore = useAudioStore()
@@ -528,12 +526,13 @@ export const usePresetStore = defineStore('preset', () => {
       return
     }
     
-    if (!currentPresetId.value) {
-      // Si no hay preset seleccionado, crear uno automático
-      createAutoPreset()
-    } else {
-      // Si hay preset seleccionado, marcar cambios para auto-guardado
+    // Solo marcar cambios si hay un preset seleccionado
+    // No crear presets automáticamente
+    if (currentPresetId.value) {
       markChanges()
+    } else {
+      // Solo marcar que hay cambios sin guardar, pero no crear preset automático
+      hasUnsavedChanges.value = true
     }
   }
 

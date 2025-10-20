@@ -43,7 +43,7 @@
             </svg>
             Nuevo Preset
           </button>
-          <button @click="saveCurrentPreset" :disabled="!presetStore.currentPresetId" class="btn btn-secondary">
+          <button @click="saveCurrentPreset" class="btn btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
               <polyline points="17,21 17,13 7,13 7,21"></polyline>
@@ -350,7 +350,18 @@ const saveCurrentPreset = async () => {
   try {
     await presetStore.saveCurrentPreset()
   } catch (error) {
-    alert(`Error al guardar preset: ${error.message}`)
+    if (error.message === 'NO_PRESET_SELECTED') {
+      // Si no hay preset seleccionado, mostrar el formulario de creación
+      showCreateForm.value = true
+      // Enfocar el input cuando se muestre
+      nextTick(() => {
+        if (createInput.value) {
+          createInput.value.focus()
+        }
+      })
+    } else {
+      alert(`Error al guardar preset: ${error.message}`)
+    }
   }
 }
 
