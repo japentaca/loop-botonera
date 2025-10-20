@@ -86,7 +86,6 @@ export const usePresetStore = defineStore('preset', () => {
     // Capturar configuración global
     const globalConfig = {
       tempo: audioStore.tempo,
-      transpose: audioStore.transpose,
       masterVol: audioStore.masterVol,
       currentScale: audioStore.currentScale,
       delayDivision: audioStore.delayDivision,
@@ -151,7 +150,6 @@ export const usePresetStore = defineStore('preset', () => {
 
       // Actualizar configuración global con validación de tipos
       if (typeof globalConfig.tempo === 'number') audioStore.tempo = globalConfig.tempo
-      if (typeof globalConfig.transpose === 'number') audioStore.transpose = globalConfig.transpose
       if (typeof globalConfig.masterVol === 'number') audioStore.masterVol = globalConfig.masterVol
       if (typeof globalConfig.currentScale === 'string') audioStore.currentScale = globalConfig.currentScale
       if (typeof globalConfig.delayDivision === 'string') audioStore.delayDivision = globalConfig.delayDivision
@@ -229,9 +227,6 @@ export const usePresetStore = defineStore('preset', () => {
       }
       if (audioStore.updateMasterVolume && typeof globalConfig.masterVol === 'number') {
         audioStore.updateMasterVolume(Math.round(globalConfig.masterVol * 100))
-      }
-      if (audioStore.updateTranspose && typeof globalConfig.transpose === 'number') {
-        audioStore.updateTranspose(globalConfig.transpose)
       }
       if (audioStore.updateScale && typeof globalConfig.currentScale === 'string') {
         audioStore.updateScale(globalConfig.currentScale)
@@ -484,7 +479,6 @@ export const usePresetStore = defineStore('preset', () => {
 
     // Observar cambios en audioStore
     watch(() => audioStore.tempo, handleChange)
-    watch(() => audioStore.transpose, handleChange)
     watch(() => audioStore.masterVol, handleChange)
     watch(() => audioStore.currentScale, handleChange)
     watch(() => audioStore.delayDivision, handleChange)

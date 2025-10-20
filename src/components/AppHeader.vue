@@ -75,18 +75,7 @@
     <!-- Fila inferior: Controles de música y evolución -->
     <div class="header-row-secondary">
       <div class="music-controls">
-        <div class="control-group-compact">
-          <label class="control-label-compact">Transpose</label>
-          <input 
-            type="range" 
-            min="-12" 
-            max="12" 
-            :value="audioStore.transpose"
-            @input="audioStore.updateTranspose($event.target.value)"
-            class="range-compact"
-          />
-          <span class="value-compact">{{ audioStore.transpose > 0 ? '+' : '' }}{{ audioStore.transpose }}</span>
-        </div>
+
 
         <div class="control-group-compact">
           <label class="control-label-compact">Escala</label>

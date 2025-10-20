@@ -218,10 +218,7 @@ export function useNoteUtils() {
     return (parseInt(octave) + 1) * 12 + noteMap[note]
   }
 
-  // Transponer nota
-  const transposeNote = (midiNote, semitones) => {
-    return Math.max(0, Math.min(127, midiNote + semitones))
-  }
+
 
   // Generar nota base aleatoria
   const generateRandomBaseNote = (minNote = 36, maxNote = 60) => {
@@ -264,7 +261,6 @@ export function useNoteUtils() {
   return {
     midiToNoteName,
     noteNameToMidi,
-    transposeNote,
     generateRandomBaseNote,
     quantizeToScale
   }

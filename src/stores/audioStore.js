@@ -10,7 +10,6 @@ export const useAudioStore = defineStore('audio', () => {
   const isPlaying = ref(false)
   const currentPulse = ref(0)
   const tempo = ref(120)
-  const transpose = ref(0)
   const masterVol = ref(0.7)
   const loops = ref([])
   const delayDivision = ref('8n')
@@ -118,7 +117,14 @@ export const useAudioStore = defineStore('audio', () => {
       const octave = Math.floor(Math.random() * maxOctaves)
       const note = baseNote + scale[scaleIndex] + (octave * 12)
       // Asegurar que la nota esté en rango MIDI válido y musical
-      return Math.max(24, Math.min(84, note))
+      const finalNote = Math.max(24, Math.min(84, note))
+      
+      // Verificar que la nota generada esté realmente en la escala
+      const { quantizeToScale } = useNoteUtils()
+      const quantizedNote = quantizeToScale(finalNote, scale, baseNote)
+      
+      console.log(`🎼 GenerateNotesInRange: nota ${finalNote} → ${quantizedNote} (escala: ${scale[scaleIndex]})`)
+      return quantizedNote
     })
   }
 
@@ -204,7 +210,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Crear loop básico sin audio (para mostrar en UI)
   const createBasicLoop = (id) => {
-    const scale = scales[currentScale.value]
+    const scale = useScales().getScale(currentScale.value)
     const baseNote = 36 + Math.floor(Math.random() * 24)
     const synthType = 'sine'
     const length = 16
@@ -241,7 +247,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const createLoop = (id) => {
-    const scale = scales[currentScale.value]
+    const scale = useScales().getScale(currentScale.value)
     const baseNote = 36 + Math.floor(Math.random() * 24)
     const synthType = 'sine'
     const length = 16
@@ -418,7 +424,7 @@ export const useAudioStore = defineStore('audio', () => {
       if (!Tone.context || Tone.context.state !== 'running') return
 
       // Calcular frecuencia desde nota MIDI
-      const midiNote = loop.notes[step] + transpose.value
+      const midiNote = loop.notes[step]
       if (Number.isNaN(midiNote) || midiNote < 0 || midiNote > 127) return
       const freq = Tone.Frequency(midiNote, 'midi').toFrequency()
 
@@ -443,7 +449,7 @@ export const useAudioStore = defineStore('audio', () => {
         const temp = new Tone.Synth().toDestination()
         const midiNote = loop?.notes?.[step]
         if (typeof midiNote === 'number' && isFinite(midiNote)) {
-          const noteName = Tone.Frequency(midiNote + (transpose?.value || 0), 'midi').toNote()
+          const noteName = Tone.Frequency(midiNote, 'midi').toNote()
           const useTime = Tone.context?.state === 'running' && typeof time === 'number' ? time : undefined
           temp.triggerAttackRelease(noteName, '16n', useTime)
         }
@@ -587,16 +593,16 @@ export const useAudioStore = defineStore('audio', () => {
     }
   }
 
-  // Actualizar transposición
-  const updateTranspose = (value) => {
-    transpose.value = Number(value)
-  }
+
 
   // Cambiar escala actual y cuantizar notas de los loops
   const updateScale = (newScale) => {
-    if (!scales[newScale]) return
+    const scale = useScales().getScale(newScale)
+    
+    if (!scale) return
     currentScale.value = newScale
-    const scale = scales[newScale]
+    
+    console.log(`🔍 updateScale: newScale=${newScale}, scale=`, scale, `type=${typeof scale}`, `isArray=${Array.isArray(scale)}`)
     
     if (!audioInitialized.value) {
       // Si no está inicializado, solo actualizar la referencia de la escala
@@ -624,28 +630,18 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Sistema de evolución automática
   const getRandomScale = (excludeScale = null) => {
-    const availableScales = Object.keys(scales).filter(scale => 
+    const { scales: scalesList } = useScales()
+    const availableScales = Object.keys(scalesList).filter(scale => 
       scale !== excludeScale && !recentScales.value.includes(scale)
     )
     if (availableScales.length === 0) {
       // Si no hay escalas disponibles, usar cualquiera excepto la actual
-      return Object.keys(scales).find(scale => scale !== excludeScale) || 'major'
+      return Object.keys(scalesList).find(scale => scale !== excludeScale) || 'major'
     }
     return availableScales[Math.floor(Math.random() * availableScales.length)]
   }
 
-  const transposeNotesForScale = (notes, currentScale, newScale, baseNote) => {
-    const { quantizeToScale } = useNoteUtils()
-    console.log(`🔄 Transponiendo notas de escala ${currentScale} a ${newScale}`, scales[newScale])
-    return notes.map(note => {
-      if (typeof note !== 'number') return note
-      // Mantener la posición relativa en el patrón y asegurar rango válido
-      const quantizedNote = quantizeToScale(note, scales[newScale], baseNote)
-      const result = Math.max(24, Math.min(96, quantizedNote))
-      console.log(`  Nota ${note} → ${result} (escala: ${newScale}, baseNote: ${baseNote})`)
-      return result
-    })
-  }
+
 
   const selectRandomLoops = (count) => {
     const activeLoops = loops.value.filter(loop => loop.isActive)
@@ -697,33 +693,27 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   // Call & Response: un loop "responde" al último modificador
-  const applyCallResponse = (loopsToTranspose) => {
-    if (!Array.isArray(loopsToTranspose) || loopsToTranspose.length === 0) return loopsToTranspose
+  const applyCallResponse = (loopsToReharmonize) => {
+    if (!Array.isArray(loopsToReharmonize) || loopsToReharmonize.length === 0) return loopsToReharmonize
     // Elegir un respondedor diferente al último si es posible
-    const candidates = loopsToTranspose.filter(l => l.id !== lastResponderId.value)
-    const responder = (candidates.length ? candidates : loopsToTranspose)[0]
+    const candidates = loopsToReharmonize.filter(l => l.id !== lastResponderId.value)
+    const responder = (candidates.length ? candidates : loopsToReharmonize)[0]
     lastResponderId.value = responder?.id ?? null
     
-    // La respuesta: transposición basada en intervalos de escala
-    const { quantizeToScale } = useNoteUtils()
-    const scale = scales[currentScale.value] || scales.major
-    const scaleIntervals = scale
-    const randomInterval = scaleIntervals[Math.floor(Math.random() * scaleIntervals.length)]
-    const octaveShift = Math.floor(Math.random() * 3) - 1 // -1, 0, o +1 octava
-    const transposition = randomInterval + (octaveShift * 12)
+    // La respuesta: regeneración completa de notas en la escala actual
+    const scale = useScales().getScale(currentScale.value) || useScales().getScale('major')
     
-    // Asegurar que la nota base esté en rango válido
-    responder.baseNote = Math.max(24, Math.min(84, responder.baseNote + transposition))
-    console.log(`🎤 Call&Response: cuantizando responder con escala`, scale, `baseNote: ${responder.baseNote}`)
-    responder.notes = responder.notes.map(n => {
-      if (typeof n === 'number') {
-        const quantized = quantizeToScale(n, scale, responder.baseNote)
-        console.log(`  Responder: nota ${n} → ${quantized}`)
-        return quantized
-      }
-      return n
-    })
-    return loopsToTranspose
+    // Asignar una nueva nota base apropiada
+    const baseNotes = [36, 48, 60, 72] // C2, C3, C4, C5
+    responder.baseNote = baseNotes[Math.floor(Math.random() * baseNotes.length)]
+    
+    console.log(`🎤 Call&Response: regenerando responder con escala`, scale, `baseNote: ${responder.baseNote}`)
+    
+    // Regenerar todas las notas del loop usando la escala actual
+    responder.notes = generateNotesInRange(scale, responder.baseNote, responder.length, 2)
+    
+    console.log(`  Responder: notas completamente regeneradas en escala`)
+    return loopsToReharmonize
   }
 
   const evolveMusic = () => {
@@ -764,24 +754,26 @@ export const useAudioStore = defineStore('audio', () => {
       }
     }
     
-    // 3. Transponer selectivamente algunos loops
-    let loopsToTranspose = selectRandomLoops(Math.ceil(evolveIntensity.value / 2))
+    // 3. Regenerar notas de algunos loops en la nueva escala
+    const loopsToReharmonize = selectRandomLoops(Math.ceil(evolveIntensity.value / 2))
     
     // Aplicar call & response si está activado
     if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
-      loopsToTranspose = applyCallResponse(loopsToTranspose)
+      loopsToReharmonize = applyCallResponse(loopsToReharmonize)
     }
     
-    loopsToTranspose.forEach(loop => {
-      // Usar intervalos de la escala actual en lugar de semitonos aleatorios
-      const scale = scales[newScale] || scales.major
-      const scaleIntervals = scale
-      const randomInterval = scaleIntervals[Math.floor(Math.random() * scaleIntervals.length)]
-      const octaveShift = Math.floor(Math.random() * 3) - 1 // -1, 0, o +1 octava
-      const transposition = randomInterval + (octaveShift * 12)
+    loopsToReharmonize.forEach(loop => {
+      // Generar nuevas notas en la nueva escala manteniendo el patrón rítmico
+      const scale = useScales().getScale(newScale) || useScales().getScale('major')
       
-      loop.baseNote = Math.max(24, Math.min(84, loop.baseNote + transposition))
-      loop.notes = transposeNotesForScale(loop.notes, oldScale, newScale, loop.baseNote)
+      // Mantener una nota base apropiada para la nueva escala
+      const baseNotes = [36, 48, 60, 72] // C2, C3, C4, C5
+      loop.baseNote = baseNotes[Math.floor(Math.random() * baseNotes.length)]
+      
+      // Generar nuevas notas en la escala seleccionada
+      loop.notes = generateNotesInRange(scale, loop.baseNote, loop.length, 2)
+      
+      console.log(`🎵 Evolución: Loop ${loop.id} reharmonizado en escala ${newScale}, baseNote: ${loop.baseNote}`)
     })
     
     // 4. Regenerar patrones de algunos canales
@@ -790,7 +782,7 @@ export const useAudioStore = defineStore('audio', () => {
       // Mantener la base pero regenerar el patrón
       loop.pattern = generatePattern(loop.length)
       // Generar notas limitadas a 2 octavas para evitar rangos extremos
-      loop.notes = generateNotesInRange(scales[newScale], loop.baseNote, loop.length, 2)
+      loop.notes = generateNotesInRange(useScales().getScale(newScale), loop.baseNote, loop.length, 2)
     })
     
     // 5. Resetear contador
@@ -800,7 +792,7 @@ export const useAudioStore = defineStore('audio', () => {
     // Información de depuración
     const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
     const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
-    console.log(`Evolución automática${modeInfo}${tensionInfo}: escala ${oldScale} → ${newScale}, ${loopsToTranspose.length} loops transpuestos, ${loopsToRegenerate.length} loops regenerados`)
+    console.log(`Evolución automática${modeInfo}${tensionInfo}: escala ${oldScale} → ${newScale}, ${loopsToReharmonize.length} loops reharmonizados, ${loopsToRegenerate.length} loops regenerados`)
   }
 
   const checkEvolve = () => {
@@ -919,7 +911,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (!audioInitialized.value) return
     const loop = loops.value[id]
     
-    const scale = scales[currentScale.value]
+    const scale = useScales().getScale(currentScale.value)
     const baseNote = 36 + Math.floor(Math.random() * 24)
     
     loop.scale = scale
@@ -1042,7 +1034,6 @@ export const useAudioStore = defineStore('audio', () => {
     currentPulse,
     currentBeat,
     tempo,
-    transpose,
     masterVol,
     masterVolume,
     loops,
@@ -1065,7 +1056,6 @@ export const useAudioStore = defineStore('audio', () => {
     applySparseDistribution,
     updateTempo,
     updateMasterVolume,
-    updateTranspose,
     updateScale,
     updateDelayDivision,
     delayDivision,
