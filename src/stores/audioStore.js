@@ -15,6 +15,7 @@ export const useAudioStore = defineStore('audio', () => {
   const loops = ref([])
   const delayDivision = ref('8n')
   const currentScale = ref('major') // Escala actual seleccionada
+  const scaleLocked = ref(false) // Bloquear cambios de escala durante evolución
   
   // Estado de evolución automática
   const autoEvolve = ref(false)
@@ -35,6 +36,11 @@ export const useAudioStore = defineStore('audio', () => {
   const lastResponderId = ref(null) // para call & response
   const evolveStartTime = ref(Date.now()) // para calcular momentum
   const momentumMaxLevel = ref(5) // nivel máximo de momentum
+  
+  // Configuración de gestión de energía sonora
+  const energyManagementEnabled = ref(true) // habilitar/deshabilitar gestión automática
+  const maxSonicEnergy = ref(4.0) // límite máximo de energía sonora total
+  const energyReductionFactor = ref(0.8) // factor de reducción cuando se excede el límite
   
   // Derivados para UI
   const currentBeat = computed(() => currentPulse.value % 16)
@@ -74,18 +80,23 @@ export const useAudioStore = defineStore('audio', () => {
   const synthTypes = ['sine', 'triangle', 'square', 'sawtooth']
 
   // Funciones auxiliares
-  const generatePattern = (length) => {
+  const generatePattern = (length, useAdaptiveDensity = true) => {
     const pattern = new Array(length).fill(false)
-    const density = 0.3 + Math.random() * 0.4
+    
+    // Usar densidad adaptiva o densidad fija según el parámetro
+    const density = useAdaptiveDensity ? getAdaptiveDensity(length) : (0.3 + Math.random() * 0.4)
+    
     for (let i = 0; i < length; i++) {
       if (Math.random() < density) {
         pattern[i] = true
       }
     }
-    // Asegurar al menos una nota
+    
+    // Asegurar al menos una nota activa
     if (!pattern.some(Boolean)) {
       pattern[0] = true
     }
+    
     return pattern
   }
 
@@ -95,6 +106,86 @@ export const useAudioStore = defineStore('audio', () => {
       const octave = Math.floor(Math.random() * 3)
       return baseNote + scale[scaleIndex] + (octave * 12)
     })
+  }
+
+  // Gestión de energía sonora
+  const calculateSonicEnergy = () => {
+    const activeLoops = loops.value.filter(loop => loop.isActive)
+    if (activeLoops.length === 0) return 0
+    
+    let totalEnergy = 0
+    activeLoops.forEach(loop => {
+      // Calcular energía basada en densidad del patrón, volumen y efectos
+      const patternDensity = loop.pattern.filter(Boolean).length / loop.pattern.length
+      const volumeContribution = loop.volume || 0.5
+      const effectsMultiplier = 1 + (loop.delayAmount || 0) * 0.3 + (loop.reverbAmount || 0) * 0.2
+      
+      const loopEnergy = patternDensity * volumeContribution * effectsMultiplier
+      totalEnergy += loopEnergy
+    })
+    
+    return totalEnergy
+  }
+
+  const getAdaptiveDensity = (baseLength = 16) => {
+    // Si la gestión de energía está deshabilitada, usar densidad fija
+    if (!energyManagementEnabled.value) {
+      return 0.3 + Math.random() * 0.4
+    }
+    
+    const activeCount = loops.value.filter(loop => loop.isActive).length
+    
+    // Densidad base más alta para pocos loops, más baja para muchos
+    let baseDensity = 0.5
+    
+    if (activeCount <= 1) {
+      baseDensity = 0.6 + Math.random() * 0.3 // 0.6-0.9 para loops solos
+    } else if (activeCount <= 3) {
+      baseDensity = 0.4 + Math.random() * 0.3 // 0.4-0.7 para pocos loops
+    } else if (activeCount <= 5) {
+      baseDensity = 0.25 + Math.random() * 0.25 // 0.25-0.5 para varios loops
+    } else {
+      baseDensity = 0.15 + Math.random() * 0.2 // 0.15-0.35 para muchos loops
+    }
+    
+    // Ajuste adicional basado en energía total actual
+    const currentEnergy = calculateSonicEnergy()
+    
+    if (currentEnergy > maxSonicEnergy.value) {
+      baseDensity *= 0.7 // Reducir densidad si hay mucha energía
+    }
+    
+    return Math.max(0.1, Math.min(0.9, baseDensity))
+  }
+
+  const getAdaptiveVolume = (loopId) => {
+    // Si la gestión de energía está deshabilitada, usar volumen fijo
+    if (!energyManagementEnabled.value) {
+      return 0.5
+    }
+    
+    const activeCount = loops.value.filter(loop => loop.isActive).length
+    const currentEnergy = calculateSonicEnergy()
+    
+    // Volumen base más bajo cuando hay más loops activos
+    let baseVolume = 0.7
+    
+    if (activeCount <= 2) {
+      baseVolume = 0.8
+    } else if (activeCount <= 4) {
+      baseVolume = 0.6
+    } else if (activeCount <= 6) {
+      baseVolume = 0.45
+    } else {
+      baseVolume = 0.35
+    }
+    
+    // Ajuste adicional por energía total usando configuración
+    if (currentEnergy > maxSonicEnergy.value) {
+      baseVolume *= energyReductionFactor.value
+    }
+    
+    return Math.max(0.2, Math.min(1.0, baseVolume))
   }
 
   // Crear loop básico sin audio (para mostrar en UI)
@@ -129,7 +220,7 @@ export const useAudioStore = defineStore('audio', () => {
       reverbSend: null,
       delayAmount: 0.2,
       reverbAmount: 0.3,
-      volume: 0.5,
+      volume: getAdaptiveVolume(id),
       pan: 0,
       envelope
     }
@@ -194,7 +285,7 @@ export const useAudioStore = defineStore('audio', () => {
       reverbSend,
       delayAmount: 0.2,
       reverbAmount: 0.3,
-      volume: 0.5,
+      volume: getAdaptiveVolume(id),
       pan: 0,
       envelope
     }
@@ -366,6 +457,45 @@ export const useAudioStore = defineStore('audio', () => {
     if (!audioInitialized.value) return
     const loop = loops.value[id]
     loop.isActive = !loop.isActive
+    
+    // Ajustar volúmenes de todos los loops activos para mantener balance energético
+    adjustAllLoopVolumes()
+  }
+
+  // Funciones de configuración de energía sonora
+  const updateEnergyManagement = (enabled) => {
+    energyManagementEnabled.value = enabled
+    if (enabled) {
+      // Reajustar volúmenes cuando se habilita
+      adjustAllLoopVolumes()
+    }
+  }
+
+  const updateMaxSonicEnergy = (value) => {
+    maxSonicEnergy.value = Math.max(1.0, Math.min(10.0, Number(value)))
+    if (energyManagementEnabled.value) {
+      adjustAllLoopVolumes()
+    }
+  }
+
+  const updateEnergyReductionFactor = (value) => {
+    energyReductionFactor.value = Math.max(0.1, Math.min(1.0, Number(value)))
+    if (energyManagementEnabled.value) {
+      adjustAllLoopVolumes()
+    }
+  }
+
+  // Ajustar volúmenes de todos los loops para mantener balance energético
+  const adjustAllLoopVolumes = () => {
+    loops.value.forEach(loop => {
+      if (loop.isActive) {
+        const newVolume = getAdaptiveVolume(loop.id)
+        // Solo ajustar si la diferencia es significativa para evitar cambios constantes
+        if (Math.abs(loop.volume - newVolume) > 0.1) {
+          loop.volume = newVolume
+        }
+      }
+    })
   }
 
   // Actualizar parámetro de loop
@@ -571,33 +701,37 @@ export const useAudioStore = defineStore('audio', () => {
     // Aplicar momentum si está activado
     applyMomentum()
     
-    // 1. Seleccionar nueva escala según el modo
-    let newScale
-    switch (evolveMode.value) {
-      case 'momentum':
-        newScale = getRandomScale(currentScale.value)
-        break
-      case 'callResponse':
-        newScale = getRelatedScale(currentScale.value)
-        break
-      case 'tensionRelease':
-        const tensionScale = applyTensionRelease()
-        newScale = tensionScale || getRandomScale(currentScale.value)
-        break
-      default: // classic
-        newScale = getRandomScale(currentScale.value)
+    let newScale = currentScale.value // Por defecto mantener la escala actual
+    let oldScale = currentScale.value
+    
+    // 1. Seleccionar nueva escala según el modo solo si no está bloqueada
+    if (!scaleLocked.value) {
+      switch (evolveMode.value) {
+        case 'momentum':
+          newScale = getRandomScale(currentScale.value)
+          break
+        case 'callResponse':
+          newScale = getRelatedScale(currentScale.value)
+          break
+        case 'tensionRelease':
+          const tensionScale = applyTensionRelease()
+          newScale = tensionScale || getRandomScale(currentScale.value)
+          break
+        default: // classic
+          newScale = getRandomScale(currentScale.value)
+      }
+      
+      // Actualizar historial de escalas solo si cambió
+      if (newScale !== oldScale) {
+        recentScales.value.push(newScale)
+        if (recentScales.value.length > 3) {
+          recentScales.value.shift()
+        }
+        
+        // 2. Cambiar escala global (cuantizar notas existentes)
+        updateScale(newScale)
+      }
     }
-    
-    const oldScale = currentScale.value
-    
-    // Actualizar historial de escalas
-    recentScales.value.push(newScale)
-    if (recentScales.value.length > 3) {
-      recentScales.value.shift()
-    }
-    
-    // 2. Cambiar escala global (cuantizar notas existentes)
-    updateScale(newScale)
     
     // 3. Transponer selectivamente algunos loops
     let loopsToTranspose = selectRandomLoops(Math.ceil(evolveIntensity.value / 2))
@@ -715,6 +849,12 @@ export const useAudioStore = defineStore('audio', () => {
     console.log(`Tension/Release ${enabled ? 'activado' : 'desactivado'}`)
   }
 
+  // Función para alternar el bloqueo de escala
+  const toggleScaleLock = () => {
+    scaleLocked.value = !scaleLocked.value
+    console.log(`Bloqueo de escala: ${scaleLocked.value ? 'activado' : 'desactivado'}`)
+  }
+
   // Cuantizar notas del loop a la escala
   const quantizeLoopNotes = (loop, targetScale) => {
     const { quantizeToScale } = useNoteUtils()
@@ -733,8 +873,13 @@ export const useAudioStore = defineStore('audio', () => {
     
     loop.scale = scale
     loop.baseNote = baseNote
-    loop.pattern = generatePattern(loop.length)
+    loop.pattern = generatePattern(loop.length) // Usa densidad adaptiva por defecto
     loop.notes = generateNotes(scale, baseNote, loop.length)
+    
+    // Ajustar volumen si el loop está activo
+    if (loop.isActive) {
+      loop.volume = getAdaptiveVolume(id)
+    }
   }
 
   // Regenerar todos los loops
@@ -742,6 +887,8 @@ export const useAudioStore = defineStore('audio', () => {
     for (let i = 0; i < NUM_LOOPS; i++) {
       regenerateLoop(i)
     }
+    // Ajustar volúmenes después de regenerar todos
+    adjustAllLoopVolumes()
   }
 
   // Actualizar configuración del sintetizador de un loop
@@ -847,6 +994,20 @@ export const useAudioStore = defineStore('audio', () => {
     setEvolveMode,
     setMomentumEnabled,
     setCallResponseEnabled,
-    setTensionReleaseMode
+    setTensionReleaseMode,
+    toggleScaleLock,
+    scaleLocked,
+    // Funciones de gestión de energía sonora
+    calculateSonicEnergy,
+    getAdaptiveDensity,
+    getAdaptiveVolume,
+    adjustAllLoopVolumes,
+    // Configuración de energía sonora
+    energyManagementEnabled,
+    maxSonicEnergy,
+    energyReductionFactor,
+    updateEnergyManagement,
+    updateMaxSonicEnergy,
+    updateEnergyReductionFactor
   }
 });
