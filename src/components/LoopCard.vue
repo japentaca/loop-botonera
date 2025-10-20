@@ -4,12 +4,14 @@
       <Button 
         @click="audioStore.toggleLoop(loop.id)" 
         :class="['loop-button', { active: loop.isActive }]"
+        :icon="loop.isActive ? 'pi pi-pause' : 'pi pi-play'"
         :label="`L${loop.id + 1}`"
         size="large"
         text
       >
         <template #default>
-          L{{ loop.id + 1 }}
+          <i :class="loop.isActive ? 'pi pi-pause' : 'pi pi-play'" class="loop-icon"></i>
+          <span class="loop-label">L{{ loop.id + 1 }}</span>
           <div class="beat-indicator">
             <ProgressBar 
               :value="beatProgress" 
@@ -161,5 +163,29 @@ const beatProgress = computed(() => {
 .loop-button:not(.active) {
   background: var(--primary-color) !important;
   color: white !important;
+}
+
+/* Estilos para el contenido del botón del loop */
+.loop-button .p-button-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-direction: column;
+}
+
+.loop-icon {
+  font-size: 1.2rem;
+  margin-bottom: 0.25rem;
+}
+
+.loop-label {
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+/* Ajustar el indicador de beat */
+.beat-indicator {
+  width: 100%;
+  margin-top: 0.25rem;
 }
 </style>

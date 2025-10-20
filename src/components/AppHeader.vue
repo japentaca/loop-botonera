@@ -8,10 +8,11 @@
         <Button 
           @click="togglePlay" 
           :class="['play-button-compact', { playing: audioStore.isPlaying }]"
-          :icon="audioStore.isPlaying ? 'pi pi-pause' : 'pi pi-play'"
-          :label="audioStore.isPlaying ? 'Pausa' : 'Play'"
           size="small"
-        />
+          :title="audioStore.isPlaying ? 'Pausa' : 'Play'"
+        >
+          {{ audioStore.isPlaying ? '⏸️' : '▶️' }}
+        </Button>
         
         <Button 
           @click="regenerateAllLoops" 
