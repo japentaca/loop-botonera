@@ -1,16 +1,13 @@
 <template>
-  <div v-if="presetStore.isDialogOpen" class="preset-dialog-overlay" @click="closeDialog">
-    <div class="preset-dialog" @click.stop>
-      <!-- Header del diálogo -->
-      <div class="dialog-header">
-        <h2>Gestión de Presets</h2>
-        <button class="close-btn" @click="closeDialog" title="Cerrar">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
+  <Dialog 
+    v-model:visible="presetStore.isDialogOpen"
+    modal
+    header="Gestión de Presets"
+    :style="{ width: '90vw', maxWidth: '1200px' }"
+    :closable="true"
+    @hide="closeDialog"
+    class="preset-manager-dialog"
+  >
 
       <!-- Información del preset actual -->
       <div class="current-preset-info">
@@ -227,14 +224,14 @@
       <div v-if="presetStore.isLoading" class="loading-overlay">
         <div class="loading-spinner"></div>
       </div>
-    </div>
-  </div>
+  </Dialog>
 </template>
 
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { usePresetStore } from '../stores/presetStore'
 import { getStorageStats } from '../services/presetService'
+import Dialog from 'primevue/dialog'
 
 const presetStore = usePresetStore()
 

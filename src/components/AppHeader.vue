@@ -5,28 +5,29 @@
       <div class="title-compact">🎹 LOOP SYNTH MACHINE 🎹</div>
       
       <div class="main-controls">
-        <button 
+        <Button 
           @click="togglePlay" 
           :class="['play-button-compact', { playing: audioStore.isPlaying }]"
-        >
-          {{ audioStore.isPlaying ? '⏸' : '▶' }}
-        </button>
+          :icon="audioStore.isPlaying ? 'pi pi-pause' : 'pi pi-play'"
+          :label="audioStore.isPlaying ? 'Pausa' : 'Play'"
+          size="small"
+        />
         
-        <button 
+        <Button 
           @click="regenerateAllLoops" 
           class="regen-button-compact"
-        >
-          🔄 Regenerar
-        </button>
+          icon="pi pi-refresh"
+          label="Regenerar"
+          size="small"
+        />
         
         <div class="control-group-compact">
           <label class="control-label-compact">Tempo</label>
-          <input 
-            type="range" 
-            min="10" 
-            max="180" 
-            :value="tempTempo"
-            @input="onTempoInput($event.target.value)"
+          <Slider 
+            v-model="tempTempo"
+            :min="10" 
+            :max="180"
+            @change="onTempoInput(tempTempo)"
             class="range-compact"
           />
           <span class="value-compact">{{ tempTempo }}</span>
@@ -34,32 +35,33 @@
         
         <div class="control-group-compact">
           <label class="control-label-compact">Vol</label>
-          <input 
-            type="range" 
-            min="0" 
-            max="100" 
-            :value="tempMasterVolume"
-            @input="onMasterVolumeInput($event.target.value)"
+          <Slider 
+            v-model="tempMasterVolume"
+            :min="0" 
+            :max="100"
+            @change="onMasterVolumeInput(tempMasterVolume)"
             class="range-compact"
           />
           <span class="value-compact">{{ tempMasterVolume }}%</span>
         </div>
         
-        <button 
+        <Button 
           @click="audioStore.applySparseDistribution" 
           class="sparse-button"
+          label="Sparse"
+          size="small"
+          severity="secondary"
           title="Distribuir canales activos en el panorama estéreo"
-        >
-          Sparse
-        </button>
+        />
         
-        <button 
+        <Button 
           @click="openPresetDialog"
           class="preset-button-compact"
+          icon="pi pi-save"
+          label="Presets"
+          size="small"
           title="Gestionar presets"
-        >
-          💾 Presets
-        </button>
+        />
       </div>
       
       <!-- Visualizador de pulsos integrado -->
@@ -75,65 +77,56 @@
     <!-- Fila inferior: Controles de música y evolución -->
     <div class="header-row-secondary">
       <div class="music-controls">
-
-
         <div class="control-group-compact">
           <label class="control-label-compact">Escala</label>
-          <select 
-            :value="audioStore.currentScale" 
-            @change="onScaleChange($event.target.value)"
+          <Dropdown 
+            :modelValue="audioStore.currentScale" 
+            @update:modelValue="onScaleChange"
+            :options="scaleOptions"
+            optionLabel="label"
+            optionValue="value"
             class="select-compact"
-          >
-            <option v-for="scaleKey in scaleKeys" :key="scaleKey" :value="scaleKey">
-              {{ scaleNamesSpanish[scaleKey] }}
-            </option>
-          </select>
+          />
         </div>
 
         <div class="control-group-compact">
           <label class="control-label-compact">Delay</label>
-          <select 
-            :value="audioStore.delayDivision" 
-            @change="audioStore.updateDelayDivision($event.target.value)" 
+          <Dropdown 
+            :modelValue="audioStore.delayDivision" 
+            @update:modelValue="audioStore.updateDelayDivision"
+            :options="delayOptions"
+            optionLabel="label"
+            optionValue="value"
             class="select-compact"
-          >
-            <optgroup label="Binarias">
-              <option value="16n">1/16</option>
-              <option value="8n">1/8</option>
-              <option value="4n">1/4</option>
-              <option value="2n">1/2</option>
-            </optgroup>
-            <optgroup label="Trinarias">
-              <option value="8t">1/8t</option>
-              <option value="4t">1/4t</option>
-              <option value="2t">1/2t</option>
-            </optgroup>
-          </select>
+          />
         </div>
       </div>
       
-
-      
       <div class="evolution-controls-compact">
-        <button 
+        <Button 
           @click="toggleAutoEvolve" 
           :class="['evolve-button-compact', { active: audioStore.autoEvolve }]"
-        >
-          {{ audioStore.autoEvolve ? '⏸' : '▶' }} Auto
-        </button>
+          :icon="audioStore.autoEvolve ? 'pi pi-pause' : 'pi pi-play'"
+          label="Auto"
+          size="small"
+          :severity="audioStore.autoEvolve ? 'success' : 'secondary'"
+        />
         
-        <button 
+        <Button 
           @click="openStyleDialog"
           class="style-config-button-compact"
+          icon="pi pi-cog"
+          label="Estilos"
+          size="small"
           title="Configurar estilos de evolución"
-        >
-          ⚙️ Estilos
-        </button>
+        />
         
         <div class="evolve-progress-compact" v-if="audioStore.autoEvolve">
-          <div class="progress-bar-compact">
-            <div class="progress-fill-compact" :style="{ width: evolveProgress + '%' }"></div>
-          </div>
+          <ProgressBar 
+            :value="evolveProgress" 
+            class="progress-bar-compact"
+            :showValue="false"
+          />
           <span class="next-evolve">{{ nextEvolveInMeasures }}c</span>
         </div>
       </div>
@@ -164,6 +157,23 @@ const { scales, scaleNames, scaleNamesSpanish } = useScales()
 
 // Obtener las claves de las escalas para el selector
 const scaleKeys = Object.keys(scales)
+
+// Opciones para el dropdown de escalas
+const scaleOptions = scaleKeys.map(key => ({
+  label: scaleNamesSpanish[key],
+  value: key
+}))
+
+// Opciones para el dropdown de delay
+const delayOptions = [
+  { label: '1/16 (semicorchea)', value: '16n' },
+  { label: '1/8 (corchea)', value: '8n' },
+  { label: '1/4 (negra)', value: '4n' },
+  { label: '1/2 (blanca)', value: '2n' },
+  { label: '1/8t (corchea ternaria)', value: '8t' },
+  { label: '1/4t (negra ternaria)', value: '4t' },
+  { label: '1/2t (blanca ternaria)', value: '2t' }
+]
 
 // Estado para el diálogo de configuración de estilos
 const isStyleDialogOpen = ref(false)

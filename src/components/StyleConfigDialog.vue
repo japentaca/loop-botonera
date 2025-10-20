@@ -1,24 +1,36 @@
 <template>
-  <div v-if="isOpen" class="dialog-overlay" @click="closeDialog">
-    <div class="dialog-content" @click.stop>
-      <div class="dialog-header">
-        <h3>Configuración de Estilos</h3>
-        <button class="close-button" @click="closeDialog">×</button>
-      </div>
-      
-      <div class="dialog-body">
+  <Dialog 
+    :visible="isOpen" 
+    modal 
+    header="Configuración de Estilos"
+    :style="{ width: '90vw', maxWidth: '800px' }"
+    :closable="true"
+    :closeOnEscape="true"
+    :dismissableMask="true"
+    @update:visible="onVisibilityChange"
+    @hide="closeDialog"
+    class="style-config-dialog"
+  >
+    <div class="dialog-body">
         <!-- Estilos Creativos -->
         <div class="config-section">
           <h4>Estilos Creativos</h4>
           <div class="styles-grid">
-            <MultiSelector
-              v-model="selectedEvolutionTypes"
-              :options="evolutionOptions"
-              label="Tipos de Evolución"
-              placeholder="Seleccionar estilos..."
-              :max-selections="3"
-              @update:modelValue="onEvolutionTypesChange"
-            />
+            <div class="field">
+              <label for="evolution-types" class="field-label">Tipos de Evolución</label>
+              <MultiSelect
+                id="evolution-types"
+                v-model="selectedEvolutionTypes"
+                :options="evolutionOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Seleccionar estilos..."
+                :maxSelectedLabels="3"
+                :selectionLimit="3"
+                class="w-full"
+                @update:modelValue="onEvolutionTypesChange"
+              />
+            </div>
           </div>
         </div>
 
@@ -30,13 +42,12 @@
             <div class="control-group">
               <label class="control-label">Intervalo (compases)</label>
               <div class="slider-container">
-                <input 
-                  type="range" 
-                  min="4" 
-                  max="32" 
-                  step="4"
-                  :value="audioStore.evolveInterval"
-                  @input="onEvolveIntervalChange($event.target.value)"
+                <Slider 
+                  :min="4" 
+                  :max="32" 
+                  :step="4"
+                  :modelValue="audioStore.evolveInterval"
+                  @update:modelValue="onEvolveIntervalChange"
                   class="range-slider"
                 />
                 <span class="value-display">{{ audioStore.evolveInterval }}</span>
@@ -48,13 +59,12 @@
             <div class="control-group">
               <label class="control-label">Intensidad</label>
               <div class="slider-container">
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="10" 
-                  step="1"
-                  :value="audioStore.evolveIntensity"
-                  @input="onEvolveIntensityChange($event.target.value)"
+                <Slider 
+                  :min="1" 
+                  :max="10" 
+                  :step="1"
+                  :modelValue="audioStore.evolveIntensity"
+                  @update:modelValue="onEvolveIntensityChange"
                   class="range-slider"
                 />
                 <span class="value-display">{{ audioStore.evolveIntensity }}</span>
@@ -66,13 +76,12 @@
             <div class="control-group">
               <label class="control-label">Momentum Máximo</label>
               <div class="slider-container">
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="10" 
-                  step="1"
-                  :value="momentumMaxLevel"
-                  @input="onMomentumMaxLevelChange($event.target.value)"
+                <Slider 
+                  :min="1" 
+                  :max="10" 
+                  :step="1"
+                  :modelValue="momentumMaxLevel"
+                  @update:modelValue="onMomentumMaxLevelChange"
                   class="range-slider"
                 />
                 <span class="value-display">{{ momentumMaxLevel }}</span>
@@ -88,14 +97,14 @@
           <div class="controls-grid">
             <!-- Habilitar Gestión de Energía -->
             <div class="control-group checkbox-group">
-              <label class="checkbox-label">
-                <input 
-                  type="checkbox" 
-                  :checked="audioStore.energyManagementEnabled"
-                  @change="onEnergyManagementChange($event.target.checked)"
+              <div class="checkbox-container">
+                <Checkbox 
+                  :modelValue="audioStore.energyManagementEnabled"
+                  @update:modelValue="onEnergyManagementChange"
+                  inputId="energyManagement"
                 />
-                <span class="checkbox-text">Habilitar gestión automática de energía</span>
-              </label>
+                <label for="energyManagement" class="checkbox-text">Habilitar gestión automática de energía</label>
+              </div>
               <small class="control-description">Ajusta automáticamente volumen y densidad según la energía total</small>
             </div>
 
@@ -103,13 +112,12 @@
             <div class="control-group">
               <label class="control-label">Energía Sonora Máxima</label>
               <div class="slider-container">
-                <input 
-                  type="range" 
-                  min="1.0" 
-                  max="5.0" 
-                  step="0.1"
-                  :value="audioStore.maxSonicEnergy"
-                  @input="onMaxSonicEnergyChange($event.target.value)"
+                <Slider 
+                  :min="1.0" 
+                  :max="5.0" 
+                  :step="0.1"
+                  :modelValue="audioStore.maxSonicEnergy"
+                  @update:modelValue="onMaxSonicEnergyChange"
                   class="range-slider"
                 />
                 <span class="value-display">{{ audioStore.maxSonicEnergy.toFixed(1) }}</span>
@@ -121,13 +129,12 @@
             <div class="control-group">
               <label class="control-label">Factor de Reducción</label>
               <div class="slider-container">
-                <input 
-                  type="range" 
-                  min="0.1" 
-                  max="1.0" 
-                  step="0.05"
-                  :value="audioStore.energyReductionFactor"
-                  @input="onEnergyReductionFactorChange($event.target.value)"
+                <Slider 
+                  :min="0.1" 
+                  :max="1.0" 
+                  :step="0.05"
+                  :modelValue="audioStore.energyReductionFactor"
+                  @update:modelValue="onEnergyReductionFactorChange"
                   class="range-slider"
                 />
                 <span class="value-display">{{ Math.round(audioStore.energyReductionFactor * 100) }}%</span>
@@ -143,31 +150,43 @@
           <div class="controls-grid">
             <!-- Bloqueo de Escala -->
             <div class="control-group checkbox-group">
-              <label class="checkbox-label">
-                <input 
-                  type="checkbox" 
+              <div class="checkbox-container">
+                <Checkbox 
                   v-model="audioStore.scaleLocked"
+                  inputId="scaleLocked"
                 />
-                <span class="checkbox-text">Bloquear cambios de escala</span>
-              </label>
+                <label for="scaleLocked" class="checkbox-text">Bloquear cambios de escala</label>
+              </div>
               <small class="control-description">Evita que la evolución automática cambie la escala musical</small>
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="dialog-footer">
-        <button class="btn-secondary" @click="resetToDefaults">Restaurar Valores por Defecto</button>
-        <button class="btn-primary" @click="closeDialog">Cerrar</button>
-      </div>
     </div>
-  </div>
+    
+    <template #footer>
+      <Button 
+        label="Restaurar Valores por Defecto" 
+        icon="pi pi-refresh" 
+        severity="secondary" 
+        @click="resetToDefaults" 
+      />
+      <Button 
+        label="Cerrar" 
+        icon="pi pi-check" 
+        @click="closeDialog" 
+      />
+    </template>
+  </Dialog>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useAudioStore } from '../stores/audioStore'
-import MultiSelector from './MultiSelector.vue'
+import Dialog from 'primevue/dialog'
+import Button from 'primevue/button'
+import Slider from 'primevue/slider'
+import Checkbox from 'primevue/checkbox'
+import MultiSelect from 'primevue/multiselect'
 
 const props = defineProps({
   isOpen: {
@@ -265,6 +284,12 @@ const resetToDefaults = () => {
   audioStore.updateEnergyReductionFactor(0.6)
   selectedEvolutionTypes.value = []
   onEvolutionTypesChange([])
+}
+
+const onVisibilityChange = (visible) => {
+  if (!visible) {
+    emit('close')
+  }
 }
 
 const closeDialog = () => {

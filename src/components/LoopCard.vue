@@ -1,79 +1,83 @@
 <template>
   <div :class="['loop-card', { active: loop.isActive }]">
     <div class="loop-main">
-      <button 
+      <Button 
         @click="audioStore.toggleLoop(loop.id)" 
         :class="['loop-button', { active: loop.isActive }]"
+        :label="`L${loop.id + 1}`"
+        size="large"
+        text
       >
-        L{{ loop.id + 1 }}
-        <div class="beat-indicator">
-          <div class="beat-progress" :style="{ width: beatProgress + '%' }"></div>
-        </div>
-      </button>
+        <template #default>
+          L{{ loop.id + 1 }}
+          <div class="beat-indicator">
+            <ProgressBar 
+              :value="beatProgress" 
+              class="beat-progress"
+              :showValue="false"
+            />
+          </div>
+        </template>
+      </Button>
       
       <div class="loop-controls">
         <div class="mini-control">
           <span class="mini-label">Tamaño</span>
-          <input 
-            type="range" 
+          <Slider 
+            :modelValue="sizeIndex"
+            @update:modelValue="audioStore.updateLoopParam(loop.id, 'length', allowedSizes[$event])"
+            :min="0" 
+            :max="9" 
+            :step="1"
             class="mini-slider"
-            min="0" 
-            max="9" 
-            step="1"
-            :value="sizeIndex"
-            @input="audioStore.updateLoopParam(loop.id, 'length', allowedSizes[parseInt($event.target.value)])"
           />
           <span class="mini-value">{{ loop.length }}</span>
         </div>
         
         <div class="mini-control">
           <span class="mini-label">Delay</span>
-          <input 
-            type="range" 
+          <Slider 
+            :modelValue="loop.delayAmount * 100"
+            @update:modelValue="audioStore.updateLoopParam(loop.id, 'delayAmount', $event / 100)"
+            :min="0" 
+            :max="100"
             class="mini-slider"
-            min="0" 
-            max="100" 
-            :value="loop.delayAmount * 100"
-            @input="audioStore.updateLoopParam(loop.id, 'delayAmount', $event.target.value / 100)"
           />
           <span class="mini-value">{{ Math.round(loop.delayAmount * 100) }}%</span>
         </div>
         
         <div class="mini-control">
           <span class="mini-label">Reverb</span>
-          <input 
-            type="range" 
+          <Slider 
+            :modelValue="loop.reverbAmount * 100"
+            @update:modelValue="audioStore.updateLoopParam(loop.id, 'reverbAmount', $event / 100)"
+            :min="0" 
+            :max="100"
             class="mini-slider"
-            min="0" 
-            max="100" 
-            :value="loop.reverbAmount * 100"
-            @input="audioStore.updateLoopParam(loop.id, 'reverbAmount', $event.target.value / 100)"
           />
           <span class="mini-value">{{ Math.round(loop.reverbAmount * 100) }}%</span>
         </div>
         
         <div class="mini-control">
           <span class="mini-label">Volumen</span>
-          <input 
-            type="range" 
+          <Slider 
+            :modelValue="loop.volume * 100"
+            @update:modelValue="audioStore.updateLoopParam(loop.id, 'volume', $event / 100)"
+            :min="0" 
+            :max="100"
             class="mini-slider"
-            min="0" 
-            max="100" 
-            :value="loop.volume * 100"
-            @input="audioStore.updateLoopParam(loop.id, 'volume', $event.target.value / 100)"
           />
           <span class="mini-value">{{ Math.round(loop.volume * 100) }}%</span>
         </div>
         
         <div class="mini-control">
           <span class="mini-label">Pan</span>
-          <input 
-            type="range" 
+          <Slider 
+            :modelValue="loop.pan * 100"
+            @update:modelValue="audioStore.updateLoopParam(loop.id, 'pan', $event / 100)"
+            :min="-100" 
+            :max="100"
             class="mini-slider"
-            min="-100" 
-            max="100" 
-            :value="loop.pan * 100"
-            @input="audioStore.updateLoopParam(loop.id, 'pan', $event.target.value / 100)"
           />
           <span class="mini-value">{{ formatPan(loop.pan) }}</span>
         </div>
@@ -81,12 +85,22 @@
     </div>
     
     <div class="loop-actions">
-      <button @click="synthStore.openSynthEditor(loop.id)" class="edit-button">
-        🎛️ Editar Synth
-      </button>
-      <button @click="audioStore.regenerateLoop(loop.id)" class="edit-button">
-        🔄 Regenerar Loop
-      </button>
+      <Button 
+        @click="synthStore.openSynthEditor(loop.id)" 
+        class="edit-button"
+        icon="pi pi-cog"
+        label="Editar Synth"
+        size="small"
+        outlined
+      />
+      <Button 
+        @click="audioStore.regenerateLoop(loop.id)" 
+        class="edit-button"
+        icon="pi pi-refresh"
+        label="Regenerar Loop"
+        size="small"
+        outlined
+      />
     </div>
     
     <div class="synth-type-display">
@@ -141,3 +155,11 @@ const beatProgress = computed(() => {
   return props.loop.isActive ? 50 : 0
 })
 </script>
+
+<style scoped>
+/* Estilo simple para el botón inactivo */
+.loop-button:not(.active) {
+  background: var(--primary-color) !important;
+  color: white !important;
+}
+</style>
