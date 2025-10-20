@@ -230,9 +230,11 @@ export function useNoteUtils() {
 
   // Cuantizar nota a escala
   const quantizeToScale = (midiNote, scale, baseNote = 60) => {
+    if (typeof midiNote !== 'number') return midiNote
+    
     const relativeNote = midiNote - baseNote
     const octave = Math.floor(relativeNote / 12)
-    const noteInOctave = relativeNote % 12
+    const noteInOctave = ((relativeNote % 12) + 12) % 12 // Asegurar valor positivo
     
     // Encontrar la nota más cercana en la escala
     let closestInterval = scale[0]
@@ -246,7 +248,17 @@ export function useNoteUtils() {
       }
     })
     
-    return baseNote + (octave * 12) + closestInterval
+    // Depuración para escalas pentatónicas
+    const isPentatonic = scale.length === 5 && JSON.stringify(scale) === JSON.stringify([0, 2, 4, 7, 9])
+    if (isPentatonic && ![0, 2, 4, 7, 9].includes(closestInterval)) {
+      console.warn(`⚠️ PROBLEMA PENTATÓNICO: nota ${midiNote} (rel: ${noteInOctave}) → intervalo ${closestInterval} NO está en pentatónica [0,2,4,7,9]`)
+      console.warn(`Escala recibida:`, scale)
+      console.warn(`Base: ${baseNote}, Octava: ${octave}`)
+    }
+    
+    // Devolver la nota cuantizada en rango válido
+    const quantizedNote = baseNote + (octave * 12) + closestInterval
+    return Math.max(24, Math.min(84, quantizedNote))
   }
 
   return {
@@ -347,10 +359,12 @@ export function useMusic() {
     const targetIntervals = scales[targetScale] || scales.major
     
     return notes.map(note => {
+      if (typeof note !== 'number') return note
+      
       // Calcular la distancia desde la nota base
       const distance = note - baseNote
       const octave = Math.floor(distance / 12)
-      const relativePitch = distance % 12
+      const relativePitch = ((distance % 12) + 12) % 12 // Asegurar valor positivo
       
       // Encontrar el intervalo más cercano en la escala objetivo
       let closestInterval = targetIntervals[0]
@@ -364,8 +378,9 @@ export function useMusic() {
         }
       })
       
-      // Devolver la nota cuantizada
-      return baseNote + closestInterval + (octave * 12)
+      // Devolver la nota cuantizada en rango válido
+      const quantizedNote = baseNote + closestInterval + (octave * 12)
+      return Math.max(24, Math.min(84, quantizedNote))
     })
   }
 

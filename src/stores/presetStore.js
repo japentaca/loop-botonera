@@ -462,6 +462,13 @@ export const usePresetStore = defineStore('preset', () => {
       return
     }
     
+    // No guardar automáticamente si la evolución automática está activa
+    // para evitar guardados no deseados por cambios automáticos del sistema
+    const audioStore = useAudioStore()
+    if (audioStore.autoEvolve) {
+      return
+    }
+    
     if (!currentPresetId.value) {
       // Si no hay preset seleccionado, crear uno automático
       createAutoPreset()

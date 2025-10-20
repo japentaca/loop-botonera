@@ -104,7 +104,21 @@ export const useAudioStore = defineStore('audio', () => {
     return Array.from({ length }, () => {
       const scaleIndex = Math.floor(Math.random() * scale.length)
       const octave = Math.floor(Math.random() * 3)
-      return baseNote + scale[scaleIndex] + (octave * 12)
+      const note = baseNote + scale[scaleIndex] + (octave * 12)
+      // Asegurar que la nota esté en rango MIDI válido
+      return Math.max(24, Math.min(96, note))
+    })
+  }
+
+  // Generar notas aleatorias de una escala con rango limitado de octavas
+  const generateNotesInRange = (scale, baseNote, length, maxOctaves = 2) => {
+    return Array.from({ length }, () => {
+      if (Math.random() < 0.3) return null // 30% silencio
+      const scaleIndex = Math.floor(Math.random() * scale.length)
+      const octave = Math.floor(Math.random() * maxOctaves)
+      const note = baseNote + scale[scaleIndex] + (octave * 12)
+      // Asegurar que la nota esté en rango MIDI válido y musical
+      return Math.max(24, Math.min(84, note))
     })
   }
 
@@ -622,10 +636,14 @@ export const useAudioStore = defineStore('audio', () => {
 
   const transposeNotesForScale = (notes, currentScale, newScale, baseNote) => {
     const { quantizeToScale } = useNoteUtils()
+    console.log(`🔄 Transponiendo notas de escala ${currentScale} a ${newScale}`, scales[newScale])
     return notes.map(note => {
       if (typeof note !== 'number') return note
-      // Mantener la posición relativa en el patrón
-      return quantizeToScale(note, scales[newScale], baseNote)
+      // Mantener la posición relativa en el patrón y asegurar rango válido
+      const quantizedNote = quantizeToScale(note, scales[newScale], baseNote)
+      const result = Math.max(24, Math.min(96, quantizedNote))
+      console.log(`  Nota ${note} → ${result} (escala: ${newScale}, baseNote: ${baseNote})`)
+      return result
     })
   }
 
@@ -686,12 +704,25 @@ export const useAudioStore = defineStore('audio', () => {
     const responder = (candidates.length ? candidates : loopsToTranspose)[0]
     lastResponderId.value = responder?.id ?? null
     
-    // La respuesta: leve transposición opuesta y cuantización a escala actual
+    // La respuesta: transposición basada en intervalos de escala
     const { quantizeToScale } = useNoteUtils()
-    const scale = scales[currentScale.value]
-    const responseSemitones = Math.random() < 0.5 ? -3 : 3
-    responder.baseNote = Math.max(12, Math.min(96, responder.baseNote + responseSemitones))
-    responder.notes = responder.notes.map(n => typeof n === 'number' ? quantizeToScale(n, scale, responder.baseNote) : n)
+    const scale = scales[currentScale.value] || scales.major
+    const scaleIntervals = scale
+    const randomInterval = scaleIntervals[Math.floor(Math.random() * scaleIntervals.length)]
+    const octaveShift = Math.floor(Math.random() * 3) - 1 // -1, 0, o +1 octava
+    const transposition = randomInterval + (octaveShift * 12)
+    
+    // Asegurar que la nota base esté en rango válido
+    responder.baseNote = Math.max(24, Math.min(84, responder.baseNote + transposition))
+    console.log(`🎤 Call&Response: cuantizando responder con escala`, scale, `baseNote: ${responder.baseNote}`)
+    responder.notes = responder.notes.map(n => {
+      if (typeof n === 'number') {
+        const quantized = quantizeToScale(n, scale, responder.baseNote)
+        console.log(`  Responder: nota ${n} → ${quantized}`)
+        return quantized
+      }
+      return n
+    })
     return loopsToTranspose
   }
 
@@ -742,8 +773,14 @@ export const useAudioStore = defineStore('audio', () => {
     }
     
     loopsToTranspose.forEach(loop => {
-      const transposition = Math.floor(Math.random() * 13) - 6 // -6 a +6 semitonos
-      loop.baseNote = Math.max(12, Math.min(96, loop.baseNote + transposition))
+      // Usar intervalos de la escala actual en lugar de semitonos aleatorios
+      const scale = scales[newScale] || scales.major
+      const scaleIntervals = scale
+      const randomInterval = scaleIntervals[Math.floor(Math.random() * scaleIntervals.length)]
+      const octaveShift = Math.floor(Math.random() * 3) - 1 // -1, 0, o +1 octava
+      const transposition = randomInterval + (octaveShift * 12)
+      
+      loop.baseNote = Math.max(24, Math.min(84, loop.baseNote + transposition))
       loop.notes = transposeNotesForScale(loop.notes, oldScale, newScale, loop.baseNote)
     })
     
@@ -752,7 +789,8 @@ export const useAudioStore = defineStore('audio', () => {
     loopsToRegenerate.forEach(loop => {
       // Mantener la base pero regenerar el patrón
       loop.pattern = generatePattern(loop.length)
-      loop.notes = generateNotes(scales[newScale], loop.baseNote, loop.length)
+      // Generar notas limitadas a 2 octavas para evitar rangos extremos
+      loop.notes = generateNotesInRange(scales[newScale], loop.baseNote, loop.length, 2)
     })
     
     // 5. Resetear contador
@@ -865,7 +903,15 @@ export const useAudioStore = defineStore('audio', () => {
     const { quantizeToScale } = useNoteUtils()
     if (!Array.isArray(loop?.notes)) return
     const base = typeof loop.baseNote === 'number' ? loop.baseNote : 60
-    loop.notes = loop.notes.map(n => (typeof n === 'number' ? quantizeToScale(n, targetScale, base) : n))
+    console.log(`🎵 Cuantizando loop ${loop.id} a escala`, targetScale)
+    loop.notes = loop.notes.map(n => {
+      if (typeof n === 'number') {
+        const quantized = quantizeToScale(n, targetScale, base)
+        console.log(`  Loop ${loop.id}: nota ${n} → ${quantized} (base: ${base})`)
+        return quantized
+      }
+      return n
+    })
   }
 
   // Regenerar loop
