@@ -1,10 +1,12 @@
 <template>
   <Dialog 
-    :visible="synthStore.isModalOpen" 
+    v-model:visible="synthStore.isModalOpen" 
     modal 
     :header="`Editor de Sintetizador - Loop ${synthStore.currentLoopId || 'N/A'}`"
-    :style="{ width: '90vw', maxWidth: '600px' }"
+    :style="{ width: '95vw', maxWidth: '900px' }"
     :closable="true"
+    dismissableMask
+    :closeOnEscape="true"
     @hide="synthStore.closeSynthEditor"
     class="synth-editor-dialog"
   >
@@ -32,10 +34,11 @@
             :key="opt.value"
             @click="synthStore.updateOscillatorType(opt.value)"
             :label="opt.label"
-            :severity="synthStore.tempSynthConfig.oscillatorType === opt.value ? 'info' : 'secondary'"
-            :outlined="synthStore.tempSynthConfig.oscillatorType !== opt.value"
+            :icon="(synthStore.tempSynthConfig.oscillatorType === opt.value) ? 'pi pi-check' : ''"
+            :severity="(synthStore.tempSynthConfig.oscillatorType === opt.value) ? 'success' : 'secondary'"
+            :outlined="(synthStore.tempSynthConfig.oscillatorType !== opt.value)"
             size="small"
-            class="osc-btn"
+            :class="['osc-btn', { 'selected': (synthStore.tempSynthConfig.oscillatorType === opt.value) }]"
           />
         </div>
       </div>
@@ -186,7 +189,7 @@ const synthTypeOptions = [
 
 .control-section h4 {
   margin: 0 0 1rem 0;
-  color: #333;
+  color: #e0e0e0;
   font-size: 1.1rem;
   font-weight: 600;
 }
@@ -194,7 +197,7 @@ const synthTypeOptions = [
 .help-text {
   margin: 0.5rem 0 0 0;
   font-size: 0.85rem;
-  color: #666;
+  color: #9ca3af;
   font-style: italic;
 }
 
@@ -205,7 +208,24 @@ const synthTypeOptions = [
 }
 
 .osc-btn {
-  min-width: 80px;
+  min-width: 90px;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.osc-btn.selected {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #ffffff !important;
+  border-color: #047857 !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  transform: translateY(-1px);
+  font-weight: 600;
+}
+
+.osc-btn:not(.selected):hover {
+  background: #1f2937 !important;
+  color: #e5e7eb !important;
+  border-color: #374151 !important;
 }
 
 .envelope-controls,
@@ -224,23 +244,32 @@ const synthTypeOptions = [
 
 .envelope-param label,
 .mod-param label {
-  font-weight: 500;
-  color: #555;
-  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  font-size: 0.95rem;
 }
 
 .slider-container {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
+  background: rgba(26, 26, 26, 0.85);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 217, 255, 0.25);
+  width: 100%;
 }
 
 .value-display {
-  min-width: 60px;
-  text-align: right;
-  font-weight: 500;
-  color: #333;
+  min-width: 70px;
+  text-align: center;
+  font-weight: 600;
+  color: #e0e0e0;
   font-size: 0.9rem;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .flex-1 {
@@ -267,7 +296,7 @@ const synthTypeOptions = [
 
 @media (min-width: 1024px) {
   .envelope-controls {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>
