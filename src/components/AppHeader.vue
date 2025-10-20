@@ -269,14 +269,6 @@ const toggleAutoEvolve = () => {
   }
 }
 
-const onEvolveIntervalChange = (value) => {
-  audioStore.updateEvolveInterval(Number(value))
-}
-
-const onEvolveIntensityChange = (value) => {
-  audioStore.updateEvolveIntensity(Number(value))
-}
-
 const onScaleChange = (scale) => {
   audioStore.updateScale(scale)
 }

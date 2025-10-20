@@ -246,10 +246,9 @@ export const useAudioStore = defineStore('audio', () => {
     const targetLevel = Math.min(evolutionSystem.evolutionIntensity.value * 10, Math.floor(elapsedSec / 10))
     if (targetLevel > momentumLevel.value) {
       momentumLevel.value = targetLevel
-      const newInterval = Math.max(4, evolutionSystem.evolutionInterval.value - momentumLevel.value)
-      evolutionSystem.updateEvolutionSettings({ interval: newInterval * 1000 })
-      const newIntensity = Math.min(1.0, 0.3 + Math.floor(momentumLevel.value / 20))
-      evolutionSystem.updateEvolutionSettings({ intensity: newIntensity })
+      // Eliminado: modificación automática del intervalo de evolución
+      // Eliminado: modificación automática de la intensidad de evolución
+      // El momentum solo debe actualizar su propio nivel, no los parámetros de evolución
     }
   }
 

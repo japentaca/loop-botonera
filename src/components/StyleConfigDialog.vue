@@ -98,12 +98,15 @@
             <!-- Habilitar Gestión de Energía -->
             <div class="control-group checkbox-group">
               <div class="checkbox-container">
-                <Checkbox 
-                  :modelValue="audioStore.energyManagementEnabled"
-                  @update:modelValue="onEnergyManagementChange"
-                  inputId="energyManagement"
-                />
-                <label for="energyManagement" class="checkbox-text">Habilitar gestión automática de energía</label>
+                <label for="energyManagement" class="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    id="energyManagement"
+                    v-model="energyManagementEnabled"
+                    class="custom-checkbox"
+                  />
+                  <span class="checkbox-text">Habilitar gestión automática de energía</span>
+                </label>
               </div>
               <small class="control-description">Ajusta automáticamente volumen y densidad según la energía total</small>
             </div>
@@ -151,11 +154,15 @@
             <!-- Bloqueo de Escala -->
             <div class="control-group checkbox-group">
               <div class="checkbox-container">
-                <Checkbox 
-                  v-model="audioStore.scaleLocked"
-                  inputId="scaleLocked"
-                />
-                <label for="scaleLocked" class="checkbox-text">Bloquear cambios de escala</label>
+                <label for="scaleLocked" class="checkbox-label">
+                  <input 
+                    id="scaleLocked"
+                    type="checkbox" 
+                    v-model="scaleLocked"
+                    class="custom-checkbox"
+                  />
+                  <span class="checkbox-text">Bloquear cambios de escala</span>
+                </label>
               </div>
               <small class="control-description">Evita que la evolución automática cambie la escala musical</small>
             </div>
@@ -245,10 +252,6 @@ const onMomentumMaxLevelChange = (value) => {
   }
 }
 
-const onEnergyManagementChange = (enabled) => {
-  audioStore.updateEnergyManagement(enabled)
-}
-
 const onMaxSonicEnergyChange = (value) => {
   audioStore.updateMaxSonicEnergy(Number(value))
 }
@@ -256,6 +259,27 @@ const onMaxSonicEnergyChange = (value) => {
 const onEnergyReductionFactorChange = (value) => {
   audioStore.updateEnergyReductionFactor(Number(value))
 }
+
+// Computed property para el checkbox de bloqueo de escala
+const scaleLocked = computed({
+  get: () => audioStore.scaleLocked,
+  set: (value) => {
+    if (value !== audioStore.scaleLocked) {
+      audioStore.toggleScaleLock()
+      console.log('Estado del bloqueo de escala:', audioStore.scaleLocked)
+    }
+  }
+})
+
+// Computed property para el checkbox de gestión automática de energía
+const energyManagementEnabled = computed({
+  get: () => audioStore.energyManagementEnabled,
+  set: (value) => {
+    audioStore.updateEnergyManagement(value)
+    console.log('Gestión automática de energía:', value ? 'activada' : 'desactivada')
+    console.log('Estado de gestión de energía:', audioStore.energyManagementEnabled)
+  }
+})
 
 // Manejar cambios en el multiselector de evolución
 const onEvolutionTypesChange = (selectedTypes) => {
@@ -476,24 +500,60 @@ watch(() => [
 .checkbox-group {
   display: flex;
   flex-direction: column;
+  gap: 0.25rem;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   cursor: pointer;
+  font-size: 0.9rem;
   color: #ffffff;
 }
 
-.checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: #00d9ff;
+.custom-checkbox {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid #00d9ff;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.custom-checkbox:checked {
+  background: #00d9ff;
+  border-color: #00d9ff;
+}
+
+.custom-checkbox:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.custom-checkbox:hover {
+  border-color: #7b2ff7;
+  box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.2);
 }
 
 .checkbox-text {
+  font-size: 0.9rem;
+  color: #ffffff;
+  cursor: pointer;
   font-weight: 500;
 }
 
