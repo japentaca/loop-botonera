@@ -165,10 +165,25 @@ export const useAudioEngine = () => {
 
     // Crear sintetizador según el tipo
     let synth
-    if (synthType === 'Synth') {
-      synth = markRaw(new Tone.Synth(synthConfig))
-    } else {
-      synth = markRaw(new Tone.PolySynth(Tone.Synth, synthConfig))
+    switch (synthType) {
+      case 'Synth':
+        synth = markRaw(new Tone.Synth(synthConfig))
+        break
+      case 'AMSynth':
+        synth = markRaw(new Tone.PolySynth(Tone.AMSynth, synthConfig))
+        break
+      case 'FMSynth':
+        synth = markRaw(new Tone.PolySynth(Tone.FMSynth, synthConfig))
+        break
+      case 'PluckSynth':
+        synth = markRaw(new Tone.PolySynth(Tone.PluckSynth, synthConfig))
+        break
+      case 'MembraneSynth':
+        synth = markRaw(new Tone.PolySynth(Tone.MembraneSynth, synthConfig))
+        break
+      default: // PolySynth
+        synth = markRaw(new Tone.PolySynth(Tone.Synth, synthConfig))
+        break
     }
 
     // Crear efectos individuales

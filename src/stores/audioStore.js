@@ -129,7 +129,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Actualizar configuración del sintetizador
   const updateLoopSynth = (loopId, synthConfig) => {
-    loopManager.updateLoopSynth(loopId, synthConfig)
+    loopManager.updateLoopSynth(loopId, synthConfig, audioEngine)
   }
 
   // Regenerar loop individual

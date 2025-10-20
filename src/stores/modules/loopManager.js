@@ -320,6 +320,99 @@ export const useLoopManager = () => {
     audioEngine.playNote(audioChain, midiNote, duration, loop.volume, time)
   }
 
+  // Actualizar configuración del sintetizador de un loop
+  const updateLoopSynth = (loopId, synthConfig, audioEngine) => {
+    const loop = loops.value[loopId]
+    if (!loop) {
+      console.error(`Loop ${loopId} no encontrado`)
+      return
+    }
+
+    if (!audioEngine) {
+      console.error('AudioEngine requerido para actualizar sintetizador')
+      return
+    }
+
+    try {
+      // Desconectar y limpiar el sintetizador anterior
+      if (loop.synth) {
+        loop.synth.disconnect()
+        loop.synth.dispose()
+      }
+      if (loop.panner) {
+        loop.panner.disconnect()
+        loop.panner.dispose()
+      }
+      if (loop.delaySend) {
+        loop.delaySend.disconnect()
+        loop.delaySend.dispose()
+      }
+      if (loop.reverbSend) {
+        loop.reverbSend.disconnect()
+        loop.reverbSend.dispose()
+      }
+
+      // Actualizar la configuración del loop
+      loop.synthModel = synthConfig.type || 'PolySynth'
+      loop.synthType = synthConfig.oscillator?.type || 'sine'
+      loop.envelope = synthConfig.envelope || {
+        attack: 0.01,
+        decay: 0.3,
+        sustain: 0.5,
+        release: 0.8
+      }
+
+      // Preparar configuraciones para audioEngine.createAudioChain
+      const newSynthConfig = {
+        oscillator: { type: loop.synthType },
+        envelope: loop.envelope
+      }
+
+      // Agregar configuraciones específicas según el tipo de sintetizador
+      if (loop.synthModel === 'AMSynth') {
+        newSynthConfig.harmonicity = synthConfig.harmonicity || 3
+        newSynthConfig.modulation = { type: loop.synthType }
+        newSynthConfig.modulationEnvelope = {
+          attack: loop.envelope.attack,
+          decay: loop.envelope.decay,
+          sustain: 0.85,
+          release: loop.envelope.release
+        }
+      } else if (loop.synthModel === 'FMSynth') {
+        newSynthConfig.harmonicity = synthConfig.harmonicity || 3
+        newSynthConfig.modulationIndex = synthConfig.modulationIndex || 10
+        newSynthConfig.modulation = { type: loop.synthType }
+      } else if (loop.synthModel === 'PluckSynth') {
+        newSynthConfig.attackNoise = 1
+        newSynthConfig.dampening = 4000
+        newSynthConfig.resonance = 0.7
+      } else if (loop.synthModel === 'MembraneSynth') {
+        newSynthConfig.pitchDecay = 0.05
+        newSynthConfig.octaves = 10
+      }
+
+      const effectsConfig = {
+        delayAmount: loop.delayAmount,
+        reverbAmount: loop.reverbAmount,
+        pan: loop.pan,
+        synthType: loop.synthModel
+      }
+
+      // Crear nueva cadena de audio usando audioEngine
+      const audioChain = audioEngine.createAudioChain(newSynthConfig, effectsConfig)
+
+      // Asignar los nuevos objetos de audio al loop
+      loop.synth = audioChain.synth
+      loop.panner = audioChain.panner
+      loop.delaySend = audioChain.delaySend
+      loop.reverbSend = audioChain.reverbSend
+
+      console.log(`Sintetizador actualizado para loop ${loopId}:`, loop.synthModel)
+    } catch (error) {
+      console.error(`Error al actualizar sintetizador del loop ${loopId}:`, error)
+    }
+  }
+
   return {
     // Estado
     loops,
@@ -335,6 +428,7 @@ export const useLoopManager = () => {
     // Funciones de control
     toggleLoop,
     updateLoopParam,
+    updateLoopSynth,
     
     // Funciones de generación
     generatePattern,
