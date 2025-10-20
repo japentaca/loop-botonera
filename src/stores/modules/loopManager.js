@@ -1,0 +1,355 @@
+import { ref } from 'vue'
+import { useScales, useNoteUtils } from '../../composables/useMusic'
+
+/**
+ * Gestor de loops que maneja la creación, configuración y 
+ * reproducción de patrones musicales
+ */
+export const useLoopManager = () => {
+  // Estado de los loops
+  const loops = ref([])
+  const NUM_LOOPS = 8
+
+  // Configuración
+  const synthTypes = ['sine', 'triangle', 'square', 'sawtooth']
+
+  // Funciones de generación de patrones
+  const generatePattern = (length, density = null) => {
+    const pattern = new Array(length).fill(false)
+    
+    // Usar densidad proporcionada o calcular una aleatoria
+    const patternDensity = density !== null ? density : (0.3 + Math.random() * 0.4)
+    
+    for (let i = 0; i < length; i++) {
+      if (Math.random() < patternDensity) {
+        pattern[i] = true
+      }
+    }
+    
+    // Asegurar al menos una nota activa
+    if (!pattern.some(Boolean)) {
+      pattern[0] = true
+    }
+    
+    return pattern
+  }
+
+  const generateNotes = (scale, baseNote, length) => {
+    return Array.from({ length }, () => {
+      const scaleIndex = Math.floor(Math.random() * scale.length)
+      const octave = Math.floor(Math.random() * 3)
+      const note = baseNote + scale[scaleIndex] + (octave * 12)
+      // Asegurar que la nota esté en rango MIDI válido
+      return Math.max(24, Math.min(96, note))
+    })
+  }
+
+  const generateNotesInRange = (scale, baseNote, length, maxOctaves = 2) => {
+    return Array.from({ length }, () => {
+      if (Math.random() < 0.3) return null // 30% silencio
+      const scaleIndex = Math.floor(Math.random() * scale.length)
+      const octave = Math.floor(Math.random() * maxOctaves)
+      const note = baseNote + scale[scaleIndex] + (octave * 12)
+      // Asegurar que la nota esté en rango MIDI válido y musical
+      const finalNote = Math.max(24, Math.min(84, note))
+      
+      // Verificar que la nota generada esté realmente en la escala
+      const { quantizeToScale } = useNoteUtils()
+      const quantizedNote = quantizeToScale(finalNote, scale, baseNote)
+      
+      return quantizedNote
+    })
+  }
+
+  // Crear estructura básica de loop (sin objetos de audio)
+  const createBasicLoop = (id, scale, adaptiveVolume = 0.5, adaptiveDensity = null) => {
+    const baseNote = 36 + Math.floor(Math.random() * 24)
+    const synthType = synthTypes[Math.floor(Math.random() * synthTypes.length)]
+    const length = 16
+    
+    const envelope = {
+      attack: 0.01,
+      decay: 0.3,
+      sustain: 0.5,
+      release: 0.8
+    }
+
+    return {
+      id,
+      isActive: false,
+      scale,
+      baseNote,
+      synthModel: 'PolySynth',
+      synthType,
+      pattern: generatePattern(length, adaptiveDensity),
+      notes: generateNotes(scale, baseNote, length),
+      length,
+      // Objetos de audio (se asignarán después)
+      synth: null,
+      panner: null,
+      delaySend: null,
+      reverbSend: null,
+      // Parámetros de efectos
+      delayAmount: 0.2,
+      reverbAmount: 0.3,
+      volume: adaptiveVolume,
+      pan: 0,
+      envelope
+    }
+  }
+
+  // Crear loop completo con objetos de audio
+  const createLoop = (id, scale, audioEngine, adaptiveVolume = 0.5, adaptiveDensity = null) => {
+    const basicLoop = createBasicLoop(id, scale, adaptiveVolume, adaptiveDensity)
+    
+    // Crear cadena de audio usando el motor de audio
+    const synthConfig = {
+      oscillator: { type: basicLoop.synthType },
+      envelope: basicLoop.envelope
+    }
+    
+    const effectsConfig = {
+      delayAmount: basicLoop.delayAmount,
+      reverbAmount: basicLoop.reverbAmount,
+      pan: basicLoop.pan,
+      synthType: basicLoop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
+    }
+
+    try {
+      const audioChain = audioEngine.createAudioChain(synthConfig, effectsConfig)
+      
+      // Asignar objetos de audio al loop
+      basicLoop.synth = audioChain.synth
+      basicLoop.panner = audioChain.panner
+      basicLoop.delaySend = audioChain.delaySend
+      basicLoop.reverbSend = audioChain.reverbSend
+    } catch (error) {
+      console.error('Error al crear cadena de audio para loop:', error)
+    }
+
+    return basicLoop
+  }
+
+  // Inicializar todos los loops
+  const initializeLoops = (currentScale, audioEngine = null, getAdaptiveVolume = null, getAdaptiveDensity = null) => {
+    const scale = useScales().getScale(currentScale)
+    loops.value = []
+    
+    for (let i = 0; i < NUM_LOOPS; i++) {
+      const adaptiveVolume = getAdaptiveVolume ? getAdaptiveVolume(i) : 0.5
+      const adaptiveDensity = getAdaptiveDensity ? getAdaptiveDensity() : null
+      
+      if (audioEngine && audioEngine.audioInitialized) {
+        loops.value.push(createLoop(i, scale, audioEngine, adaptiveVolume, adaptiveDensity))
+      } else {
+        loops.value.push(createBasicLoop(i, scale, adaptiveVolume, adaptiveDensity))
+      }
+    }
+  }
+
+  // Actualizar loops existentes con objetos de audio
+  const upgradeLoopsWithAudio = (audioEngine) => {
+    loops.value.forEach((loop) => {
+      if (!loop.synth) {
+        const synthConfig = {
+          oscillator: { type: loop.synthType },
+          envelope: loop.envelope
+        }
+        
+        const effectsConfig = {
+          delayAmount: loop.delayAmount,
+          reverbAmount: loop.reverbAmount,
+          pan: loop.pan,
+          synthType: loop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
+        }
+
+        try {
+          const audioChain = audioEngine.createAudioChain(synthConfig, effectsConfig)
+          
+          loop.synth = audioChain.synth
+          loop.panner = audioChain.panner
+          loop.delaySend = audioChain.delaySend
+          loop.reverbSend = audioChain.reverbSend
+        } catch (error) {
+          console.error('Error al actualizar loop con audio:', error)
+        }
+      }
+    })
+  }
+
+  // Activar/desactivar loop
+  const toggleLoop = (id) => {
+    const loop = loops.value[id]
+    if (loop) {
+      loop.isActive = !loop.isActive
+    }
+  }
+
+  // Actualizar parámetros de loop
+  const updateLoopParam = (id, param, value) => {
+    const loop = loops.value[id]
+    if (!loop) return
+
+    switch (param) {
+      case 'length': {
+        const newLen = Math.max(1, Math.round(Number(value)))
+        loop.length = newLen
+        loop.pattern = generatePattern(newLen)
+        loop.notes = generateNotes(loop.scale, loop.baseNote, newLen)
+        break
+      }
+      case 'delay':
+      case 'delayAmount': {
+        const amt = param === 'delay' ? Number(value) / 100 : Number(value)
+        loop.delayAmount = amt
+        if (loop.delaySend) loop.delaySend.gain.value = amt
+        break
+      }
+      case 'reverb':
+      case 'reverbAmount': {
+        const amt = param === 'reverb' ? Number(value) / 100 : Number(value)
+        loop.reverbAmount = amt
+        if (loop.reverbSend) loop.reverbSend.gain.value = amt
+        break
+      }
+      case 'volume': {
+        const v = Math.abs(value) <= 1 ? Number(value) : Number(value) / 100
+        loop.volume = Math.max(0, Math.min(1, v))
+        break
+      }
+      case 'pan': {
+        const p = Math.abs(value) <= 1 ? Number(value) : Number(value) / 100
+        const pan = Math.max(-1, Math.min(1, p))
+        if (loop.panner && loop.panner.pan) {
+          loop.panner.pan.value = pan
+        }
+        loop.pan = pan
+        break
+      }
+      case 'synthType': {
+        loop.synthType = value
+        // Nota: cambiar el tipo de oscilador requiere recrear el sintetizador
+        break
+      }
+    }
+  }
+
+  // Cuantizar notas de un loop a una nueva escala
+  const quantizeLoopNotes = (loop, newScale) => {
+    const { quantizeToScale } = useNoteUtils()
+    
+    loop.scale = newScale
+    loop.notes = loop.notes.map(note => {
+      if (note === null || note === undefined) return note
+      return quantizeToScale(note, newScale, loop.baseNote)
+    })
+  }
+
+  // Actualizar escala de todos los loops
+  const updateAllLoopsScale = (newScale) => {
+    const scale = useScales().getScale(newScale)
+    if (!scale) return
+    
+    loops.value.forEach(loop => {
+      quantizeLoopNotes(loop, scale)
+    })
+  }
+
+  // Regenerar patrón de un loop
+  const regenerateLoopPattern = (id, density = null) => {
+    const loop = loops.value[id]
+    if (loop) {
+      loop.pattern = generatePattern(loop.length, density)
+    }
+  }
+
+  // Regenerar notas de un loop
+  const regenerateLoopNotes = (id) => {
+    const loop = loops.value[id]
+    if (loop) {
+      loop.notes = generateNotes(loop.scale, loop.baseNote, loop.length)
+    }
+  }
+
+  // Regenerar loop completo (patrón y notas)
+  const regenerateLoop = (id, scale, adaptiveDensity = null, adaptiveVolume = null) => {
+    const loop = loops.value[id]
+    if (!loop) return
+
+    // Actualizar escala si se proporciona
+    if (scale) {
+      loop.scale = scale
+    }
+
+    // Regenerar patrón con densidad adaptiva
+    loop.pattern = generatePattern(loop.length, adaptiveDensity)
+    
+    // Regenerar notas con la nueva escala
+    loop.notes = generateNotes(loop.scale, loop.baseNote, loop.length)
+    
+    // Aplicar volumen adaptivo si se proporciona
+    if (adaptiveVolume !== null) {
+      loop.volume = Math.max(0, Math.min(1, adaptiveVolume))
+    }
+  }
+
+  // Obtener loops activos
+  const getActiveLoops = () => {
+    return loops.value.filter(loop => loop.isActive)
+  }
+
+  // Reproducir nota de un loop específico
+  const playLoopNote = (loop, audioEngine, step, time) => {
+    if (!loop.notes || !loop.notes[step] || loop.notes[step] === null) return
+    
+    const midiNote = loop.notes[step]
+    const synthModel = loop.synthModel || 'PolySynth'
+    
+    // Seleccionar duración según el modelo de síntesis
+    const duration = (synthModel === 'AMSynth' || synthModel === 'FMSynth') ? '8n'
+      : (synthModel === 'PluckSynth' || synthModel === 'MembraneSynth') ? '16n'
+      : '16n'
+
+    const audioChain = {
+      synth: loop.synth,
+      panner: loop.panner,
+      delaySend: loop.delaySend,
+      reverbSend: loop.reverbSend
+    }
+
+    audioEngine.playNote(audioChain, midiNote, duration, loop.volume, time)
+  }
+
+  return {
+    // Estado
+    loops,
+    NUM_LOOPS,
+    synthTypes,
+    
+    // Funciones de creación
+    createBasicLoop,
+    createLoop,
+    initializeLoops,
+    upgradeLoopsWithAudio,
+    
+    // Funciones de control
+    toggleLoop,
+    updateLoopParam,
+    
+    // Funciones de generación
+    generatePattern,
+    generateNotes,
+    generateNotesInRange,
+    regenerateLoopPattern,
+    regenerateLoopNotes,
+    regenerateLoop,
+    
+    // Funciones de escala
+    quantizeLoopNotes,
+    updateAllLoopsScale,
+    
+    // Utilidades
+    getActiveLoops,
+    playLoopNote
+  }
+}

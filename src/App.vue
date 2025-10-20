@@ -21,6 +21,11 @@ const presetStore = usePresetStore()
 
 onMounted(async () => {
   // Inicializar audio cuando la aplicación se monta
+  try {
+    await audioStore.initAudio()
+  } catch (error) {
+    console.error('Error inicializando audio:', error)
+  }
   
   // Inicializar el sistema de presets
   try {

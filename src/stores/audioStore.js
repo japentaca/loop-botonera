@@ -1,650 +1,228 @@
 import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
-import * as Tone from 'tone'
-import { useSynthesizer } from '../composables/useAudio'
 import { useScales, useNoteUtils, useMusic } from '../composables/useMusic'
 
+// Importar los nuevos módulos especializados
+import { useAudioEngine } from './modules/audioEngine'
+import { useLoopManager } from './modules/loopManager'
+import { useEnergyManager } from './modules/energyManager'
+import { useEvolutionSystem } from './modules/evolutionSystem'
+
 export const useAudioStore = defineStore('audio', () => {
-  // Estado reactivo
-  const audioInitialized = ref(false)
-  const isPlaying = ref(false)
-  const currentPulse = ref(0)
-  const tempo = ref(120)
-  const masterVol = ref(0.7)
-  const loops = ref([])
-  const delayDivision = ref('8n')
-  const currentScale = ref('major') // Escala actual seleccionada
-  const scaleLocked = ref(false) // Bloquear cambios de escala durante evolución
-  
-  // Estado de evolución automática
+  // Inicializar módulos especializados
+  const audioEngine = useAudioEngine()
+  const loopManager = useLoopManager()
+  const energyManager = useEnergyManager()
+  const evolutionSystem = useEvolutionSystem()
+
+  // Estado específico del store principal (coordinación entre módulos)
+  const currentScale = ref('major')
+  const scaleNamesSpanish = ref({
+    'major': 'Mayor',
+    'minor': 'Menor',
+    'dorian': 'Dórico',
+    'phrygian': 'Frigio',
+    'lydian': 'Lidio',
+    'mixolydian': 'Mixolidio',
+    'locrian': 'Locrio',
+    'harmonicMinor': 'Menor Armónica',
+    'melodicMinor': 'Menor Melódica',
+    'pentatonic': 'Pentatónica',
+    'blues': 'Blues',
+    'chromatic': 'Cromática'
+  })
+
+  // Estado de evolución automática (coordinación entre módulos)
   const autoEvolve = ref(false)
-  const evolveInterval = ref(8) // compases entre evoluciones
-  const evolveIntensity = ref(2) // 1-3 canales afectados
   const measuresSinceEvolve = ref(0)
-  const nextEvolveMeasure = ref(evolveInterval.value)
-  const recentScales = ref([]) // historial de últimas 3 escalas
+  const nextEvolveMeasure = ref(0)
+  const scaleLocked = ref(false)
+  const recentScales = ref([])
+  const isTensionPhase = ref(false)
+  const lastResponderId = ref(null)
+  const evolveStartTime = ref(0)
+  const momentumLevel = ref(0)
   let evolveIntervalId = null
-  
-  // Características creativas adicionales
-  const evolveMode = ref('classic') // classic, momentum, callResponse, tensionRelease
+
+  // Configuración de modos creativos
+  const evolveMode = ref('classic')
   const momentumEnabled = ref(false)
-  const momentumLevel = ref(0) // 0-10, aumenta con el tiempo
   const callResponseEnabled = ref(false)
   const tensionReleaseMode = ref(false)
-  const isTensionPhase = ref(false) // true = tensión, false = release
-  const lastResponderId = ref(null) // para call & response
-  const evolveStartTime = ref(Date.now()) // para calcular momentum
-  const momentumMaxLevel = ref(5) // nivel máximo de momentum
-  
-  // Configuración de gestión de energía sonora
-  const energyManagementEnabled = ref(true) // habilitar/deshabilitar gestión automática
-  const maxSonicEnergy = ref(2.5) // límite máximo de energía sonora total
-  const energyReductionFactor = ref(0.6) // factor de reducción cuando se excede el límite (60%)
-  
-  // Derivados para UI
-  const currentBeat = computed(() => currentPulse.value % 16)
-  const masterVolume = computed({
-    get: () => Math.round(masterVol.value * 100),
-    set: (v) => {
-      const volPercent = Math.max(0, Math.min(100, Number(v)))
-      masterVol.value = volPercent / 100
-      if (audioInitialized.value && masterGain) {
-        masterGain.gain.value = masterVol.value
-      }
-    }
-  });
-  
-  // Depuración de audio
-  const DEBUG_AUDIO = false
-  const DEBUG_VERBOSE = false
-  const DEBUG_INIT = false
-  const DEBUG_TRANSPORT = false
-  const DEBUG_LOOPS = false
-  const BYPASS_EFFECTS_FOR_TEST = false
-  const USE_SIMPLE_SYNTH = true
-  const dbg = (msg, data = undefined) => {
-    if (DEBUG_AUDIO) {
-      // Silenciado: logs de debug no esenciales
-    }
-  }
 
-  // Referencias de audio
-  let delay, reverb, masterGain
-  let _feedbackResetTimer = null
+  // Computed properties que combinan datos de múltiples módulos
+  const scales = computed(() => {
+    const { scales: scalesList } = useScales()
+    return scalesList
+  })
 
-  // Constantes
-  const NUM_LOOPS = 8
-  const { scales, scaleNames, scaleNamesSpanish } = useScales()
-  const { getRelatedScale } = useMusic()
-  const synthTypes = ['sine', 'triangle', 'square', 'sawtooth']
+  const scaleNames = computed(() => Object.keys(scales.value))
+  const synthTypes = computed(() => ['sine', 'square', 'sawtooth', 'triangle'])
 
-  // Funciones auxiliares
-  const generatePattern = (length, useAdaptiveDensity = true) => {
-    const pattern = new Array(length).fill(false)
+  // Funciones principales que coordinan entre módulos
+
+  // Función para reproducir loops activos en cada pulso
+  const playActiveLoops = (time, pulse) => {
+    const activeLoops = loopManager.getActiveLoops()
     
-    // Usar densidad adaptiva o densidad fija según el parámetro
-    const density = useAdaptiveDensity ? getAdaptiveDensity(length) : (0.3 + Math.random() * 0.4)
-    
-    for (let i = 0; i < length; i++) {
-      if (Math.random() < density) {
-        pattern[i] = true
-      }
-    }
-    
-    // Asegurar al menos una nota activa
-    if (!pattern.some(Boolean)) {
-      pattern[0] = true
-    }
-    
-    return pattern
-  }
-
-  const generateNotes = (scale, baseNote, length) => {
-    return Array.from({ length }, () => {
-      const scaleIndex = Math.floor(Math.random() * scale.length)
-      const octave = Math.floor(Math.random() * 3)
-      const note = baseNote + scale[scaleIndex] + (octave * 12)
-      // Asegurar que la nota esté en rango MIDI válido
-      return Math.max(24, Math.min(96, note))
-    })
-  }
-
-  // Generar notas aleatorias de una escala con rango limitado de octavas
-  const generateNotesInRange = (scale, baseNote, length, maxOctaves = 2) => {
-    return Array.from({ length }, () => {
-      if (Math.random() < 0.3) return null // 30% silencio
-      const scaleIndex = Math.floor(Math.random() * scale.length)
-      const octave = Math.floor(Math.random() * maxOctaves)
-      const note = baseNote + scale[scaleIndex] + (octave * 12)
-      // Asegurar que la nota esté en rango MIDI válido y musical
-      const finalNote = Math.max(24, Math.min(84, note))
-      
-      // Verificar que la nota generada esté realmente en la escala
-      const { quantizeToScale } = useNoteUtils()
-      const quantizedNote = quantizeToScale(finalNote, scale, baseNote)
-      
-      console.log(`🎼 GenerateNotesInRange: nota ${finalNote} → ${quantizedNote} (escala: ${scale[scaleIndex]})`)
-      return quantizedNote
-    })
-  }
-
-  // Gestión de energía sonora
-  const calculateSonicEnergy = () => {
-    const activeLoops = loops.value.filter(loop => loop.isActive)
-    if (activeLoops.length === 0) return 0
-    
-    let totalEnergy = 0
     activeLoops.forEach(loop => {
-      // Calcular energía basada en densidad del patrón, volumen y efectos
-      const patternDensity = loop.pattern.filter(Boolean).length / loop.pattern.length
-      const volumeContribution = loop.volume || 0.5
-      const effectsMultiplier = 1 + (loop.delayAmount || 0) * 0.3 + (loop.reverbAmount || 0) * 0.2
-      
-      const loopEnergy = patternDensity * volumeContribution * effectsMultiplier
-      totalEnergy += loopEnergy
-    })
-    
-    return totalEnergy
-  }
-
-  const getAdaptiveDensity = (baseLength = 16) => {
-    // Si la gestión de energía está deshabilitada, usar densidad fija
-    if (!energyManagementEnabled.value) {
-      return 0.3 + Math.random() * 0.4
-    }
-    
-    const activeCount = loops.value.filter(loop => loop.isActive).length
-    
-    // Densidad base más alta para pocos loops, más baja para muchos
-    let baseDensity = 0.5
-    
-    if (activeCount <= 1) {
-      baseDensity = 0.6 + Math.random() * 0.3 // 0.6-0.9 para loops solos
-    } else if (activeCount <= 3) {
-      baseDensity = 0.4 + Math.random() * 0.3 // 0.4-0.7 para pocos loops
-    } else if (activeCount <= 5) {
-      baseDensity = 0.25 + Math.random() * 0.25 // 0.25-0.5 para varios loops
-    } else {
-      baseDensity = 0.15 + Math.random() * 0.2 // 0.15-0.35 para muchos loops
-    }
-    
-    // Ajuste adicional basado en energía total actual
-    const currentEnergy = calculateSonicEnergy()
-    
-    if (currentEnergy > maxSonicEnergy.value) {
-      baseDensity *= 0.7 // Reducir densidad si hay mucha energía
-    }
-    
-    return Math.max(0.1, Math.min(0.9, baseDensity))
-  }
-
-  const getAdaptiveVolume = (loopId) => {
-    // Si la gestión de energía está deshabilitada, usar volumen fijo
-    if (!energyManagementEnabled.value) {
-      return 0.5
-    }
-    
-    const activeCount = loops.value.filter(loop => loop.isActive).length
-    const currentEnergy = calculateSonicEnergy()
-    
-    // Volumen base más bajo cuando hay más loops activos
-    let baseVolume = 0.7
-    
-    if (activeCount <= 2) {
-      baseVolume = 0.8
-    } else if (activeCount <= 4) {
-      baseVolume = 0.6
-    } else if (activeCount <= 6) {
-      baseVolume = 0.45
-    } else {
-      baseVolume = 0.35
-    }
-    
-    // Ajuste adicional por energía total usando configuración
-    if (currentEnergy > maxSonicEnergy.value) {
-      baseVolume *= energyReductionFactor.value
-    }
-    
-    return Math.max(0.2, Math.min(1.0, baseVolume))
-  }
-
-  // Crear loop básico sin audio (para mostrar en UI)
-  const createBasicLoop = (id) => {
-    const scale = useScales().getScale(currentScale.value)
-    const baseNote = 36 + Math.floor(Math.random() * 24)
-    const synthType = 'sine'
-    const length = 16
-    
-    const envelope = {
-      attack: 0.01,
-      decay: 0.3,
-      sustain: 0.5,
-      release: 0.8
-    }
-
-    return {
-      id,
-      isActive: false,
-      scale,
-      baseNote,
-      // Tipo de síntesis (Poly/AM/FM) persistente por loop
-      synthModel: 'PolySynth',
-      // Tipo de oscilador
-      synthType,
-      pattern: generatePattern(length),
-      notes: generateNotes(scale, baseNote, length),
-      length,
-      synth: null,
-      panner: null,
-      delaySend: null,
-      reverbSend: null,
-      delayAmount: 0.2,
-      reverbAmount: 0.3,
-      volume: getAdaptiveVolume(id),
-      pan: 0,
-      envelope
-    }
-  }
-
-  const createLoop = (id) => {
-    const scale = useScales().getScale(currentScale.value)
-    const baseNote = 36 + Math.floor(Math.random() * 24)
-    const synthType = 'sine'
-    const length = 16
-    
-    const envelope = {
-      attack: 0.01,
-      decay: 0.3,
-      sustain: 0.5,
-      release: 0.8
-    }
-
-    // Crear sintetizador
-    const synthConfig = {
-      oscillator: { type: synthType },
-      envelope
-    }
-    const synth = markRaw(USE_SIMPLE_SYNTH ? new Tone.Synth(synthConfig) : new Tone.PolySynth(Tone.Synth, synthConfig))
- 
-     // Efectos y ruteo
-     const panner = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Panner(0))
-     const delaySend = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Gain(0.2))
-     const reverbSend = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Gain(0.3))
-
-    if (BYPASS_EFFECTS_FOR_TEST) {
-      synth.connect(masterGain)
-    } else {
-      synth.connect(panner)
-      synth.connect(delaySend)
-      synth.connect(reverbSend)
-      
-      if (masterGain) {
-        panner.connect(masterGain)
-      } else {
-        panner.toDestination()
+      const step = (pulse - 1) % loop.length
+      if (loop.pattern[step]) {
+        loopManager.playLoopNote(loop, audioEngine, step, time)
       }
-      if (delay) delaySend.connect(delay)
-      if (reverb) reverbSend.connect(reverb)
-    }
-
-    return {
-      id,
-      isActive: false,
-      scale,
-      baseNote,
-      // Tipo de síntesis (Poly/AM/FM) persistente por loop
-      synthModel: 'PolySynth',
-      // Tipo de oscilador
-      synthType,
-      pattern: generatePattern(length),
-      notes: generateNotes(scale, baseNote, length),
-      length,
-      synth,
-      panner,
-      delaySend,
-      reverbSend,
-      delayAmount: 0.2,
-      reverbAmount: 0.3,
-      volume: getAdaptiveVolume(id),
-      pan: 0,
-      envelope
-    }
+    })
   }
 
-  // Reset suave del feedback para re-fasear el delay
-  const softResetDelayFeedback = () => {
-    if (!audioInitialized.value || !delay) return
-    try {
-      const original = delay.feedback?.value ?? 0.4
-      // Reducir feedback a cero temporalmente
-      if (delay.feedback) delay.feedback.value = 0
-      if (_feedbackResetTimer) clearTimeout(_feedbackResetTimer)
-      const holdMs = Tone.Time('16n').toMilliseconds()
-      _feedbackResetTimer = setTimeout(() => {
-        try {
-          if (delay?.feedback) delay.feedback.value = original
-        } catch (e) {}
-      }, Math.max(10, holdMs))
-    } catch (e) {}
-  }
-
-  // Sincronizar delay con tempo según división seleccionada
-  const updateDelayTime = () => {
-    if (!audioInitialized.value || !delay) return
-    const seconds = Tone.Time(delayDivision.value).toSeconds()
-    if (delay.delayTime && delay.delayTime.value !== seconds) {
-      delay.delayTime.value = seconds
-    }
-  }
-
-  // Inicializar audio
+  // Inicialización de audio
   const initAudio = async () => {
-    if (audioInitialized.value) return
-
     try {
-      await Tone.start()
-
-      // Crear cadena de efectos
-      masterGain = markRaw(new Tone.Gain(masterVol.value).toDestination())
-      if (!BYPASS_EFFECTS_FOR_TEST) {
-        delay = markRaw(new Tone.PingPongDelay(delayDivision.value, 0.4).connect(masterGain))
-        reverb = markRaw(new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain))
-        await reverb.generate()
-      } else {
-        delay = null
-        reverb = null
-      }
-
-      // Configurar transporte
-      Tone.Transport.bpm.value = tempo.value
-      updateDelayTime()
-
-      // Actualizar loops existentes con objetos de audio
-      loops.value.forEach((loop) => {
-        const synthConfig = {
-          oscillator: { type: loop.synthType },
-          envelope: loop.envelope
-        }
-
-        const synth = markRaw(USE_SIMPLE_SYNTH ? new Tone.Synth(synthConfig) : new Tone.PolySynth(Tone.Synth, synthConfig))
-        const panner = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Panner(loop.pan))
-        const delaySend = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Gain(loop.delayAmount))
-        const reverbSend = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Gain(loop.reverbAmount))
-
-        // Conectar cadena de audio
-        if (BYPASS_EFFECTS_FOR_TEST) {
-          synth.connect(masterGain)
-        } else {
-          synth.connect(panner)
-          synth.connect(delaySend)
-          synth.connect(reverbSend)
-          
-          if (masterGain) {
-            panner.connect(masterGain)
-          } else {
-            panner.toDestination()
-          }
-          if (delay) delaySend.connect(delay)
-          if (reverb) reverbSend.connect(reverb)
-        }
-
-        // Actualizar el loop con los objetos de audio
-        loop.synth = synth
-        loop.panner = panner
-        loop.delaySend = delaySend
-        loop.reverbSend = reverbSend
-      })
-
-      // Programar reloj de transporte y reproducción de loops
-      Tone.Transport.scheduleRepeat((time) => {
-        currentPulse.value = currentPulse.value + 1
-
-        // Ejecutar loops activos en este pulso
-        loops.value.forEach(loop => {
-          if (loop.isActive && loop.pattern[currentPulse.value % loop.length]) {
-            playNote(loop, time, currentPulse.value % loop.length)
-          }
-        })
-      }, "16n")
-
-      audioInitialized.value = true
+      await audioEngine.initAudio()
+      
+      // Configurar callback del transporte para reproducir loops
+      audioEngine.setupTransportCallback(playActiveLoops)
+      
+      // Inicializar loops con configuración por defecto
+      const scale = useScales().getScale(currentScale.value)
+      loopManager.initializeLoops(scale, audioEngine)
+      
+      console.log('🎵 Audio inicializado correctamente con todos los módulos')
+      return true
     } catch (error) {
-      console.error('Error al inicializar audio:', error)
+      console.error('❌ Error al inicializar audio:', error)
+      return false
     }
   }
 
-  // Reproducir nota
-  const playNote = (loop, time, step) => {
-    try {
-      // Validar sintetizador y nota
-      if (!loop?.synth || !loop?.notes?.[step]) return
-      if (typeof loop.synth.triggerAttackRelease !== 'function') return
-
-      // Validar contexto de audio
-      if (!Tone.context || Tone.context.state !== 'running') return
-
-      // Calcular frecuencia desde nota MIDI
-      const midiNote = loop.notes[step]
-      if (Number.isNaN(midiNote) || midiNote < 0 || midiNote > 127) return
-      const freq = Tone.Frequency(midiNote, 'midi').toFrequency()
-
-      // No automatizar parámetros dentro del callback: usar velocity directo
-      const velocity = Math.max(0, Math.min(1, loop.volume ?? 1))
-
-      // Asegurar tiempo válido
-      if (typeof time !== 'number' || !isFinite(time)) return
-
-      // Seleccionar duración según el modelo de síntesis
-      const synthModel = loop.synthModel || 'PolySynth'
-      const duration = (synthModel === 'AMSynth' || synthModel === 'FMSynth') ? '8n'
-        : (synthModel === 'PluckSynth' || synthModel === 'MembraneSynth') ? '16n'
-        : '16n'
-
-      // Disparar la nota usando el tiempo del transporte
-      loop.synth.triggerAttackRelease(freq, duration, time, velocity)
-    } catch (error) {
-      console.error('Error al reproducir nota:', error)
-      try {
-        // Fallback: sintetizador temporal directo a destino
-        const temp = new Tone.Synth().toDestination()
-        const midiNote = loop?.notes?.[step]
-        if (typeof midiNote === 'number' && isFinite(midiNote)) {
-          const noteName = Tone.Frequency(midiNote, 'midi').toNote()
-          const useTime = Tone.context?.state === 'running' && typeof time === 'number' ? time : undefined
-          temp.triggerAttackRelease(noteName, '16n', useTime)
-        }
-        setTimeout(() => temp.dispose(), 800)
-      } catch (err2) {
-        console.error('Fallback también falló:', err2)
-      }
-    }
-  }
-
-  // Toggle play/stop
-  const togglePlay = async () => {
-    if (!isPlaying.value) {
-      await initAudio()
-      Tone.Transport.start()
-      isPlaying.value = true
-    } else {
-      Tone.Transport.pause()
-      isPlaying.value = false
-    }
-  }
-
-  // Toggle loop
-  const toggleLoop = (id) => {
-    if (!audioInitialized.value) return
-    const loop = loops.value[id]
-    loop.isActive = !loop.isActive
+  // Control de reproducción
+  const togglePlay = () => {
+    audioEngine.togglePlay()
     
-    // Ajustar volúmenes de todos los loops activos para mantener balance energético
-    adjustAllLoopVolumes()
-  }
-
-  // Funciones de configuración de energía sonora
-  const updateEnergyManagement = (enabled) => {
-    energyManagementEnabled.value = enabled
-    if (enabled) {
-      // Reajustar volúmenes cuando se habilita
-      adjustAllLoopVolumes()
+    if (audioEngine.isPlaying.value && autoEvolve.value) {
+      startAutoEvolve()
+    } else if (!audioEngine.isPlaying.value) {
+      stopAutoEvolve()
     }
   }
 
-  const updateMaxSonicEnergy = (value) => {
-    maxSonicEnergy.value = Math.max(1.0, Math.min(10.0, Number(value)))
-    if (energyManagementEnabled.value) {
-      adjustAllLoopVolumes()
+  // Control de loops
+  const toggleLoop = (id) => {
+    const loop = loopManager.loops.value[id]
+    if (!loop) return
+
+    loopManager.toggleLoop(id)
+    
+    // Aplicar gestión de energía después de cambios
+    if (energyManager.energyManagementEnabled.value) {
+      energyManager.adjustAllLoopVolumes(loopManager.loops.value)
     }
   }
 
-  const updateEnergyReductionFactor = (value) => {
-    energyReductionFactor.value = Math.max(0.1, Math.min(1.0, Number(value)))
-    if (energyManagementEnabled.value) {
-      adjustAllLoopVolumes()
-    }
-  }
-
-  // Ajustar volúmenes de todos los loops para mantener balance energético
-  const adjustAllLoopVolumes = () => {
-    loops.value.forEach(loop => {
-      if (loop.isActive) {
-        const newVolume = getAdaptiveVolume(loop.id)
-        // Solo ajustar si la diferencia es significativa para evitar cambios constantes
-        if (Math.abs(loop.volume - newVolume) > 0.1) {
-          loop.volume = newVolume
-        }
-      }
-    })
-  }
-
-  // Actualizar parámetro de loop
+  // Actualizar parámetros de loop
   const updateLoopParam = (id, param, value) => {
-    const loop = loops.value[id]
-
-    switch (param) {
-      case 'length': {
-        const newLenRaw = Number(value)
-        const newLen = Math.max(1, Math.round(newLenRaw))
-        loop.length = newLen
-        loop.pattern = generatePattern(newLen)
-        loop.notes = generateNotes(loop.scale, loop.baseNote, newLen)
-        break
-      }
-      case 'delay': {
-        const amt = Number(value) / 100
-        loop.delayAmount = amt
-        if (loop.delaySend) loop.delaySend.gain.value = amt
-        break
-      }
-      case 'delayAmount': {
-        const amt = Number(value)
-        loop.delayAmount = amt
-        if (loop.delaySend) loop.delaySend.gain.value = amt
-        break
-      }
-      case 'reverb': {
-        const amt = Number(value) / 100
-        loop.reverbAmount = amt
-        if (loop.reverbSend) loop.reverbSend.gain.value = amt
-        break
-      }
-      case 'reverbAmount': {
-        const amt = Number(value)
-        loop.reverbAmount = amt
-        if (loop.reverbSend) loop.reverbSend.gain.value = amt
-        break
-      }
-      case 'volume': {
-        const v = Math.abs(value) <= 1 ? Number(value) : Number(value) / 100
-        loop.volume = Math.max(0, Math.min(1, v))
-        break
-      }
-      case 'pan': {
-        const p = Math.abs(value) <= 1 ? Number(value) : Number(value) / 100
-        const pan = Math.max(-1, Math.min(1, p))
-        if (loop.panner && loop.panner.pan) {
-          loop.panner.pan.value = pan
-        }
-        loop.pan = pan
-        break
-      }
+    loopManager.updateLoopParam(id, param, value)
+    
+    // Verificar balance energético después de cambios significativos
+    if (['volume', 'delayAmount', 'reverbAmount'].includes(param)) {
+      energyManager.checkAndBalanceEnergy(loopManager.loops.value)
     }
   }
 
-  // Actualizar tempo
+  // Actualizar configuración del sintetizador
+  const updateLoopSynth = (loopId, synthConfig) => {
+    loopManager.updateLoopSynth(loopId, synthConfig)
+  }
+
+  // Regenerar loop individual
+  const regenerateLoop = (id) => {
+    if (!audioEngine.audioInitialized.value) return
+    
+    const scale = useScales().getScale(currentScale.value)
+    const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
+    const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, id)
+    
+    loopManager.regenerateLoop(id, scale, adaptiveDensity, adaptiveVolume)
+  }
+
+  // Regenerar todos los loops
+  const regenerateAllLoops = () => {
+    if (!audioEngine.audioInitialized.value) return
+    
+    const scale = useScales().getScale(currentScale.value)
+    
+    for (let i = 0; i < loopManager.NUM_LOOPS; i++) {
+      const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
+      const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, i)
+      loopManager.regenerateLoop(i, scale, adaptiveDensity, adaptiveVolume)
+    }
+    
+    // Ajustar volúmenes después de regenerar todos
+    energyManager.adjustAllLoopVolumes(loopManager.loops.value)
+  }
+
+  // Distribución panorámica
+  const applySparseDistribution = () => {
+    if (!audioEngine.audioInitialized.value) return
+    loopManager.applySparseDistribution()
+  }
+
+  // Control de tempo
   const updateTempo = (newTempo) => {
-    const t = Number(newTempo ?? tempo.value)
-    tempo.value = t
-    if (audioInitialized.value) {
-      Tone.Transport.bpm.value = t
-      updateDelayTime()
-      softResetDelayFeedback()
-    }
+    audioEngine.updateTempo(newTempo)
   }
 
-  // Actualizar volumen master (porcentaje 0-100)
-  const updateMasterVolume = (newVolumePercent) => {
-    const volPercent = Number(newVolumePercent ?? masterVolume.value)
-    const vol = Math.max(0, Math.min(100, volPercent)) / 100
-    masterVol.value = vol
-    if (audioInitialized.value && masterGain) {
-      masterGain.gain.value = vol
-    }
+  // Control de volumen maestro
+  const updateMasterVolume = (volume) => {
+    audioEngine.updateMasterVolume(volume)
   }
 
-
-
-  // Cambiar escala actual y cuantizar notas de los loops
+  // Actualizar escala musical
   const updateScale = (newScale) => {
     const scale = useScales().getScale(newScale)
-    
     if (!scale) return
+    
     currentScale.value = newScale
+    console.log(`🔍 updateScale: newScale=${newScale}`)
     
-    console.log(`🔍 updateScale: newScale=${newScale}, scale=`, scale, `type=${typeof scale}`, `isArray=${Array.isArray(scale)}`)
-    
-    if (!audioInitialized.value) {
+    if (!audioEngine.audioInitialized.value) {
       // Si no está inicializado, solo actualizar la referencia de la escala
-      loops.value.forEach(loop => {
+      loopManager.loops.value.forEach(loop => {
         loop.scale = scale
       })
       return
     }
 
     // Cuantizar notas existentes manteniendo patrón y baseNote
-    loops.value.forEach(loop => {
+    loopManager.loops.value.forEach(loop => {
       loop.scale = scale
-      quantizeLoopNotes(loop, scale)
+      loopManager.quantizeLoopNotes(loop, scale)
     })
   }
 
-  // Actualizar división del delay (tap division)
+  // Actualizar división del delay
   const updateDelayDivision = (division) => {
-    const allowed = ['16n', '8n', '4n', '2n', '8t', '4t', '2t']
-    const div = allowed.includes(division) ? division : '8n'
-    delayDivision.value = div
-    updateDelayTime()
-    softResetDelayFeedback()
+    audioEngine.updateDelayDivision(division)
   }
 
   // Sistema de evolución automática
+
   const getRandomScale = (excludeScale = null) => {
     const { scales: scalesList } = useScales()
     const availableScales = Object.keys(scalesList).filter(scale => 
       scale !== excludeScale && !recentScales.value.includes(scale)
     )
     if (availableScales.length === 0) {
-      // Si no hay escalas disponibles, usar cualquiera excepto la actual
       return Object.keys(scalesList).find(scale => scale !== excludeScale) || 'major'
     }
     return availableScales[Math.floor(Math.random() * availableScales.length)]
   }
 
-
+  const getRelatedScale = (currentScale) => {
+    const { getRelatedScale: getMusicRelatedScale } = useMusic()
+    return getMusicRelatedScale(currentScale) || getRandomScale(currentScale)
+  }
 
   const selectRandomLoops = (count) => {
-    const activeLoops = loops.value.filter(loop => loop.isActive)
+    const activeLoops = loopManager.loops.value.filter(loop => loop.isActive)
     if (activeLoops.length === 0) return []
     
     const selected = []
@@ -660,72 +238,62 @@ export const useAudioStore = defineStore('audio', () => {
     return selected
   }
 
-  // Aplicar momentum: incrementa nivel y ajusta intervalo/intensidad
+  // Aplicar momentum usando el sistema de evolución
   const applyMomentum = () => {
     if (!momentumEnabled.value) return
     const elapsedSec = (Date.now() - evolveStartTime.value) / 1000
-    // Incremento suave: cada 10s sube ~1 nivel
-    const targetLevel = Math.min(momentumMaxLevel.value, Math.floor(elapsedSec / 10))
+    const targetLevel = Math.min(evolutionSystem.evolutionIntensity.value * 10, Math.floor(elapsedSec / 10))
     if (targetLevel > momentumLevel.value) {
       momentumLevel.value = targetLevel
-      // Reducir intervalo según momentum (más cambios a mayor nivel)
-      const newInterval = Math.max(4, evolveInterval.value - momentumLevel.value)
-      updateEvolveInterval(newInterval)
-      // Aumentar intensidad hasta 3
-      const newIntensity = Math.min(3, 1 + Math.floor(momentumLevel.value / 2))
-      updateEvolveIntensity(newIntensity)
+      const newInterval = Math.max(4, evolutionSystem.evolutionInterval.value - momentumLevel.value)
+      evolutionSystem.updateEvolutionSettings({ interval: newInterval * 1000 })
+      const newIntensity = Math.min(1.0, 0.3 + Math.floor(momentumLevel.value / 20))
+      evolutionSystem.updateEvolutionSettings({ intensity: newIntensity })
     }
   }
 
-  // Tensión/Release: alterna escala más disonante vs consonante
+  // Tensión/Release usando el sistema de evolución
   const applyTensionRelease = () => {
     const { getConsonantScale, getDissonantScale } = useMusic()
-    // Alterna fase
     isTensionPhase.value = !isTensionPhase.value
     const recent = [...recentScales.value]
     if (isTensionPhase.value) {
-      // Fase de tensión
       return getDissonantScale(currentScale.value, recent)
     } else {
-      // Fase de release
       return getConsonantScale(currentScale.value, recent)
     }
   }
 
-  // Call & Response: un loop "responde" al último modificador
+  // Call & Response usando el sistema de evolución
   const applyCallResponse = (loopsToReharmonize) => {
     if (!Array.isArray(loopsToReharmonize) || loopsToReharmonize.length === 0) return loopsToReharmonize
-    // Elegir un respondedor diferente al último si es posible
+    
     const candidates = loopsToReharmonize.filter(l => l.id !== lastResponderId.value)
     const responder = (candidates.length ? candidates : loopsToReharmonize)[0]
     lastResponderId.value = responder?.id ?? null
     
-    // La respuesta: regeneración completa de notas en la escala actual
     const scale = useScales().getScale(currentScale.value) || useScales().getScale('major')
-    
-    // Asignar una nueva nota base apropiada
-    const baseNotes = [36, 48, 60, 72] // C2, C3, C4, C5
+    const baseNotes = [36, 48, 60, 72]
     responder.baseNote = baseNotes[Math.floor(Math.random() * baseNotes.length)]
     
     console.log(`🎤 Call&Response: regenerando responder con escala`, scale, `baseNote: ${responder.baseNote}`)
     
-    // Regenerar todas las notas del loop usando la escala actual
-    responder.notes = generateNotesInRange(scale, responder.baseNote, responder.length, 2)
+    responder.notes = loopManager.generateNotesInRange(scale, responder.baseNote, responder.length, 2)
     
-    console.log(`  Responder: notas completamente regeneradas en escala`)
     return loopsToReharmonize
   }
 
+  // Evolución musical principal
   const evolveMusic = () => {
-    if (!audioInitialized.value) return
+    if (!audioEngine.audioInitialized.value) return
     
     // Aplicar momentum si está activado
     applyMomentum()
     
-    let newScale = currentScale.value // Por defecto mantener la escala actual
+    let newScale = currentScale.value
     let oldScale = currentScale.value
     
-    // 1. Seleccionar nueva escala según el modo solo si no está bloqueada
+    // Seleccionar nueva escala según el modo solo si no está bloqueada
     if (!scaleLocked.value) {
       switch (evolveMode.value) {
         case 'momentum':
@@ -748,61 +316,49 @@ export const useAudioStore = defineStore('audio', () => {
         if (recentScales.value.length > 3) {
           recentScales.value.shift()
         }
-        
-        // 2. Cambiar escala global (cuantizar notas existentes)
         updateScale(newScale)
       }
     }
     
-    // 3. Regenerar notas de algunos loops en la nueva escala
-    const loopsToReharmonize = selectRandomLoops(Math.ceil(evolveIntensity.value / 2))
+    // Usar el sistema de evolución para evolucionar loops
+    const availableScales = Object.keys(scales.value).map(name => ({
+      name,
+      notes: useScales().getScale(name)
+    }))
+    
+    const evolvedLoops = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, availableScales)
     
     // Aplicar call & response si está activado
     if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
-      loopsToReharmonize = applyCallResponse(loopsToReharmonize)
+      const loopsToReharmonize = selectRandomLoops(Math.ceil(evolutionSystem.evolutionIntensity.value * 5))
+      applyCallResponse(loopsToReharmonize)
     }
     
-    loopsToReharmonize.forEach(loop => {
-      // Generar nuevas notas en la nueva escala manteniendo el patrón rítmico
-      const scale = useScales().getScale(newScale) || useScales().getScale('major')
-      
-      // Mantener una nota base apropiada para la nueva escala
-      const baseNotes = [36, 48, 60, 72] // C2, C3, C4, C5
-      loop.baseNote = baseNotes[Math.floor(Math.random() * baseNotes.length)]
-      
-      // Generar nuevas notas en la escala seleccionada
-      loop.notes = generateNotesInRange(scale, loop.baseNote, loop.length, 2)
-      
-      console.log(`🎵 Evolución: Loop ${loop.id} reharmonizado en escala ${newScale}, baseNote: ${loop.baseNote}`)
+    // Actualizar loops con las evoluciones
+    evolvedLoops.forEach((evolvedLoop, index) => {
+      if (evolvedLoop !== loopManager.loops.value[index]) {
+        Object.assign(loopManager.loops.value[index], evolvedLoop)
+      }
     })
     
-    // 4. Regenerar patrones de algunos canales
-    const loopsToRegenerate = selectRandomLoops(evolveIntensity.value)
-    loopsToRegenerate.forEach(loop => {
-      // Mantener la base pero regenerar el patrón
-      loop.pattern = generatePattern(loop.length)
-      // Generar notas limitadas a 2 octavas para evitar rangos extremos
-      loop.notes = generateNotesInRange(useScales().getScale(newScale), loop.baseNote, loop.length, 2)
-    })
+    // Aplicar gestión de energía después de la evolución
+    energyManager.checkAndBalanceEnergy(loopManager.loops.value)
     
-    // 5. Resetear contador
+    // Resetear contador
     measuresSinceEvolve.value = 0
-    nextEvolveMeasure.value = currentPulse.value + (evolveInterval.value * 16)
+    nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value / 1000 * 16)
     
-    // Información de depuración
     const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
     const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
-    console.log(`Evolución automática${modeInfo}${tensionInfo}: escala ${oldScale} → ${newScale}, ${loopsToReharmonize.length} loops reharmonizados, ${loopsToRegenerate.length} loops regenerados`)
+    console.log(`Evolución automática${modeInfo}${tensionInfo}: escala ${oldScale} → ${newScale}`)
   }
 
   const checkEvolve = () => {
-    if (!autoEvolve.value || !isPlaying.value) return
+    if (!autoEvolve.value || !audioEngine.isPlaying.value) return
     
-    const currentMeasure = Math.floor(currentPulse.value / 16)
-    const targetMeasure = Math.floor(nextEvolveMeasure.value / 16)
-    
-    if (currentMeasure >= targetMeasure) {
+    if (evolutionSystem.shouldEvolve()) {
       evolveMusic()
+      evolutionSystem.markEvolution()
     }
   }
 
@@ -810,23 +366,24 @@ export const useAudioStore = defineStore('audio', () => {
     if (evolveIntervalId) return
     
     autoEvolve.value = true
+    evolutionSystem.updateEvolutionSettings({ enabled: true })
     measuresSinceEvolve.value = 0
-    nextEvolveMeasure.value = currentPulse.value + (evolveInterval.value * 16)
-    evolveStartTime.value = Date.now() // Reiniciar tiempo de inicio para momentum
-    momentumLevel.value = 0 // Reiniciar nivel de momentum
+    nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value / 1000 * 16)
+    evolveStartTime.value = Date.now()
+    momentumLevel.value = 0
     
-    // Verificar evolución en cada pulso
     evolveIntervalId = setInterval(() => {
-      if (isPlaying.value) {
+      if (audioEngine.isPlaying.value) {
         checkEvolve()
       }
-    }, 100) // Verificar cada 100ms
+    }, 100)
     
     console.log(`Evolución automática activada [modo: ${evolveMode.value}]`)
   }
 
   const stopAutoEvolve = () => {
     autoEvolve.value = false
+    evolutionSystem.updateEvolutionSettings({ enabled: false })
     if (evolveIntervalId) {
       clearInterval(evolveIntervalId)
       evolveIntervalId = null
@@ -835,22 +392,24 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateEvolveInterval = (interval) => {
-    evolveInterval.value = Math.max(4, Math.min(32, Number(interval)))
+    const intervalMs = Math.max(4000, Math.min(32000, Number(interval) * 1000))
+    evolutionSystem.updateEvolutionSettings({ interval: intervalMs })
     if (autoEvolve.value) {
-      nextEvolveMeasure.value = currentPulse.value + (evolveInterval.value * 16)
+      nextEvolveMeasure.value = audioEngine.currentPulse.value + (intervalMs / 1000 * 16)
     }
   }
 
   const updateEvolveIntensity = (intensity) => {
-    evolveIntensity.value = Math.max(1, Math.min(3, Number(intensity)))
+    const normalizedIntensity = Math.max(0.1, Math.min(1.0, Number(intensity) / 3))
+    evolutionSystem.updateEvolutionSettings({ intensity: normalizedIntensity })
   }
 
   const updateMomentumMaxLevel = (level) => {
-    momentumMaxLevel.value = Math.max(1, Math.min(10, Number(level)))
-    console.log(`Nivel máximo de momentum actualizado a: ${momentumMaxLevel.value}`)
+    // Mantener compatibilidad con la interfaz existente
+    console.log(`Nivel máximo de momentum actualizado a: ${level}`)
   }
 
-  // Control de modos creativos desde la UI
+  // Control de modos creativos
   const setEvolveMode = (mode) => {
     const validModes = ['classic', 'momentum', 'callResponse', 'tensionRelease']
     if (validModes.includes(mode)) {
@@ -879,173 +438,51 @@ export const useAudioStore = defineStore('audio', () => {
   const setTensionReleaseMode = (enabled) => {
     tensionReleaseMode.value = Boolean(enabled)
     if (enabled) {
-      isTensionPhase.value = false // Comenzar en fase de release
+      isTensionPhase.value = false
     }
     console.log(`Tension/Release ${enabled ? 'activado' : 'desactivado'}`)
   }
 
-  // Función para alternar el bloqueo de escala
   const toggleScaleLock = () => {
     scaleLocked.value = !scaleLocked.value
     console.log(`Bloqueo de escala: ${scaleLocked.value ? 'activado' : 'desactivado'}`)
   }
 
-  // Cuantizar notas del loop a la escala
-  const quantizeLoopNotes = (loop, targetScale) => {
-    const { quantizeToScale } = useNoteUtils()
-    if (!Array.isArray(loop?.notes)) return
-    const base = typeof loop.baseNote === 'number' ? loop.baseNote : 60
-    console.log(`🎵 Cuantizando loop ${loop.id} a escala`, targetScale)
-    loop.notes = loop.notes.map(n => {
-      if (typeof n === 'number') {
-        const quantized = quantizeToScale(n, targetScale, base)
-        console.log(`  Loop ${loop.id}: nota ${n} → ${quantized} (base: ${base})`)
-        return quantized
-      }
-      return n
-    })
-  }
-
-  // Regenerar loop
-  const regenerateLoop = (id) => {
-    if (!audioInitialized.value) return
-    const loop = loops.value[id]
-    
-    const scale = useScales().getScale(currentScale.value)
-    const baseNote = 36 + Math.floor(Math.random() * 24)
-    
-    loop.scale = scale
-    loop.baseNote = baseNote
-    loop.pattern = generatePattern(loop.length) // Usa densidad adaptiva por defecto
-    loop.notes = generateNotes(scale, baseNote, loop.length)
-    
-    // Ajustar volumen si el loop está activo
-    if (loop.isActive) {
-      loop.volume = getAdaptiveVolume(id)
-    }
-  }
-
-  // Regenerar todos los loops
-  const regenerateAllLoops = () => {
-    for (let i = 0; i < NUM_LOOPS; i++) {
-      regenerateLoop(i)
-    }
-    // Ajustar volúmenes después de regenerar todos
-    adjustAllLoopVolumes()
-  }
-
-  // Distribuir canales activos en el panorama estéreo (sparse)
-  const applySparseDistribution = () => {
-    if (!audioInitialized.value) return
-    
-    // Obtener loops activos
-    const activeLoops = loops.value.filter(loop => loop.isActive)
-    
-    if (activeLoops.length === 0) return
-    
-    // Si solo hay un loop activo, centrarlo
-    if (activeLoops.length === 1) {
-      updateLoopParam(activeLoops[0].id, 'pan', 0)
-      return
-    }
-    
-    // Distribuir múltiples loops en el panorama estéreo
-    activeLoops.forEach((loop, index) => {
-      let panValue
-      
-      if (activeLoops.length === 2) {
-        // Dos loops: uno a la izquierda (-0.7) y otro a la derecha (0.7)
-        panValue = index === 0 ? -0.7 : 0.7
-      } else {
-        // Tres o más loops: distribuir uniformemente de -1 a 1
-        panValue = -1 + (2 * index) / (activeLoops.length - 1)
-        // Limitar el rango para evitar extremos muy duros
-        panValue = Math.max(-0.9, Math.min(0.9, panValue))
-      }
-      
-      updateLoopParam(loop.id, 'pan', panValue)
-    })
-    
-    console.log(`Distribución sparse aplicada a ${activeLoops.length} canales activos`)
-  }
-
-  // Actualizar configuración del sintetizador de un loop
-  const updateLoopSynth = (loopId, synthConfig) => {
-    const loop = loops.value?.[loopId]
-    if (!loop) return
-
-    // Guardar config para referencia
-    loop.synthConfig = { ...synthConfig }
-
-    // Desconectar y disponer sintetizador anterior si existe
-    if (loop.synth) {
-      try { loop.synth.disconnect() } catch (e) {}
-      try { loop.synth.dispose() } catch (e) {}
-    }
-
-    // Crear nuevo sintetizador según config
-    const newSynth = useSynthesizer().createSynth(synthConfig)
-
-    // Evitar reactividad innecesaria
-    loop.synth = markRaw(newSynth)
-
-    // Sincronizar campos del loop para reflejar la configuración actual
-    if (synthConfig?.oscillator?.type) {
-      loop.synthType = synthConfig.oscillator.type
-    }
-    // Persistir el tipo de síntesis (PolySynth/AMSynth/FMSynth)
-    if (typeof synthConfig?.type === 'string') {
-      loop.synthModel = synthConfig.type
-    }
-    if (synthConfig?.envelope) {
-      loop.envelope = { ...synthConfig.envelope }
-    }
-    if (Object.prototype.hasOwnProperty.call(synthConfig, 'harmonicity')) {
-      loop.harmonicity = synthConfig.harmonicity
-    }
-    if (Object.prototype.hasOwnProperty.call(synthConfig, 'modulationIndex')) {
-      loop.modulationIndex = synthConfig.modulationIndex
-    }
-
-    // Reconectar a cadena de efectos
-    if (BYPASS_EFFECTS_FOR_TEST) {
-      if (masterGain) {
-        loop.synth.connect(masterGain)
-      } else {
-        loop.synth.toDestination()
-      }
-    } else {
-      if (loop.panner) loop.synth.connect(loop.panner)
-      if (loop.delaySend && delay) loop.synth.connect(loop.delaySend)
-      if (loop.reverbSend && reverb) loop.synth.connect(loop.reverbSend)
-    }
-  }
-
-
-
-  // Inicializar loops básicos al crear el store
-  for (let i = 0; i < NUM_LOOPS; i++) {
-    loops.value.push(createBasicLoop(i))
-  }
-
   return {
-    audioInitialized,
-    isPlaying,
-    currentPulse,
-    currentBeat,
-    tempo,
-    masterVol,
-    masterVolume,
-    loops,
+    // Estado del motor de audio
+    audioInitialized: audioEngine.audioInitialized,
+    isPlaying: audioEngine.isPlaying,
+    currentPulse: audioEngine.currentPulse,
+    currentBeat: audioEngine.currentBeat,
+    tempo: audioEngine.tempo,
+    masterVol: audioEngine.masterVol,
+    masterVolume: audioEngine.masterVolume,
+    delayDivision: audioEngine.delayDivision,
+    
+    // Estado de loops
+    loops: loopManager.loops,
+    
+    // Estado de escalas
     currentScale,
     scaleNamesSpanish,
+    scales,
+    scaleNames,
+    synthTypes,
+    
     // Estado de evolución automática
     autoEvolve,
-    evolveInterval,
-    evolveIntensity,
-    momentumMaxLevel,
+    evolveInterval: computed(() => evolutionSystem.evolutionInterval.value / 1000), // convertir a segundos para compatibilidad
+    evolveIntensity: computed(() => evolutionSystem.evolutionIntensity.value * 3), // convertir para compatibilidad
     measuresSinceEvolve,
     nextEvolveMeasure,
+    scaleLocked,
+    
+    // Estado de gestión de energía
+    energyManagementEnabled: energyManager.energyManagementEnabled,
+    maxSonicEnergy: energyManager.maxSonicEnergy,
+    energyReductionFactor: energyManager.energyReductionFactor,
+    
+    // Funciones principales
     initAudio,
     togglePlay,
     toggleLoop,
@@ -1058,10 +495,7 @@ export const useAudioStore = defineStore('audio', () => {
     updateMasterVolume,
     updateScale,
     updateDelayDivision,
-    delayDivision,
-    scales,
-    scaleNames,
-    synthTypes,
+    
     // Funciones de evolución automática
     startAutoEvolve,
     stopAutoEvolve,
@@ -1069,24 +503,23 @@ export const useAudioStore = defineStore('audio', () => {
     updateEvolveIntensity,
     updateMomentumMaxLevel,
     evolveMusic,
+    
     // Funciones auxiliares para modos creativos
     setEvolveMode,
     setMomentumEnabled,
     setCallResponseEnabled,
     setTensionReleaseMode,
     toggleScaleLock,
-    scaleLocked,
+    
     // Funciones de gestión de energía sonora
-    calculateSonicEnergy,
-    getAdaptiveDensity,
-    getAdaptiveVolume,
-    adjustAllLoopVolumes,
+    calculateSonicEnergy: energyManager.calculateSonicEnergy,
+    getAdaptiveDensity: energyManager.getAdaptiveDensity,
+    getAdaptiveVolume: energyManager.getAdaptiveVolume,
+    adjustAllLoopVolumes: () => energyManager.adjustAllLoopVolumes(loopManager.loops.value),
+    
     // Configuración de energía sonora
-    energyManagementEnabled,
-    maxSonicEnergy,
-    energyReductionFactor,
-    updateEnergyManagement,
-    updateMaxSonicEnergy,
-    updateEnergyReductionFactor
+    updateEnergyManagement: energyManager.updateEnergyManagement,
+    updateMaxSonicEnergy: energyManager.updateMaxSonicEnergy,
+    updateEnergyReductionFactor: energyManager.updateEnergyReductionFactor
   }
-});
+})

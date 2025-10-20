@@ -245,16 +245,16 @@ const toggleScaleLock = () => {
 
 // Manejar cambios en el multiselector de evolución
 const onEvolutionTypesChange = (selectedTypes) => {
-  // Actualizar los estados en el store basándose en las selecciones
-  audioStore.setMomentumEnabled(selectedTypes.includes('momentum'))
-  audioStore.setCallResponseEnabled(selectedTypes.includes('callResponse'))
-  audioStore.setTensionReleaseMode(selectedTypes.includes('tensionRelease'))
-  
   // Si se selecciona clásico, desactivar todos los modos especiales
   if (selectedTypes.includes('classic')) {
     audioStore.setMomentumEnabled(false)
     audioStore.setCallResponseEnabled(false)
     audioStore.setTensionReleaseMode(false)
+  } else {
+    // Si no se selecciona clásico, actualizar los estados basándose en las selecciones
+    audioStore.setMomentumEnabled(selectedTypes.includes('momentum'))
+    audioStore.setCallResponseEnabled(selectedTypes.includes('callResponse'))
+    audioStore.setTensionReleaseMode(selectedTypes.includes('tensionRelease'))
   }
   
   console.log('Tipos de evolución actualizados:', selectedTypes)
@@ -286,7 +286,12 @@ watch(() => [
   if (audioStore.momentumEnabled) types.push('momentum')
   if (audioStore.callResponseEnabled) types.push('callResponse')
   if (audioStore.tensionReleaseMode) types.push('tensionRelease')
-  if (types.length === 0) types.push('classic')
+  
+  // Solo agregar 'classic' si no hay ningún tipo especial activado
+  if (types.length === 0) {
+    types.push('classic')
+  }
+  
   selectedEvolutionTypes.value = types
 }, { immediate: true })
 </script>

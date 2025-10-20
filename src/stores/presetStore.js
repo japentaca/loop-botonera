@@ -97,6 +97,11 @@ export const usePresetStore = defineStore('preset', () => {
       momentumMaxLevel: audioStore.momentumMaxLevel,
       scaleLocked: audioStore.scaleLocked,
       
+      // Tipos de evolución
+      momentumEnabled: audioStore.momentumEnabled,
+      callResponseEnabled: audioStore.callResponseEnabled,
+      tensionReleaseMode: audioStore.tensionReleaseMode,
+      
       // Gestión de energía sonora
       energyManagementEnabled: audioStore.energyManagementEnabled,
       maxSonicEnergy: audioStore.maxSonicEnergy,
@@ -160,6 +165,11 @@ export const usePresetStore = defineStore('preset', () => {
       if (typeof globalConfig.evolveIntensity === 'number') audioStore.evolveIntensity = globalConfig.evolveIntensity
       if (typeof globalConfig.momentumMaxLevel === 'number') audioStore.momentumMaxLevel = globalConfig.momentumMaxLevel
       if (typeof globalConfig.scaleLocked === 'boolean') audioStore.scaleLocked = globalConfig.scaleLocked
+      
+      // Tipos de evolución
+      if (typeof globalConfig.momentumEnabled === 'boolean') audioStore.setMomentumEnabled(globalConfig.momentumEnabled)
+      if (typeof globalConfig.callResponseEnabled === 'boolean') audioStore.setCallResponseEnabled(globalConfig.callResponseEnabled)
+      if (typeof globalConfig.tensionReleaseMode === 'boolean') audioStore.setTensionReleaseMode(globalConfig.tensionReleaseMode)
       
       // Gestión de energía sonora
       if (typeof globalConfig.energyManagementEnabled === 'boolean') audioStore.energyManagementEnabled = globalConfig.energyManagementEnabled
