@@ -320,6 +320,48 @@ export const useLoopManager = () => {
     audioEngine.playNote(audioChain, midiNote, duration, loop.volume, time)
   }
 
+  // Aplicar distribución dispersa en el espectro estéreo
+  const applySparseDistribution = () => {
+    // Obtener loops activos
+    const activeLoops = loops.value.filter(loop => loop.isActive)
+    
+    if (activeLoops.length === 0) {
+      console.log('No hay loops activos para distribuir en el espectro estéreo')
+      return
+    }
+
+    // Distribuir los loops activos a través del espectro estéreo
+    activeLoops.forEach((loop, index) => {
+      // Calcular posición en el espectro estéreo (-1 a 1)
+      let panPosition
+      
+      if (activeLoops.length === 1) {
+        // Un solo loop: centrado
+        panPosition = 0
+      } else if (activeLoops.length === 2) {
+        // Dos loops: uno a la izquierda, otro a la derecha
+        panPosition = index === 0 ? -0.7 : 0.7
+      } else {
+        // Múltiples loops: distribuir uniformemente
+        panPosition = -1 + (2 * index) / (activeLoops.length - 1)
+        // Limitar el rango para evitar extremos demasiado duros
+        panPosition = Math.max(-0.8, Math.min(0.8, panPosition))
+      }
+
+      // Aplicar la panoramización
+      loop.pan = panPosition
+      if (loop.panner && loop.panner.pan) {
+        loop.panner.pan.value = panPosition
+      }
+    })
+
+    console.log(`Distribución estéreo aplicada a ${activeLoops.length} loops activos`)
+    activeLoops.forEach((loop, index) => {
+      const panDirection = loop.pan < -0.2 ? 'izquierda' : loop.pan > 0.2 ? 'derecha' : 'centro'
+      console.log(`Loop ${loop.id}: pan=${loop.pan.toFixed(2)} (${panDirection})`)
+    })
+  }
+
   // Actualizar configuración del sintetizador de un loop
   const updateLoopSynth = (loopId, synthConfig, audioEngine) => {
     const loop = loops.value[loopId]
@@ -429,6 +471,7 @@ export const useLoopManager = () => {
     toggleLoop,
     updateLoopParam,
     updateLoopSynth,
+    applySparseDistribution,
     
     // Funciones de generación
     generatePattern,
