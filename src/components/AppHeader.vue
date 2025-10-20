@@ -38,11 +38,11 @@
             type="range" 
             min="0" 
             max="100" 
-            :value="audioStore.masterVolume"
-            @input="audioStore.updateMasterVolume($event.target.value)"
+            :value="tempMasterVolume"
+            @input="onMasterVolumeInput($event.target.value)"
             class="range-compact"
           />
-          <span class="value-compact">{{ audioStore.masterVolume }}%</span>
+          <span class="value-compact">{{ tempMasterVolume }}%</span>
         </div>
         
         <button 
@@ -198,6 +198,10 @@ const evolutionOptions = [
 const tempTempo = ref(audioStore.tempo)
 let tempoTimer = null
 
+// Estado temporal para el volumen maestro
+const tempMasterVolume = ref(audioStore.masterVolume || 70)
+let volumeTimer = null
+
 // Estado para evolución automática
 const evolveProgress = computed(() => {
   if (!audioStore.autoEvolve) return 0
@@ -222,9 +226,23 @@ const onTempoInput = (value) => {
   }, 300)
 }
 
+const onMasterVolumeInput = (value) => {
+  const v = Number(value)
+  tempMasterVolume.value = v
+  if (volumeTimer) clearTimeout(volumeTimer)
+  volumeTimer = setTimeout(() => {
+    audioStore.updateMasterVolume(v)
+  }, 150) // Debounce más corto para volumen para mejor respuesta
+}
+
 // Mantener sincronizado tempTempo con cambios externos
 watch(() => audioStore.tempo, (newTempo) => {
   tempTempo.value = newTempo
+})
+
+// Mantener sincronizado tempMasterVolume con cambios externos
+watch(() => audioStore.masterVolume, (newVolume) => {
+  tempMasterVolume.value = newVolume
 })
 
 // Métodos

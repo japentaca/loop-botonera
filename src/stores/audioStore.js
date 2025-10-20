@@ -121,8 +121,9 @@ export const useAudioStore = defineStore('audio', () => {
   const updateLoopParam = (id, param, value) => {
     loopManager.updateLoopParam(id, param, value)
     
-    // Verificar balance energético después de cambios significativos
-    if (['volume', 'delayAmount', 'reverbAmount'].includes(param)) {
+    // Verificar balance energético solo cuando se cambia el volumen
+    // Los efectos (delay/reverb) no deben activar la gestión automática de energía
+    if (param === 'volume') {
       energyManager.checkAndBalanceEnergy(loopManager.loops.value)
     }
   }
@@ -132,7 +133,7 @@ export const useAudioStore = defineStore('audio', () => {
     loopManager.updateLoopSynth(loopId, synthConfig, audioEngine)
   }
 
-  // Regenerar loop individual
+  // Regenerar loop individualla g 
   const regenerateLoop = (id) => {
     if (!audioEngine.audioInitialized.value) return
     
@@ -326,7 +327,11 @@ export const useAudioStore = defineStore('audio', () => {
       notes: useScales().getScale(name)
     }))
     
-    const evolvedLoops = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, availableScales)
+    // Excluir reverb y delay de la evolución cuando se están aplicando cambios de estilo
+    const isStyleChange = momentumEnabled.value || callResponseEnabled.value || tensionReleaseMode.value
+    const evolutionOptions = isStyleChange ? { excludeReverb: true, excludeDelay: true } : {}
+    
+    const evolvedLoops = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, availableScales, evolutionOptions)
     
     // Aplicar call & response si está activado
     if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {

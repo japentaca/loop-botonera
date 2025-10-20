@@ -17,12 +17,12 @@ export const useEnergyManager = () => {
     
     let totalEnergy = 0
     activeLoops.forEach(loop => {
-      // Calcular energía basada en densidad del patrón, volumen y efectos
+      // Calcular energía basada solo en densidad del patrón y volumen
+      // Los efectos (delay/reverb) no deben influir en la gestión automática de energía
       const patternDensity = loop.pattern.filter(Boolean).length / loop.pattern.length
       const volumeContribution = loop.volume || 0.5
-      const effectsMultiplier = 1 + (loop.delayAmount || 0) * 0.3 + (loop.reverbAmount || 0) * 0.2
       
-      const loopEnergy = patternDensity * volumeContribution * effectsMultiplier
+      const loopEnergy = patternDensity * volumeContribution
       totalEnergy += loopEnergy
     })
     

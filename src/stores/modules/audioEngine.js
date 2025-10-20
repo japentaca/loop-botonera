@@ -1,4 +1,4 @@
-import { ref, markRaw } from 'vue'
+import { ref, markRaw, computed } from 'vue'
 import * as Tone from 'tone'
 
 /**
@@ -142,6 +142,9 @@ export const useAudioEngine = () => {
     softResetDelayFeedback()
   }
 
+  // Computed properties
+  const masterVolume = computed(() => Math.round(masterVol.value * 100))
+
   // Getters para acceso a objetos de audio
   const getAudioObjects = () => ({
     delay,
@@ -245,6 +248,7 @@ export const useAudioEngine = () => {
     currentPulse,
     tempo,
     masterVol,
+    masterVolume,
     delayDivision,
     
     // Funciones principales

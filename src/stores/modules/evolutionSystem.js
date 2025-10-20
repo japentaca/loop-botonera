@@ -87,20 +87,23 @@ export const useEvolutionSystem = () => {
   }
 
   // Generar variación de efectos
-  const evolveEffects = (currentEffects, intensity = evolutionIntensity.value) => {
+  const evolveEffects = (currentEffects, intensity = evolutionIntensity.value, options = {}) => {
     if (!evolutionTypes.value.effects) return currentEffects
     
     const newEffects = { ...currentEffects }
     
+    // Opciones para controlar qué efectos se pueden evolucionar
+    const { excludeReverb = false, excludeDelay = false } = options
+    
     if (Math.random() < mutationProbabilities.value.effectChange * intensity) {
-      // Evolucionar delay
-      if (newEffects.delayAmount !== undefined) {
+      // Evolucionar delay solo si no está excluido
+      if (!excludeDelay && newEffects.delayAmount !== undefined) {
         const change = (Math.random() - 0.5) * 0.3 * intensity
         newEffects.delayAmount = Math.max(0, Math.min(1, newEffects.delayAmount + change))
       }
       
-      // Evolucionar reverb
-      if (newEffects.reverbAmount !== undefined) {
+      // Evolucionar reverb solo si no está excluido
+      if (!excludeReverb && newEffects.reverbAmount !== undefined) {
         const change = (Math.random() - 0.5) * 0.4 * intensity
         newEffects.reverbAmount = Math.max(0, Math.min(1, newEffects.reverbAmount + change))
       }
@@ -147,7 +150,7 @@ export const useEvolutionSystem = () => {
   }
 
   // Evolucionar un loop específico
-  const evolveLoop = (loop, availableScales = null) => {
+  const evolveLoop = (loop, availableScales = null, options = {}) => {
     if (!loop || !loop.isActive) return loop
     
     let evolvedLoop = { ...loop }
@@ -168,7 +171,7 @@ export const useEvolutionSystem = () => {
         delayAmount: evolvedLoop.delayAmount,
         reverbAmount: evolvedLoop.reverbAmount
       }
-      const evolvedEffects = evolveEffects(effects)
+      const evolvedEffects = evolveEffects(effects, evolutionIntensity.value, options)
       evolvedLoop.delayAmount = evolvedEffects.delayAmount
       evolvedLoop.reverbAmount = evolvedEffects.reverbAmount
     }
@@ -188,7 +191,7 @@ export const useEvolutionSystem = () => {
   }
 
   // Evolucionar múltiples loops de forma coordinada
-  const evolveMultipleLoops = (loops, availableScales = null) => {
+  const evolveMultipleLoops = (loops, availableScales = null, options = {}) => {
     const activeLoops = loops.filter(loop => loop.isActive)
     if (activeLoops.length === 0) return loops
     
@@ -200,7 +203,7 @@ export const useEvolutionSystem = () => {
     
     return loops.map(loop => {
       if (selectedLoops.includes(loop)) {
-        return evolveLoop(loop, availableScales)
+        return evolveLoop(loop, availableScales, options)
       }
       return loop
     })
@@ -264,8 +267,8 @@ export const useEvolutionSystem = () => {
   }
 
   // Forzar evolución inmediata
-  const forceEvolution = (loops, availableScales = null) => {
-    const evolvedLoops = evolveMultipleLoops(loops, availableScales)
+  const forceEvolution = (loops, availableScales = null, options = {}) => {
+    const evolvedLoops = evolveMultipleLoops(loops, availableScales, options)
     markEvolution()
     return evolvedLoops
   }
