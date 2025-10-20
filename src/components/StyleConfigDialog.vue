@@ -146,8 +146,7 @@
               <label class="checkbox-label">
                 <input 
                   type="checkbox" 
-                  :checked="audioStore.scaleLocked"
-                  @change="toggleScaleLock"
+                  v-model="audioStore.scaleLocked"
                 />
                 <span class="checkbox-text">Bloquear cambios de escala</span>
               </label>
@@ -237,10 +236,6 @@ const onMaxSonicEnergyChange = (value) => {
 
 const onEnergyReductionFactorChange = (value) => {
   audioStore.updateEnergyReductionFactor(Number(value))
-}
-
-const toggleScaleLock = () => {
-  audioStore.toggleScaleLock()
 }
 
 // Manejar cambios en el multiselector de evolución
