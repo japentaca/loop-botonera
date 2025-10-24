@@ -399,7 +399,6 @@ watch(() => [
 
 .close-button:hover {
   background: rgba(0, 217, 255, 0.1);
-  transform: scale(1.1);
 }
 
 .dialog-body {
@@ -583,7 +582,6 @@ watch(() => [
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0, 217, 255, 0.4);
 }
 
@@ -595,7 +593,6 @@ watch(() => [
 
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
 }
 
 /* Scrollbar personalizado */
