@@ -102,8 +102,6 @@ const migratePreset = (preset) => {
       // Valores comunes: 8000ms ≈ 8 compases, 4000ms ≈ 4 compases
       const measuresInterval = Math.round(evolveInterval / 1000)
       migratedPreset.globalConfig.evolveInterval = Math.max(2, Math.min(32, measuresInterval))
-      
-      console.log(`Migrado evolveInterval de ${evolveInterval}ms a ${migratedPreset.globalConfig.evolveInterval} compases`)
     }
   }
   
@@ -224,7 +222,6 @@ export const createPreset = (presetData) => {
       throw storageError
     }
 
-    console.log('Preset creado exitosamente:', trimmedName)
     return preset
   } catch (error) {
     console.error('Error creando preset:', error)

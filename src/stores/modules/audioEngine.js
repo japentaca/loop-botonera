@@ -71,10 +71,6 @@ export const useAudioEngine = () => {
       updateDelayTime()
 
       audioInitialized.value = true
-      
-      if (DEBUG_AUDIO) {
-        console.log('🎵 Motor de audio inicializado correctamente')
-      }
     } catch (error) {
       console.error('Error al inicializar motor de audio:', error)
       throw error

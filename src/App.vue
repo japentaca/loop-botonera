@@ -3,6 +3,8 @@
     <AppHeader />
     <main class="container">
       <LoopGrid />
+      <!-- Componente de prueba temporal para la matriz de notas -->
+      <MatrixTest />
     </main>
     <SynthEditor />
   </div>
@@ -13,6 +15,7 @@ import { onMounted } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import LoopGrid from './components/LoopGrid.vue'
 import SynthEditor from './components/SynthEditor.vue'
+import MatrixTest from './components/MatrixTest.vue'
 import { useAudioStore } from './stores/audioStore'
 import { usePresetStore } from './stores/presetStore'
 
@@ -30,7 +33,6 @@ onMounted(async () => {
   // Inicializar el sistema de presets
   try {
     await presetStore.initialize()
-    console.log('Sistema de presets inicializado correctamente')
   } catch (error) {
     console.error('Error inicializando sistema de presets:', error)
   }

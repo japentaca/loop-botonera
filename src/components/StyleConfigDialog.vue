@@ -266,7 +266,6 @@ const scaleLocked = computed({
   set: (value) => {
     if (value !== audioStore.scaleLocked) {
       audioStore.toggleScaleLock()
-      console.log('Estado del bloqueo de escala:', audioStore.scaleLocked)
     }
   }
 })
@@ -276,8 +275,6 @@ const energyManagementEnabled = computed({
   get: () => audioStore.energyManagementEnabled,
   set: (value) => {
     audioStore.updateEnergyManagement(value)
-    console.log('Gestión automática de energía:', value ? 'activada' : 'desactivada')
-    console.log('Estado de gestión de energía:', audioStore.energyManagementEnabled)
   }
 })
 
@@ -294,8 +291,6 @@ const onEvolutionTypesChange = (selectedTypes) => {
     audioStore.setCallResponseEnabled(selectedTypes.includes('callResponse'))
     audioStore.setTensionReleaseMode(selectedTypes.includes('tensionRelease'))
   }
-  
-  console.log('Tipos de evolución actualizados:', selectedTypes)
 }
 
 const resetToDefaults = () => {

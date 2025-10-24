@@ -48,7 +48,6 @@ export const usePresetStore = defineStore('preset', () => {
       presets.value = loadedPresets
       
       // No crear preset automáticamente - solo cargar los existentes
-      console.log(`Cargados ${loadedPresets.length} presets`)
     } catch (error) {
       console.error('Error al cargar presets:', error)
       throw error
@@ -137,8 +136,6 @@ export const usePresetStore = defineStore('preset', () => {
   // Aplicar preset al estado de la aplicación
   const applyPresetToState = async (preset, options = {}) => {
     try {
-      console.log(`🚀🚀🚀 INICIANDO applyPresetToState para preset: ${preset.name}`)
-      console.log(`🔍 delayDivision en preset:`, preset.globalConfig?.delayDivision)
       
       // Validar preset antes de aplicar
       if (!validatePreset(preset)) {
@@ -301,8 +298,6 @@ export const usePresetStore = defineStore('preset', () => {
       
       // Restaurar auto-guardado
       autoSaveEnabled.value = wasAutoSaveEnabled
-      
-      console.log('Preset aplicado correctamente:', preset.name)
       
     } catch (error) {
       console.error('Error al aplicar preset:', error)
@@ -502,8 +497,6 @@ export const usePresetStore = defineStore('preset', () => {
       currentPresetId.value = newPreset.id
       hasUnsavedChanges.value = false
       lastSaveTime.value = new Date()
-      
-      console.log('Preset automático creado:', autoPresetName)
       
       return newPreset
     } catch (error) {

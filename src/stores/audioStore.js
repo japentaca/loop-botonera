@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
 import { useScales, useNoteUtils, useMusic } from '../composables/useMusic'
+import { useNotesMatrix } from '../composables/useNotesMatrix'
 
 // Importar los nuevos módulos especializados
 import { useAudioEngine } from './modules/audioEngine'
@@ -14,6 +15,9 @@ export const useAudioStore = defineStore('audio', () => {
   const loopManager = useLoopManager()
   const energyManager = useEnergyManager()
   const evolutionSystem = useEvolutionSystem()
+  
+  // Inicializar matriz de notas centralizada
+  const notesMatrix = useNotesMatrix()
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major')
@@ -85,7 +89,6 @@ export const useAudioStore = defineStore('audio', () => {
       const scale = useScales().getScale(currentScale.value)
       loopManager.initializeLoops(scale, audioEngine)
       
-      console.log('🎵 Audio inicializado correctamente con todos los módulos')
       return true
     } catch (error) {
       console.error('❌ Error al inicializar audio:', error)
@@ -182,7 +185,6 @@ export const useAudioStore = defineStore('audio', () => {
     if (!scale) return
     
     currentScale.value = newScale
-    console.log(`🔍 updateScale: newScale=${newScale}`)
     
     if (!audioEngine.audioInitialized.value) {
       // Si no está inicializado, solo actualizar la referencia de la escala
@@ -276,8 +278,6 @@ export const useAudioStore = defineStore('audio', () => {
     const baseNotes = [36, 48, 60, 72]
     responder.baseNote = baseNotes[Math.floor(Math.random() * baseNotes.length)]
     
-    console.log(`🎤 Call&Response: regenerando responder con escala`, scale, `baseNote: ${responder.baseNote}`)
-    
     responder.notes = loopManager.generateNotesInRange(scale, responder.baseNote, responder.length, 2)
     
     return loopsToReharmonize
@@ -354,7 +354,6 @@ export const useAudioStore = defineStore('audio', () => {
     
     const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
     const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
-    console.log(`Evolución automática${modeInfo}${tensionInfo}: escala ${oldScale} → ${newScale}`)
   }
 
   const checkEvolve = () => {
@@ -382,7 +381,7 @@ export const useAudioStore = defineStore('audio', () => {
     
     // Calcular próxima evolución: simplemente sumar el intervalo en compases
     const measuresInterval = evolutionSystem.evolutionInterval.value
-    nextEvolveMeasure.value = audioEngine.currentPulse.value + (measuresInterval * 16)
+    nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value * 16)
     
     evolveStartTime.value = Date.now()
     momentumLevel.value = 0
@@ -392,8 +391,6 @@ export const useAudioStore = defineStore('audio', () => {
         checkEvolve()
       }
     }, 100)
-    
-    console.log(`Evolución automática activada [modo: ${evolveMode.value}]`)
   }
 
   const stopAutoEvolve = () => {
@@ -403,7 +400,6 @@ export const useAudioStore = defineStore('audio', () => {
       clearInterval(evolveIntervalId)
       evolveIntervalId = null
     }
-    console.log('Evolución automática desactivada')
   }
 
   const updateEvolveInterval = (interval) => {
@@ -422,7 +418,6 @@ export const useAudioStore = defineStore('audio', () => {
 
   const updateMomentumMaxLevel = (level) => {
     // Mantener compatibilidad con la interfaz existente
-    console.log(`Nivel máximo de momentum actualizado a: ${level}`)
   }
 
   // Control de modos creativos
@@ -430,7 +425,6 @@ export const useAudioStore = defineStore('audio', () => {
     const validModes = ['classic', 'momentum', 'callResponse', 'tensionRelease']
     if (validModes.includes(mode)) {
       evolveMode.value = mode
-      console.log(`Modo de evolución cambiado a: ${mode}`)
     }
   }
 
@@ -440,7 +434,6 @@ export const useAudioStore = defineStore('audio', () => {
       evolveStartTime.value = Date.now()
       momentumLevel.value = 0
     }
-    console.log(`Momentum ${enabled ? 'activado' : 'desactivado'}`)
   }
 
   const setCallResponseEnabled = (enabled) => {
@@ -448,7 +441,6 @@ export const useAudioStore = defineStore('audio', () => {
     if (!enabled) {
       lastResponderId.value = null
     }
-    console.log(`Call & Response ${enabled ? 'activado' : 'desactivado'}`)
   }
 
   const setTensionReleaseMode = (enabled) => {
@@ -456,12 +448,10 @@ export const useAudioStore = defineStore('audio', () => {
     if (enabled) {
       isTensionPhase.value = false
     }
-    console.log(`Tension/Release ${enabled ? 'activado' : 'desactivado'}`)
   }
 
   const toggleScaleLock = () => {
     scaleLocked.value = !scaleLocked.value
-    console.log(`Bloqueo de escala: ${scaleLocked.value ? 'activado' : 'desactivado'}`)
   }
 
   return {
@@ -520,6 +510,12 @@ export const useAudioStore = defineStore('audio', () => {
     updateMomentumMaxLevel,
     evolveMusic,
     
+    // Funciones de evolución con matriz
+    evolveMatrixLoop: evolutionSystem.evolveMatrixLoop,
+    evolveMultipleMatrixLoops: evolutionSystem.evolveMultipleMatrixLoops,
+    applyMatrixMutation: evolutionSystem.applyMatrixMutation,
+    evolveMatrixWithStrategy: evolutionSystem.evolveMatrixWithStrategy,
+    
     // Funciones auxiliares para modos creativos
     setEvolveMode,
     setMomentumEnabled,
@@ -536,6 +532,29 @@ export const useAudioStore = defineStore('audio', () => {
     // Configuración de energía sonora
     updateEnergyManagement: energyManager.updateEnergyManagement,
     updateMaxSonicEnergy: energyManager.updateMaxSonicEnergy,
-    updateEnergyReductionFactor: energyManager.updateEnergyReductionFactor
+    updateEnergyReductionFactor: energyManager.updateEnergyReductionFactor,
+    
+    // Funciones de matriz de notas centralizada
+    notesMatrix: notesMatrix.notesMatrix,
+    loopMetadata: notesMatrix.loopMetadata,
+    matrixState: notesMatrix.matrixState,
+    initializeMatrix: notesMatrix.initializeMatrix,
+    activateLoop: notesMatrix.activateLoop,
+    deactivateLoop: notesMatrix.deactivateLoop,
+    getLoopNotes: notesMatrix.getLoopNotes,
+    setLoopNote: notesMatrix.setLoopNote,
+    clearLoopNote: notesMatrix.clearLoopNote,
+    generateRandomNotes: notesMatrix.generateRandomNotes,
+    quantizeLoopToScale: notesMatrix.quantizeLoopToScale,
+    quantizeAllToScale: notesMatrix.quantizeAllToScale,
+    transposeLoop: notesMatrix.transposeLoop,
+    rotateLoop: notesMatrix.rotateLoop,
+    inverseLoop: notesMatrix.inverseLoop,
+    mutateLoop: notesMatrix.mutateLoop,
+    copyLoop: notesMatrix.copyLoop,
+    getMatrixStats: notesMatrix.getMatrixStats,
+    clearMatrix: notesMatrix.clearMatrix,
+    exportMatrix: notesMatrix.exportMatrix,
+    importMatrix: notesMatrix.importMatrix
   }
 })

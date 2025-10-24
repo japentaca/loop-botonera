@@ -286,8 +286,6 @@ const onEvolutionTypesChange = (selectedTypes) => {
     audioStore.setCallResponseEnabled(false)
     audioStore.setTensionReleaseMode(false)
   }
-  
-  console.log('Tipos de evolución actualizados:', selectedTypes)
 }
 
 const updateMasterVolume = () => {

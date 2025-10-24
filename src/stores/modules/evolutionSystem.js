@@ -265,6 +265,113 @@ export const useEvolutionSystem = () => {
     return evolved
   }
 
+  // Nuevas funciones para trabajar con la matriz de notas
+  const evolveMatrixLoop = (loopId, notesMatrix, intensity = evolutionIntensity.value) => {
+    if (!evolutionTypes.value.notes) return false
+    
+    const loopNotes = notesMatrix.getLoopNotes(loopId)
+    if (!loopNotes || loopNotes.length === 0) return false
+    
+    const changeCount = Math.floor(loopNotes.length * intensity * 0.4)
+    let hasChanges = false
+    
+    for (let i = 0; i < changeCount; i++) {
+      const randomStep = Math.floor(Math.random() * loopNotes.length)
+      
+      if (Math.random() < mutationProbabilities.value.changeNote) {
+        const currentNote = loopNotes[randomStep]
+        
+        if (currentNote !== null) {
+          // Transponer la nota existente
+          const transposition = Math.floor(Math.random() * 7) - 3 // -3 a +3 semitonos
+          const newNote = Math.max(21, Math.min(108, currentNote + transposition))
+          notesMatrix.setLoopNote(loopId, randomStep, newNote)
+          hasChanges = true
+        } else if (Math.random() < mutationProbabilities.value.addNote) {
+          // Agregar una nueva nota
+          const randomNote = Math.floor(Math.random() * 88) + 21 // C1 a C8
+          notesMatrix.setLoopNote(loopId, randomStep, randomNote)
+          hasChanges = true
+        }
+      } else if (Math.random() < mutationProbabilities.value.removeNote && loopNotes[randomStep] !== null) {
+        notesMatrix.clearLoopNote(loopId, randomStep)
+        hasChanges = true
+      }
+    }
+    
+    return hasChanges
+  }
+
+  const evolveMultipleMatrixLoops = (loopIds, notesMatrix, intensity = evolutionIntensity.value) => {
+    const results = {}
+    
+    loopIds.forEach(loopId => {
+      results[loopId] = evolveMatrixLoop(loopId, notesMatrix, intensity)
+    })
+    
+    return results
+  }
+
+  const applyMatrixMutation = (loopId, notesMatrix, mutationType, params = {}) => {
+    switch (mutationType) {
+      case 'transpose':
+        return notesMatrix.transposeLoop(loopId, params.semitones || 0)
+      case 'rotate':
+        return notesMatrix.rotateLoop(loopId, params.steps || 1)
+      case 'inverse':
+        return notesMatrix.inverseLoop(loopId, params.centerNote || 60)
+      case 'mutate':
+        return notesMatrix.mutateLoop(loopId, params.probability || 0.3)
+      case 'quantize':
+        return notesMatrix.quantizeLoopToScale(loopId, params.scale || [], params.baseNote || 60)
+      default:
+        return false
+    }
+  }
+
+  const evolveMatrixWithStrategy = (loopIds, notesMatrix, strategy = 'balanced') => {
+    const strategies = {
+      conservative: { intensity: 0.1, mutations: ['transpose', 'rotate'] },
+      balanced: { intensity: 0.3, mutations: ['transpose', 'rotate', 'mutate'] },
+      aggressive: { intensity: 0.6, mutations: ['transpose', 'rotate', 'inverse', 'mutate'] },
+      experimental: { intensity: 0.8, mutations: ['transpose', 'rotate', 'inverse', 'mutate', 'quantize'] }
+    }
+    
+    const config = strategies[strategy] || strategies.balanced
+    const results = {}
+    
+    loopIds.forEach(loopId => {
+      if (Math.random() < config.intensity) {
+        const mutation = config.mutations[Math.floor(Math.random() * config.mutations.length)]
+        const params = {}
+        
+        // Configurar parámetros según el tipo de mutación
+        switch (mutation) {
+          case 'transpose':
+            params.semitones = Math.floor(Math.random() * 13) - 6 // -6 a +6
+            break
+          case 'rotate':
+            params.steps = Math.floor(Math.random() * 8) + 1 // 1 a 8
+            break
+          case 'inverse':
+            params.centerNote = 60 + Math.floor(Math.random() * 25) - 12 // C4 ± 1 octava
+            break
+          case 'mutate':
+            params.probability = 0.2 + Math.random() * 0.4 // 0.2 a 0.6
+            break
+        }
+        
+        results[loopId] = {
+          mutation,
+          success: applyMatrixMutation(loopId, notesMatrix, mutation, params),
+          params
+        }
+      }
+    })
+    
+    return results
+  }
+
   return {
     // Estado
     autoEvolutionEnabled,
@@ -274,11 +381,17 @@ export const useEvolutionSystem = () => {
     evolutionTypes,
     mutationProbabilities,
     
-    // Funciones de evolución
+    // Funciones de evolución tradicionales
     evolveLoop,
     evolveMultipleLoops,
     evolveByInstrumentType,
     forceEvolution,
+    
+    // Nuevas funciones para matriz de notas
+    evolveMatrixLoop,
+    evolveMultipleMatrixLoops,
+    applyMatrixMutation,
+    evolveMatrixWithStrategy,
     
     // Control de tiempo
     shouldEvolve,

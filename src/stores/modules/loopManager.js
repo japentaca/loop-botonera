@@ -326,7 +326,6 @@ export const useLoopManager = () => {
     const activeLoops = loops.value.filter(loop => loop.isActive)
     
     if (activeLoops.length === 0) {
-      console.log('No hay loops activos para distribuir en el espectro estéreo')
       return
     }
 
@@ -355,10 +354,8 @@ export const useLoopManager = () => {
       }
     })
 
-    console.log(`Distribución estéreo aplicada a ${activeLoops.length} loops activos`)
     activeLoops.forEach((loop, index) => {
       const panDirection = loop.pan < -0.2 ? 'izquierda' : loop.pan > 0.2 ? 'derecha' : 'centro'
-      console.log(`Loop ${loop.id}: pan=${loop.pan.toFixed(2)} (${panDirection})`)
     })
   }
 
@@ -448,8 +445,6 @@ export const useLoopManager = () => {
       loop.panner = audioChain.panner
       loop.delaySend = audioChain.delaySend
       loop.reverbSend = audioChain.reverbSend
-
-      console.log(`Sintetizador actualizado para loop ${loopId}:`, loop.synthModel)
     } catch (error) {
       console.error(`Error al actualizar sintetizador del loop ${loopId}:`, error)
     }
