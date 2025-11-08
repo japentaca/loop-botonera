@@ -5,39 +5,39 @@ export function useScales() {
     // Escalas diatónicas
     major: [0, 2, 4, 5, 7, 9, 11],
     minor: [0, 2, 3, 5, 7, 8, 10],
-    
+
     // Modos griegos
     dorian: [0, 2, 3, 5, 7, 9, 10],
     phrygian: [0, 1, 3, 5, 7, 8, 10],
     lydian: [0, 2, 4, 6, 7, 9, 11],
     mixolydian: [0, 2, 4, 5, 7, 9, 10],
     locrian: [0, 1, 3, 5, 6, 8, 10],
-    
+
     // Escalas menores
     harmonicMinor: [0, 2, 3, 5, 7, 8, 11],
     melodicMinor: [0, 2, 3, 5, 7, 9, 11],
-    
+
     // Escalas pentatónicas
     pentatonic: [0, 2, 4, 7, 9],
     minorPentatonic: [0, 3, 5, 7, 10],
-    
+
     // Escalas de blues
     blues: [0, 3, 5, 6, 7, 10],
     majorBlues: [0, 2, 3, 4, 7, 9],
-    
+
     // Escalas exóticas
     wholeTone: [0, 2, 4, 6, 8, 10],
     diminished: [0, 1, 3, 4, 6, 7, 9, 10],
-    
+
     // Escalas modales modernas
     acoustic: [0, 2, 4, 6, 7, 9, 10],
     altered: [0, 1, 3, 4, 6, 8, 10],
-    
+
     // Escalas étnicas
     hirajoshi: [0, 2, 3, 7, 8],
     kumoi: [0, 2, 3, 7, 9],
     pelog: [0, 1, 3, 7, 8],
-    
+
     // Escalas adicionales
     chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
     augmented: [0, 3, 4, 7, 8, 11],
@@ -91,13 +91,13 @@ export function useScales() {
   // Generar notas de una escala
   const generateScaleNotes = (scale, baseNote, octaves = 3) => {
     const notes = []
-    
+
     for (let octave = 0; octave < octaves; octave++) {
       scale.forEach(interval => {
         notes.push(baseNote + interval + (octave * 12))
       })
     }
-    
+
     return notes
   }
 
@@ -115,33 +115,33 @@ export function usePatterns() {
   // Generar patrón rítmico
   const generateRhythmPattern = (length = 16, density = 0.35) => {
     const pattern = new Array(length).fill(false)
-    
+
     // Aplicar densidad
     for (let i = 0; i < length; i++) {
       if (Math.random() < density) {
         pattern[i] = true
       }
     }
-    
+
     // Asegurar al menos una nota activa
     if (!pattern.some(Boolean)) {
       pattern[0] = true
     }
-    
+
     return pattern
   }
 
   // Generar patrón melódico
   const generateMelodyPattern = (scale, baseNote, length = 16) => {
     const notes = []
-    
+
     for (let i = 0; i < length; i++) {
       const scaleIndex = Math.floor(Math.random() * scale.length)
       const octave = Math.floor(Math.random() * 3) // 0-2 octavas adicionales
       const note = baseNote + scale[scaleIndex] + (octave * 12)
       notes.push(note)
     }
-    
+
     return notes
   }
 
@@ -150,15 +150,15 @@ export function usePatterns() {
     if (pulses >= steps) {
       return new Array(steps).fill(true)
     }
-    
+
     const pattern = new Array(steps).fill(false)
     const interval = steps / pulses
-    
+
     for (let i = 0; i < pulses; i++) {
       const index = Math.round(i * interval) % steps
       pattern[index] = true
     }
-    
+
     return pattern
   }
 
@@ -166,7 +166,7 @@ export function usePatterns() {
   const generateSwingPattern = (length = 16, swingAmount = 0.1) => {
     const pattern = generateRhythmPattern(length)
     const swingPattern = []
-    
+
     for (let i = 0; i < pattern.length; i++) {
       if (pattern[i]) {
         // Aplicar swing en beats off (impares)
@@ -182,7 +182,7 @@ export function usePatterns() {
         })
       }
     }
-    
+
     return swingPattern
   }
 
@@ -210,10 +210,10 @@ export function useNoteUtils() {
       'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8,
       'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
     }
-    
+
     const match = noteName.match(/([A-G][#b]?)(\d+)/)
     if (!match) return 60 // Default to C4
-    
+
     const [, note, octave] = match
     return (parseInt(octave) + 1) * 12 + noteMap[note]
   }
@@ -228,15 +228,15 @@ export function useNoteUtils() {
   // Cuantizar nota a escala
   const quantizeToScale = (midiNote, scale, baseNote = 60) => {
     if (typeof midiNote !== 'number') return midiNote
-    
+
     const relativeNote = midiNote - baseNote
     const octave = Math.floor(relativeNote / 12)
     const noteInOctave = ((relativeNote % 12) + 12) % 12 // Asegurar valor positivo
-    
+
     // Encontrar la nota más cercana en la escala
     let closestInterval = scale[0]
     let minDistance = Math.abs(noteInOctave - scale[0])
-    
+
     scale.forEach(interval => {
       const distance = Math.abs(noteInOctave - interval)
       if (distance < minDistance) {
@@ -244,18 +244,19 @@ export function useNoteUtils() {
         closestInterval = interval
       }
     })
-    
-    // Depuración para escalas pentatónicas
-    const isPentatonic = scale.length === 5 && JSON.stringify(scale) === JSON.stringify([0, 2, 4, 7, 9])
-    if (isPentatonic && ![0, 2, 4, 7, 9].includes(closestInterval)) {
-      console.warn(`⚠️ PROBLEMA PENTATÓNICO: nota ${midiNote} (rel: ${noteInOctave}) → intervalo ${closestInterval} NO está en pentatónica [0,2,4,7,9]`)
-      console.warn(`Escala recibida:`, scale)
-      console.warn(`Base: ${baseNote}, Octava: ${octave}`)
+
+    // Devolver la nota cuantizada en rango válido manteniendo la escala
+    let quantizedNote = baseNote + (octave * 12) + closestInterval
+
+    // Si está fuera del rango, transponer por octavas completas para mantener la escala
+    while (quantizedNote < 24) {
+      quantizedNote += 12
     }
-    
-    // Devolver la nota cuantizada en rango válido
-    const quantizedNote = baseNote + (octave * 12) + closestInterval
-    return Math.max(24, Math.min(84, quantizedNote))
+    while (quantizedNote > 84) {
+      quantizedNote -= 12
+    }
+
+    return quantizedNote
   }
 
   return {
@@ -288,14 +289,14 @@ export function useChords() {
   // Generar progresión de acordes
   const generateChordProgression = (scale, baseNote, length = 4) => {
     const progression = []
-    
+
     for (let i = 0; i < length; i++) {
       const scaleIndex = Math.floor(Math.random() * scale.length)
       const chordRoot = baseNote + scale[scaleIndex]
       const chordType = Math.random() > 0.7 ? 'minor' : 'major'
       progression.push(generateChord(chordRoot, chordType))
     }
-    
+
     return progression
   }
 
@@ -314,19 +315,19 @@ export function useMusic() {
   // Funciones para escalas consonantes y disonantes
   const getConsonantScale = (currentScale = null, recentScales = []) => {
     const consonantScales = ['major', 'lydian', 'mixolydian', 'pentatonic', 'minor']
-    const available = consonantScales.filter(scale => 
+    const available = consonantScales.filter(scale =>
       scale !== currentScale && !recentScales.includes(scale)
     )
-    return available.length > 0 ? 
+    return available.length > 0 ?
       available[Math.floor(Math.random() * available.length)] : 'major'
   }
 
   const getDissonantScale = (currentScale = null, recentScales = []) => {
     const dissonantScales = ['diminished', 'wholeTone', 'chromatic', 'phrygian', 'locrian']
-    const available = dissonantScales.filter(scale => 
+    const available = dissonantScales.filter(scale =>
       scale !== currentScale && !recentScales.includes(scale)
     )
-    return available.length > 0 ? 
+    return available.length > 0 ?
       available[Math.floor(Math.random() * available.length)] : 'diminished'
   }
 
@@ -341,31 +342,31 @@ export function useMusic() {
       'mixolydian': ['major', 'dorian', 'lydian'],
       'pentatonic': ['major', 'dorian', 'mixolydian']
     }
-    
+
     const related = relations[targetScale] || ['major', 'minor', 'dorian']
-    const available = related.filter(scale => 
+    const available = related.filter(scale =>
       scale !== currentScale && !recentScales.includes(scale)
     )
-    return available.length > 0 ? 
+    return available.length > 0 ?
       available[Math.floor(Math.random() * available.length)] : getRandomScale().name
   }
 
   // Función para cuantizar notas a una escala
   const quantizeToScale = (notes, targetScale, baseNote) => {
     const targetIntervals = scales[targetScale] || scales.major
-    
+
     return notes.map(note => {
       if (typeof note !== 'number') return note
-      
+
       // Calcular la distancia desde la nota base
       const distance = note - baseNote
       const octave = Math.floor(distance / 12)
       const relativePitch = ((distance % 12) + 12) % 12 // Asegurar valor positivo
-      
+
       // Encontrar el intervalo más cercano en la escala objetivo
       let closestInterval = targetIntervals[0]
       let minDistance = Math.abs(relativePitch - closestInterval)
-      
+
       targetIntervals.forEach(interval => {
         const distance = Math.abs(relativePitch - interval)
         if (distance < minDistance) {
@@ -373,7 +374,7 @@ export function useMusic() {
           closestInterval = interval
         }
       })
-      
+
       // Devolver la nota cuantizada en rango válido
       const quantizedNote = baseNote + closestInterval + (octave * 12)
       return Math.max(24, Math.min(84, quantizedNote))

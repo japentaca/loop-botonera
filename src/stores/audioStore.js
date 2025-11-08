@@ -10,14 +10,14 @@ import { useEnergyManager } from './modules/energyManager'
 import { useEvolutionSystem } from './modules/evolutionSystem'
 
 export const useAudioStore = defineStore('audio', () => {
-  // Inicializar módulos especializados
-  const audioEngine = useAudioEngine()
-  const loopManager = useLoopManager()
-  const energyManager = useEnergyManager()
-  const evolutionSystem = useEvolutionSystem()
-  
-  // Inicializar matriz de notas centralizada
+  // Inicializar matriz de notas centralizada primero
   const notesMatrix = useNotesMatrix()
+
+  // Inicializar módulos especializados con acceso a la matriz
+  const audioEngine = useAudioEngine()
+  const loopManager = useLoopManager(notesMatrix)
+  const energyManager = useEnergyManager()
+  const evolutionSystem = useEvolutionSystem(notesMatrix)
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major')
@@ -69,7 +69,7 @@ export const useAudioStore = defineStore('audio', () => {
   // Función para reproducir loops activos en cada pulso
   const playActiveLoops = (time, pulse) => {
     const activeLoops = loopManager.getActiveLoops()
-    
+
     activeLoops.forEach(loop => {
       const step = (pulse - 1) % loop.length
       if (loop.pattern[step]) {
@@ -79,40 +79,53 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   // Inicialización de audio
+  let audioStoreInitializing = false
   const initAudio = async () => {
     console.log('🎵 AUDIO STORE: Starting audio initialization');
+
+    // Prevent multiple concurrent initializations
+    if (audioStoreInitializing) {
+      console.log('🔴 AUDIO STORE: Already initializing, skipping this call');
+      return
+    }
+
+    audioStoreInitializing = true
     console.log('🎵 AUDIO STORE: Current scale:', currentScale.value);
-    
+
     try {
       console.log('🎵 AUDIO STORE: Initializing audio engine...');
       await audioEngine.initAudio()
       console.log('🎵 AUDIO STORE: Audio engine initialized successfully');
-      
+
       // Configurar callback del transporte para reproducir loops
       console.log('🎵 AUDIO STORE: Setting up transport callback');
       audioEngine.setupTransportCallback(playActiveLoops)
       console.log('🎵 AUDIO STORE: Transport callback configured');
-      
+
       // Inicializar loops con configuración por defecto
       console.log('🎵 AUDIO STORE: Getting scale and initializing loops');
       const scale = useScales().getScale(currentScale.value)
       console.log('🎵 AUDIO STORE: Scale retrieved:', currentScale.value);
-      
+
       loopManager.initializeLoops(scale, audioEngine)
       console.log('🎵 AUDIO STORE: Loops initialized successfully');
-      
+
       console.log('🎵 AUDIO STORE: Audio initialization complete');
+      audioStoreInitializing = false
       return true
     } catch (error) {
       console.error('🔴 AUDIO STORE: Error al inicializar audio:', error)
+      audioStoreInitializing = false
       return false
     }
   }
 
   // Control de reproducción
   const togglePlay = () => {
+    console.log('🎵 AUDIO_STORE: togglePlay called - Current isPlaying:', audioEngine.isPlaying.value);
     audioEngine.togglePlay()
-    
+    console.log('🎵 AUDIO_STORE: togglePlay executed - New isPlaying:', audioEngine.isPlaying.value);
+
     if (audioEngine.isPlaying.value && autoEvolve.value) {
       startAutoEvolve()
     } else if (!audioEngine.isPlaying.value) {
@@ -126,7 +139,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (!loop) return
 
     loopManager.toggleLoop(id)
-    
+
     // Aplicar gestión de energía después de cambios
     if (energyManager.energyManagementEnabled.value) {
       energyManager.adjustAllLoopVolumes(loopManager.loops.value)
@@ -136,7 +149,7 @@ export const useAudioStore = defineStore('audio', () => {
   // Actualizar parámetros de loop
   const updateLoopParam = (id, param, value) => {
     loopManager.updateLoopParam(id, param, value)
-    
+
     // Verificar balance energético solo cuando se cambia el volumen
     // Los efectos (delay/reverb) no deben activar la gestión automática de energía
     if (param === 'volume') {
@@ -152,28 +165,30 @@ export const useAudioStore = defineStore('audio', () => {
   // Regenerar loop individualla g 
   const regenerateLoop = (id) => {
     if (!audioEngine.audioInitialized.value) return
-    
+
     const scale = useScales().getScale(currentScale.value)
     const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
     const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, id)
-    
+
     loopManager.regenerateLoop(id, scale, adaptiveDensity, adaptiveVolume)
   }
 
   // Regenerar todos los loops
   const regenerateAllLoops = () => {
     if (!audioEngine.audioInitialized.value) return
-    
+
     const scale = useScales().getScale(currentScale.value)
-    
+    console.log('🎵 REGENERATING ALL LOOPS with scale:', currentScale.value, 'intervals:', scale)
+
     for (let i = 0; i < loopManager.NUM_LOOPS; i++) {
       const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
       const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, i)
       loopManager.regenerateLoop(i, scale, adaptiveDensity, adaptiveVolume)
     }
-    
+
     // Ajustar volúmenes después de regenerar todos
     energyManager.adjustAllLoopVolumes(loopManager.loops.value)
+    console.log('🎵 FINISHED REGENERATING ALL LOOPS with scale:', currentScale.value)
   }
 
   // Distribución panorámica
@@ -196,9 +211,9 @@ export const useAudioStore = defineStore('audio', () => {
   const updateScale = (newScale) => {
     const scale = useScales().getScale(newScale)
     if (!scale) return
-    
+
     currentScale.value = newScale
-    
+
     if (!audioEngine.audioInitialized.value) {
       // Si no está inicializado, solo actualizar la referencia de la escala
       loopManager.loops.value.forEach(loop => {
@@ -223,7 +238,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   const getRandomScale = (excludeScale = null) => {
     const { scales: scalesList } = useScales()
-    const availableScales = Object.keys(scalesList).filter(scale => 
+    const availableScales = Object.keys(scalesList).filter(scale =>
       scale !== excludeScale && !recentScales.value.includes(scale)
     )
     if (availableScales.length === 0) {
@@ -240,17 +255,17 @@ export const useAudioStore = defineStore('audio', () => {
   const selectRandomLoops = (count) => {
     const activeLoops = loopManager.loops.value.filter(loop => loop.isActive)
     if (activeLoops.length === 0) return []
-    
+
     const selected = []
     const available = [...activeLoops]
     const numToSelect = Math.min(count, available.length)
-    
+
     for (let i = 0; i < numToSelect; i++) {
       const randomIndex = Math.floor(Math.random() * available.length)
       selected.push(available[randomIndex])
       available.splice(randomIndex, 1)
     }
-    
+
     return selected
   }
 
@@ -310,15 +325,19 @@ export const useAudioStore = defineStore('audio', () => {
     const baseFromCaller = (caller?.baseNote ?? null)
     const octaveShift = Math.random() < 0.5 ? 0 : (Math.random() < 0.5 ? 12 : -12)
     const chosenBase = baseFromCaller ? Math.max(24, Math.min(72, baseFromCaller + octaveShift))
-                                      : baseNotes[Math.floor(Math.random() * baseNotes.length)]
+      : baseNotes[Math.floor(Math.random() * baseNotes.length)]
     responder.baseNote = chosenBase
 
     // Generar respuesta derivada del caller si existe; en su defecto, generar notas en rango
+    let responseNotes
     if (caller) {
-      responder.notes = loopManager.generateResponseFromCall(caller, responder, scale, responder.baseNote)
+      responseNotes = loopManager.generateResponseFromCall(caller, responder, scale, responder.baseNote)
     } else {
-      responder.notes = loopManager.generateNotesInRange(scale, responder.baseNote, responder.length, 2)
+      responseNotes = loopManager.generateNotesInRange(scale, responder.baseNote, responder.length, 2)
     }
+
+    // Guardar las notas en la matriz centralizada
+    notesMatrix.setLoopNotes(responder.id, responseNotes)
 
     return loopsToReharmonize
   }
@@ -326,13 +345,13 @@ export const useAudioStore = defineStore('audio', () => {
   // Evolución musical principal
   const evolveMusic = () => {
     if (!audioEngine.audioInitialized.value) return
-    
+
     // Aplicar momentum si está activado
     applyMomentum()
-    
+
     let newScale = currentScale.value
     let oldScale = currentScale.value
-    
+
     // Seleccionar nueva escala según el modo solo si no está bloqueada
     if (!scaleLocked.value) {
       switch (evolveMode.value) {
@@ -352,7 +371,7 @@ export const useAudioStore = defineStore('audio', () => {
             ? getRelatedScale(currentScale.value)
             : getRandomScale(currentScale.value)
       }
-      
+
       // Actualizar historial de escalas solo si cambió
       if (newScale !== oldScale) {
         recentScales.value.push(newScale)
@@ -362,50 +381,50 @@ export const useAudioStore = defineStore('audio', () => {
         updateScale(newScale)
       }
     }
-    
+
     // Usar el sistema de evolución para evolucionar loops
     const availableScales = Object.keys(scales.value).map(name => ({
       name,
       notes: useScales().getScale(name)
     }))
-    
+
     // Excluir reverb y delay de la evolución cuando se están aplicando cambios de estilo
     const isStyleChange = momentumEnabled.value || callResponseEnabled.value || tensionReleaseMode.value
     const evolutionOptions = isStyleChange ? { excludeReverb: true, excludeDelay: true } : {}
-    
+
     const evolvedLoops = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, availableScales, evolutionOptions)
-    
+
     // Aplicar call & response si está activado
     if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
       const loopsToReharmonize = selectRandomLoops(Math.ceil(evolutionSystem.evolutionIntensity.value * 5))
       applyCallResponse(loopsToReharmonize)
     }
-    
+
     // Actualizar loops con las evoluciones
     evolvedLoops.forEach((evolvedLoop, index) => {
       if (evolvedLoop !== loopManager.loops.value[index]) {
         Object.assign(loopManager.loops.value[index], evolvedLoop)
       }
     })
-    
+
     // Aplicar gestión de energía después de la evolución
     energyManager.checkAndBalanceEnergy(loopManager.loops.value)
-    
+
     // Resetear contador
     measuresSinceEvolve.value = 0
     nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value * 16)
-    
+
     const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
     const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
   }
 
   const checkEvolve = () => {
     if (!autoEvolve.value || !audioEngine.isPlaying.value) return
-    
+
     // Verificar evolución basada en compases musicales
     const currentMeasure = Math.floor(audioEngine.currentPulse.value / 16)
     const targetMeasure = Math.floor(nextEvolveMeasure.value / 16)
-    
+
     if (currentMeasure >= targetMeasure) {
       evolveMusic()
       // Calcular próxima evolución: simplemente sumar el intervalo en compases
@@ -417,18 +436,18 @@ export const useAudioStore = defineStore('audio', () => {
 
   const startAutoEvolve = () => {
     if (evolveIntervalId) return
-    
+
     autoEvolve.value = true
     evolutionSystem.updateEvolutionSettings({ enabled: true })
     measuresSinceEvolve.value = 0
-    
+
     // Calcular próxima evolución: simplemente sumar el intervalo en compases
     const measuresInterval = evolutionSystem.evolutionInterval.value
     nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value * 16)
-    
+
     evolveStartTime.value = Date.now()
     momentumLevel.value = 0
-    
+
     evolveIntervalId = setInterval(() => {
       if (audioEngine.isPlaying.value) {
         checkEvolve()
@@ -508,17 +527,17 @@ export const useAudioStore = defineStore('audio', () => {
     masterVol: audioEngine.masterVol,
     masterVolume: audioEngine.masterVolume,
     delayDivision: audioEngine.delayDivision,
-    
+
     // Estado de loops
     loops: loopManager.loops,
-    
+
     // Estado de escalas
     currentScale,
     scaleNamesSpanish,
     scales,
     scaleNames,
     synthTypes,
-    
+
     // Estado de evolución automática
     autoEvolve,
     evolveInterval: computed(() => evolutionSystem.evolutionInterval.value), // intervalo en compases
@@ -526,12 +545,12 @@ export const useAudioStore = defineStore('audio', () => {
     measuresSinceEvolve,
     nextEvolveMeasure,
     scaleLocked,
-    
+
     // Estado de gestión de energía
     energyManagementEnabled: energyManager.energyManagementEnabled,
     maxSonicEnergy: energyManager.maxSonicEnergy,
     energyReductionFactor: energyManager.energyReductionFactor,
-    
+
     // Funciones principales
     initAudio,
     togglePlay,
@@ -545,7 +564,7 @@ export const useAudioStore = defineStore('audio', () => {
     updateMasterVolume,
     updateScale,
     updateDelayDivision,
-    
+
     // Funciones de evolución automática
     startAutoEvolve,
     stopAutoEvolve,
@@ -553,31 +572,31 @@ export const useAudioStore = defineStore('audio', () => {
     updateEvolveIntensity,
     updateMomentumMaxLevel,
     evolveMusic,
-    
+
     // Funciones de evolución con matriz
     evolveMatrixLoop: evolutionSystem.evolveMatrixLoop,
     evolveMultipleMatrixLoops: evolutionSystem.evolveMultipleMatrixLoops,
     applyMatrixMutation: evolutionSystem.applyMatrixMutation,
     evolveMatrixWithStrategy: evolutionSystem.evolveMatrixWithStrategy,
-    
+
     // Funciones auxiliares para modos creativos
     setEvolveMode,
     setMomentumEnabled,
     setCallResponseEnabled,
     setTensionReleaseMode,
     toggleScaleLock,
-    
+
     // Funciones de gestión de energía sonora
     calculateSonicEnergy: energyManager.calculateSonicEnergy,
     getAdaptiveDensity: energyManager.getAdaptiveDensity,
     getAdaptiveVolume: energyManager.getAdaptiveVolume,
     adjustAllLoopVolumes: () => energyManager.adjustAllLoopVolumes(loopManager.loops.value),
-    
+
     // Configuración de energía sonora
     updateEnergyManagement: energyManager.updateEnergyManagement,
     updateMaxSonicEnergy: energyManager.updateMaxSonicEnergy,
     updateEnergyReductionFactor: energyManager.updateEnergyReductionFactor,
-    
+
     // Funciones de matriz de notas centralizada
     notesMatrix: notesMatrix.notesMatrix,
     loopMetadata: notesMatrix.loopMetadata,
@@ -585,10 +604,11 @@ export const useAudioStore = defineStore('audio', () => {
     initializeMatrix: notesMatrix.initializeMatrix,
     activateLoop: notesMatrix.activateLoop,
     deactivateLoop: notesMatrix.deactivateLoop,
+    updateLoopMetadata: notesMatrix.updateLoopMetadata,
     getLoopNotes: notesMatrix.getLoopNotes,
     setLoopNote: notesMatrix.setLoopNote,
     clearLoopNote: notesMatrix.clearLoopNote,
-    generateRandomNotes: notesMatrix.generateRandomNotes,
+    generateRandomNotes: notesMatrix.generateLoopNotes,
     quantizeLoopToScale: notesMatrix.quantizeLoopToScale,
     quantizeAllToScale: notesMatrix.quantizeAllToScale,
     transposeLoop: notesMatrix.transposeLoop,

@@ -6,18 +6,18 @@ const generateId = () => {
 }
 
 export const validatePreset = (preset) => {
-  return preset && 
-         preset.name && 
-         preset.globalConfig && 
-         preset.loops && 
-         Array.isArray(preset.loops)
+  return preset &&
+    preset.name &&
+    preset.globalConfig &&
+    preset.loops &&
+    Array.isArray(preset.loops)
 }
 
 export const getAllPresets = () => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (!stored) return []
-    
+
     const presets = JSON.parse(stored)
     return Array.isArray(presets) ? presets : []
   } catch (error) {
@@ -32,8 +32,8 @@ const saveAllPresets = (presets) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(limitedPresets))
     return true
   } catch (error) {
-    throw new Error(error.name === 'QuotaExceededError' 
-      ? 'Storage full. Delete some presets.' 
+    throw new Error(error.name === 'QuotaExceededError'
+      ? 'Storage full. Delete some presets.'
       : `Save error: ${error.message}`)
   }
 }
@@ -49,11 +49,11 @@ export const createPreset = (presetData) => {
   }
 
   const presets = getAllPresets()
-  
+
   if (presets.length >= MAX_PRESETS) {
     throw new Error(`Maximum ${MAX_PRESETS} presets allowed`)
   }
-  
+
   const trimmedName = presetData.name.trim()
   if (presets.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) {
     throw new Error('Preset name already exists')
@@ -80,7 +80,7 @@ export const createPreset = (presetData) => {
 export const updatePreset = (id, updates) => {
   const presets = getAllPresets()
   const index = presets.findIndex(preset => preset.id === id)
-  
+
   if (index === -1) {
     throw new Error('Preset not found')
   }
@@ -104,77 +104,106 @@ export const updatePreset = (id, updates) => {
 export const deletePreset = (id) => {
   const presets = getAllPresets()
   const filteredPresets = presets.filter(preset => preset.id !== id)
-  
+
   if (filteredPresets.length === presets.length) {
     throw new Error('Preset not found')
   }
 
   saveAllPresets(filteredPresets)
   return true
-}
-
+}/**
+ * Duplica un preset
+ */
 export const duplicatePreset = (id) => {
-  const originalPreset = getPresetById(id)
-  if (!originalPreset) {
-    throw new Error('Preset not found')
-  }
+  try {
+    const originalPreset = getPresetById(id)
+    if (!originalPreset) {
+      throw new Error('Preset no encontrado')
+    }
 
-  const presets = getAllPresets()
-  if (presets.length >= MAX_PRESETS) {
-    throw new Error(`Maximum ${MAX_PRESETS} presets allowed`)
-  }
+    const duplicatedPreset = {
+      ...originalPreset,
+      id: generateId(),
+      name: `${originalPreset.name} (Copia)`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
 
-  const duplicatedPreset = {
-    ...originalPreset,
-    id: generateId(),
-    name: `${originalPreset.name} (Copy)`,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
+    const presets = getAllPresets()
 
-  presets.push(duplicatedPreset)
-  saveAllPresets(presets)
-  return duplicatedPreset
+    if (presets.length >= MAX_PRESETS) {
+      throw new Error(`Máximo ${MAX_PRESETS} presets permitidos`)
+    }
+
+    presets.push(duplicatedPreset)
+    saveAllPresets(presets)
+
+    return duplicatedPreset
+  } catch (error) {
+    throw new Error(`Error al duplicar preset: ${error.message}`)
+  }
 }
 
+/**
+ * Exporta un preset como JSON
+ */
 export const exportPreset = (id) => {
   const preset = getPresetById(id)
   if (!preset) {
-    throw new Error('Preset not found')
+    throw new Error('Preset no encontrado')
   }
   return JSON.stringify(preset, null, 2)
 }
 
+/**
+ * Importa un preset desde JSON
+ */
 export const importPreset = (jsonString) => {
-  const preset = JSON.parse(jsonString)
-  preset.id = generateId()
-  preset.createdAt = new Date().toISOString()
-  preset.updatedAt = new Date().toISOString()
-  
-  if (!validatePreset(preset)) {
-    throw new Error('Invalid preset data')
-  }
+  try {
+    const preset = JSON.parse(jsonString)
 
-  const presets = getAllPresets()
-  if (presets.length >= MAX_PRESETS) {
-    throw new Error(`Maximum ${MAX_PRESETS} presets allowed`)
-  }
+    // Generar nuevo ID para evitar conflictos
+    preset.id = generateId()
+    preset.createdAt = new Date().toISOString()
+    preset.updatedAt = new Date().toISOString()
 
-  presets.push(preset)
-  saveAllPresets(presets)
-  return preset
+    validatePreset(preset)
+
+    const presets = getAllPresets()
+
+    if (presets.length >= MAX_PRESETS) {
+      throw new Error(`Máximo ${MAX_PRESETS} presets permitidos`)
+    }
+
+    presets.push(preset)
+    saveAllPresets(presets)
+
+    return preset
+  } catch (error) {
+    throw new Error(`Error al importar preset: ${error.message}`)
+  }
 }
 
+/**
+ * Limpia todos los presets (usar con precaución)
+ */
 export const clearAllPresets = () => {
-  localStorage.removeItem(STORAGE_KEY)
-  return true
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+    return true
+  } catch (error) {
+    throw new Error(`Error al limpiar presets: ${error.message}`)
+  }
 }
 
+/**
+ * Obtiene estadísticas de uso de almacenamiento
+ */
 export const getStorageStats = () => {
   try {
     const presets = getAllPresets()
     const jsonString = localStorage.getItem(STORAGE_KEY) || '[]'
-    
+
     return {
       totalPresets: presets.length,
       maxPresets: MAX_PRESETS,

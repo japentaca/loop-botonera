@@ -1,63 +1,180 @@
 <template>
   <div id="app">
-    <AppHeader />
-    <main class="container">
-      <LoopGrid />
-    </main>
-    <SynthEditor />
+    <!-- Audio Start Overlay -->
+    <div v-if="!audioStore.audioInitialized" class="audio-start-overlay">
+      <div class="audio-start-card">
+        <h2>🎵 Loop Synth Machine</h2>
+        <p>Click the button below to initialize the audio engine</p>
+        <button @click="initializeAudio" class="start-audio-button" :disabled="isInitializing">
+          {{ isInitializing ? 'Initializing...' : '🔊 Start Audio' }}
+        </button>
+        <p class="audio-note">
+          <small>WebAudio requires user interaction to start</small>
+        </p>
+      </div>
+    </div>
+
+    <!-- Main App (disabled until audio is ready) -->
+    <div :class="['main-app', { disabled: !audioStore.audioInitialized }]">
+      <AppHeader />
+      <main class="container">
+        <LoopGrid />
+      </main>
+      <SynthEditor />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
-import AppHeader from './components/AppHeader.vue'
-import LoopGrid from './components/LoopGrid.vue'
-import SynthEditor from './components/SynthEditor.vue'
-import { useAudioStore } from './stores/audioStore'
-import { usePresetStore } from './stores/presetStore'
+  import { onMounted, ref } from 'vue'
+  import AppHeader from './components/AppHeader.vue'
+  import LoopGrid from './components/LoopGrid.vue'
+  import SynthEditor from './components/SynthEditor.vue'
+  import { useAudioStore } from './stores/audioStore'
+  import { usePresetStore } from './stores/presetStore'
 
-console.log('🔵 APP: App.vue script setup starting');
-console.log('🔵 APP: Current time:', new Date().toISOString());
+  const componentId = Math.random().toString(36).substr(2, 9)
+  console.log('🔵 APP: App.vue script setup starting - Instance ID:', componentId);
 
-const audioStore = useAudioStore()
-const presetStore = usePresetStore()
+  const audioStore = useAudioStore()
+  const presetStore = usePresetStore()
+  const isInitializing = ref(false)
 
-console.log('🔵 APP: Stores initialized - audioStore:', !!audioStore, 'presetStore:', !!presetStore);
+  console.log('🔵 APP: Stores initialized - audioStore:', !!audioStore, 'presetStore:', !!presetStore);
 
-onMounted(async () => {
-  console.log('🔵 APP: onMounted lifecycle hook fired');
-  console.log('🔵 APP: Starting async initialization sequence');
-  
-  // Inicializar audio cuando la aplicación se monta
-  console.log('🔵 APP: Initializing audio store...');
-  try {
-    await audioStore.initAudio()
-    console.log('🔵 APP: Audio store initialized successfully');
-  } catch (error) {
-    console.error('🔴 APP: Error inicializando audio:', error)
+  // Initialize audio only when user clicks the start button
+  const initializeAudio = async () => {
+    if (isInitializing.value) {
+      console.log('🔴 APP: Already initializing, skipping');
+      return
+    }
+
+    isInitializing.value = true
+    console.log('🔵 APP: Starting user-initiated audio initialization');
+
+    try {
+      // Initialize audio store first
+      console.log('🔵 APP: Initializing audio store...');
+      await audioStore.initAudio()
+      console.log('🔵 APP: Audio store initialized successfully');
+
+      // Initialize preset system after audio is ready
+      console.log('🔵 APP: Initializing preset store...');
+      await presetStore.initialize()
+      console.log('🔵 APP: Preset store initialized successfully');
+
+      console.log('🔵 APP: All initialization complete');
+    } catch (error) {
+      console.error('🔴 APP: Error during initialization:', error)
+    } finally {
+      isInitializing.value = false
+    }
   }
-  
-  // Inicializar el sistema de presets
-  console.log('🔵 APP: Initializing preset store...');
-  try {
-    console.log('🔵 APP: About to call presetStore.initialize()');
-    await presetStore.initialize()
-    console.log('🔵 APP: Preset store initialized successfully');
-    console.log('🔵 APP: Post-initialization state:');
-    console.log('🔵 APP: - presets count:', presetStore.presetsCount);
-    console.log('🔵 APP: - current preset:', JSON.stringify(presetStore.currentPreset));
-    console.log('🔵 APP: - is loading:', presetStore.isLoading);
-    console.log('🔵 APP: - is dialog open:', presetStore.isDialogOpen);
-  } catch (error) {
-    console.error('🔴 APP: Error inicializando sistema de presets:', error)
-    console.error('🔴 APP: Error details:', error.message)
-    console.error('🔴 APP: Error stack:', error.stack)
-  }
-  
-  console.log('🔵 APP: All async initialization complete');
-})
+
+  onMounted(() => {
+    console.log('🔵 APP: Component mounted - waiting for user interaction to initialize audio');
+  })
 </script>
 
 <style>
-@import './style.css';
+  @import './style.css';
+
+  /* Audio Start Overlay */
+  .audio-start-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    color: white;
+  }
+
+  .audio-start-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 3rem;
+    text-align: center;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  .audio-start-card h2 {
+    margin-bottom: 1rem;
+    font-size: 2rem;
+    background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+    background-size: 300% 300%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient 3s ease infinite;
+  }
+
+  @keyframes gradient {
+    0% {
+      background-position: 0% 50%;
+    }
+
+    50% {
+      background-position: 100% 50%;
+    }
+
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  .audio-start-card p {
+    margin-bottom: 2rem;
+    font-size: 1.1rem;
+    opacity: 0.9;
+  }
+
+  .start-audio-button {
+    background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+    border: none;
+    color: white;
+    font-size: 1.3rem;
+    font-weight: bold;
+    padding: 1rem 2rem;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+    min-width: 200px;
+  }
+
+  .start-audio-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+  }
+
+  .start-audio-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .audio-note {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    opacity: 0.7;
+  }
+
+  /* Main app disabled state */
+  .main-app.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+    filter: grayscale(50%);
+  }
+
+  .main-app {
+    transition: all 0.3s ease;
+  }
 </style>
