@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { useAudioStore } from '../audioStore'
 
 /**
  * Sistema de evolución automática que modifica loops de forma inteligente
@@ -94,8 +95,9 @@ export const useEvolutionSystem = () => {
     
     const evolvedLoop = { ...loop }
     
-    // Cambio de escala ocasional en modo creativo
-    if (Math.random() < 0.1 && availableScales && availableScales.length > 1) {
+    // Cambio de escala ocasional en modo creativo - solo si no está bloqueada
+    const audioStore = useAudioStore()
+    if (Math.random() < 0.1 && availableScales && availableScales.length > 1 && !audioStore.scaleLocked) {
       const currentScaleIndex = availableScales.findIndex(s => s.name === loop.scale?.name)
       if (currentScaleIndex !== -1) {
         const newScaleIndex = (currentScaleIndex + 1) % availableScales.length

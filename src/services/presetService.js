@@ -112,32 +112,66 @@ const migratePreset = (preset) => {
  * Obtiene todos los presets del localStorage
  */
 export const getAllPresets = () => {
+  console.log('📋 PRESET SERVICE: Starting getAllPresets');
+  console.log('📋 PRESET SERVICE: STORAGE_KEY:', STORAGE_KEY);
+  console.log('📋 PRESET SERVICE: Browser info:', navigator.userAgent);
+  console.log('📋 PRESET SERVICE: localStorage keys:', Object.keys(localStorage));
+  
   try {
+    console.log('📋 PRESET SERVICE: Attempting to access localStorage');
     const stored = localStorage.getItem(STORAGE_KEY)
+    console.log('📋 PRESET SERVICE: localStorage.getItem result:', stored);
+    console.log('📋 PRESET SERVICE: localStorage available:', typeof localStorage !== 'undefined');
+    console.log('📋 PRESET SERVICE: localStorage length:', localStorage.length);
+    
+    // Check all localStorage keys to see what's available
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      console.log(`📋 PRESET SERVICE: localStorage key[${i}]:`, key);
+      if (key && key.includes('preset')) {
+        console.log(`📋 PRESET SERVICE: Found preset-related key:`, key);
+      }
+    }
+    
     if (!stored) {
+      console.log('📋 PRESET SERVICE: No stored data found for STORAGE_KEY, returning empty array');
       return []
     }
 
+    console.log('📋 PRESET SERVICE: Parsing stored data...');
     const presets = JSON.parse(stored)
+    console.log('📋 PRESET SERVICE: Parsed data type:', typeof presets);
+    console.log('📋 PRESET SERVICE: Is array:', Array.isArray(presets));
+    console.log('📋 PRESET SERVICE: Array length:', presets?.length);
+    
     if (!Array.isArray(presets)) {
-      console.warn('Datos de presets corruptos, reiniciando...')
+      console.warn('📋 PRESET SERVICE: Datos de presets corruptos, reiniciando...')
       return []
     }
 
-    // Migrar presets si es necesario
-    return presets.map(preset => {
+    console.log('📋 PRESET SERVICE: Starting migration and validation...');
+    // SKIP MIGRATION FOR BRAVE BROWSER TESTING
+    console.log('📋 PRESET SERVICE: SKIPPING MIGRATION - using presets as-is');
+    const result = presets.map(preset => {
       try {
-        const migrated = migratePreset(preset)
-        validatePreset(migrated)
-        return migrated
+        console.log('📋 PRESET SERVICE: Validating preset:', preset?.name || 'unnamed');
+        // Skip migration and just validate
+        validatePreset(preset)
+        console.log('📋 PRESET SERVICE: Preset validated successfully (migration skipped)');
+        return preset
       } catch (error) {
-        console.warn(`Preset corrupto eliminado: ${preset.name || 'Sin nombre'}`, error)
+        console.warn(`📋 PRESET SERVICE: Preset corrupto eliminado: ${preset.name || 'Sin nombre'}`, error)
         return null
       }
     }).filter(Boolean)
+    
+    console.log('📋 PRESET SERVICE: Final result count:', result.length);
+    return result;
 
   } catch (error) {
-    console.error('Error al cargar presets:', error)
+    console.error('📋 PRESET SERVICE: Error al cargar presets:', error)
+    console.error('📋 PRESET SERVICE: Error details:', error.message);
+    console.error('📋 PRESET SERVICE: Error stack:', error.stack);
     return []
   }
 }

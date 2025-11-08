@@ -52,27 +52,41 @@ export const useAudioEngine = () => {
 
   // Inicializar el motor de audio
   const initAudio = async () => {
-    if (audioInitialized.value) return
+    console.log('🔊 AUDIO ENGINE: Starting audio engine initialization');
+    
+    if (audioInitialized.value) {
+      console.log('🔊 AUDIO ENGINE: Audio already initialized, skipping');
+      return
+    }
 
     try {
+      console.log('🔊 AUDIO ENGINE: Starting Tone.js...');
       await Tone.start()
+      console.log('🔊 AUDIO ENGINE: Tone.js started successfully');
 
       // Crear cadena de efectos globales
+      console.log('🔊 AUDIO ENGINE: Creating master gain node');
       masterGain = markRaw(new Tone.Gain(masterVol.value).toDestination())
+      console.log('🔊 AUDIO ENGINE: Master gain node created');
       
       if (!BYPASS_EFFECTS_FOR_TEST) {
+        console.log('🔊 AUDIO ENGINE: Creating delay effect');
         delay = markRaw(new Tone.PingPongDelay(delayDivision.value, 0.4).connect(masterGain))
+        console.log('🔊 AUDIO ENGINE: Creating reverb effect');
         reverb = markRaw(new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain))
         await reverb.generate()
+        console.log('🔊 AUDIO ENGINE: Effects created successfully');
       }
 
       // Configurar transporte
+      console.log('🔊 AUDIO ENGINE: Configuring transport, BPM:', tempo.value);
       Tone.Transport.bpm.value = tempo.value
       updateDelayTime()
 
       audioInitialized.value = true
+      console.log('🔊 AUDIO ENGINE: Audio engine initialization complete');
     } catch (error) {
-      console.error('Error al inicializar motor de audio:', error)
+      console.error('🔴 AUDIO ENGINE: Error al inicializar motor de audio:', error)
       throw error
     }
   }

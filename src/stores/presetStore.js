@@ -42,17 +42,50 @@ export const usePresetStore = defineStore('preset', () => {
 
   // Cargar presets desde localStorage
   const loadPresets = async () => {
+    console.log('📋 PRESET STORE: Starting loadPresets');
+    console.log('📋 PRESET STORE: Browser info:', navigator.userAgent);
+    console.log('📋 PRESET STORE: localStorage available:', typeof localStorage !== 'undefined');
+    console.log('📋 PRESET STORE: localStorage length:', localStorage.length);
+    
     try {
       isLoading.value = true
-      const loadedPresets = getAllPresets()
+      console.log('📋 PRESET STORE: Loading presets from storage...');
+      
+      // Add retry mechanism for Brave browser compatibility
+      let loadedPresets = [];
+      let attempts = 0;
+      const maxAttempts = 3;
+      
+      while (attempts < maxAttempts) {
+        console.log(`📋 PRESET STORE: Attempt ${attempts + 1} to load presets`);
+        loadedPresets = getAllPresets();
+        
+        if (loadedPresets.length > 0) {
+          console.log('📋 PRESET STORE: Successfully loaded presets on attempt', attempts + 1);
+          break;
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log(`📋 PRESET STORE: No presets found, waiting ${attempts * 100}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, attempts * 100));
+        }
+      }
+      
+      console.log('📋 PRESET STORE: Found', loadedPresets.length, 'presets');
+      console.log('📋 PRESET STORE: Preset details:', loadedPresets.map(p => ({id: p.id, name: p.name})));
+      console.log('📋 PRESET STORE: About to set presets.value');
       presets.value = loadedPresets
+      console.log('📋 PRESET STORE: Presets.value set successfully');
+      console.log('📋 PRESET STORE: presets.value length:', presets.value.length);
       
       // No crear preset automáticamente - solo cargar los existentes
     } catch (error) {
-      console.error('Error al cargar presets:', error)
+      console.error('🔴 PRESET STORE: Error al cargar presets:', error)
       throw error
     } finally {
       isLoading.value = false
+      console.log('📋 PRESET STORE: loadPresets complete');
     }
   }
 
@@ -571,8 +604,49 @@ export const usePresetStore = defineStore('preset', () => {
 
   // Inicialización
   const initialize = async () => {
-    await loadPresets()
-    setupAutoSave()
+    console.log('📋 PRESET STORE: Starting preset system initialization');
+    console.log('📋 PRESET STORE: Current time:', new Date().toISOString());
+    console.log('📋 PRESET STORE: Initialize function called!');
+    
+    isLoading.value = true
+    
+    try {
+      console.log('📋 PRESET STORE: Loading presets from storage...');
+      console.log('📋 PRESET STORE: About to call loadPresets()');
+      await loadPresets()
+      console.log('📋 PRESET STORE: Presets loaded, count:', presets.value.length);
+      console.log('📋 PRESET STORE: Presets array contents:', JSON.stringify(presets.value));
+      
+      // Si no hay presets, crear uno por defecto
+      if (presets.value.length === 0) {
+        console.log('📋 PRESET STORE: No presets found, creating default preset');
+        await createDefaultPreset()
+        console.log('📋 PRESET STORE: Default preset created');
+      }
+      
+      // Establecer el preset actual al más reciente
+      if (presets.value.length > 0 && !currentPresetId.value) {
+        console.log('📋 PRESET STORE: Setting current preset to first available');
+        console.log('📋 PRESET STORE: First preset ID:', presets.value[0].id);
+        currentPresetId.value = sortedPresets.value[0].id
+        console.log('📋 PRESET STORE: Set current preset to:', currentPresetId.value);
+      }
+      
+      console.log('📋 PRESET STORE: Preset system initialization complete');
+      console.log('📋 PRESET STORE: Current preset ID:', currentPresetId.value);
+      console.log('📋 PRESET STORE: Final presets array:', JSON.stringify(presets.value));
+      console.log('📋 PRESET STORE: Presets count:', presets.value.length);
+      console.log('📋 PRESET STORE: Current preset object:', JSON.stringify(currentPreset.value));
+      setupAutoSave()
+      return true
+    } catch (error) {
+      console.error('🔴 PRESET STORE: Error al inicializar sistema de presets:', error)
+      console.error('🔴 PRESET STORE: Error details:', error.message)
+      console.error('🔴 PRESET STORE: Error stack:', error.stack)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
   }
 
   return {

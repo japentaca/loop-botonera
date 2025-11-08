@@ -44,6 +44,7 @@ export const useAudioStore = defineStore('audio', () => {
   const recentScales = ref([])
   const isTensionPhase = ref(false)
   const lastResponderId = ref(null)
+  const lastCallerId = ref(null)
   const evolveStartTime = ref(0)
   const momentumLevel = ref(0)
   let evolveIntervalId = null
@@ -79,19 +80,31 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Inicialización de audio
   const initAudio = async () => {
+    console.log('🎵 AUDIO STORE: Starting audio initialization');
+    console.log('🎵 AUDIO STORE: Current scale:', currentScale.value);
+    
     try {
+      console.log('🎵 AUDIO STORE: Initializing audio engine...');
       await audioEngine.initAudio()
+      console.log('🎵 AUDIO STORE: Audio engine initialized successfully');
       
       // Configurar callback del transporte para reproducir loops
+      console.log('🎵 AUDIO STORE: Setting up transport callback');
       audioEngine.setupTransportCallback(playActiveLoops)
+      console.log('🎵 AUDIO STORE: Transport callback configured');
       
       // Inicializar loops con configuración por defecto
+      console.log('🎵 AUDIO STORE: Getting scale and initializing loops');
       const scale = useScales().getScale(currentScale.value)
-      loopManager.initializeLoops(scale, audioEngine)
+      console.log('🎵 AUDIO STORE: Scale retrieved:', currentScale.value);
       
+      loopManager.initializeLoops(scale, audioEngine)
+      console.log('🎵 AUDIO STORE: Loops initialized successfully');
+      
+      console.log('🎵 AUDIO STORE: Audio initialization complete');
       return true
     } catch (error) {
-      console.error('❌ Error al inicializar audio:', error)
+      console.error('🔴 AUDIO STORE: Error al inicializar audio:', error)
       return false
     }
   }
@@ -269,17 +282,44 @@ export const useAudioStore = defineStore('audio', () => {
   // Call & Response usando el sistema de evolución
   const applyCallResponse = (loopsToReharmonize) => {
     if (!Array.isArray(loopsToReharmonize) || loopsToReharmonize.length === 0) return loopsToReharmonize
-    
+
+    // Elegir respondedor distinto al anterior
     const candidates = loopsToReharmonize.filter(l => l.id !== lastResponderId.value)
     const responder = (candidates.length ? candidates : loopsToReharmonize)[0]
     lastResponderId.value = responder?.id ?? null
-    
+
+    // Elegir caller entre loops activos distintos del respondedor y del último caller
+    const activeLoops = loopManager.loops.value.filter(loop => loop.isActive && loop.id !== responder?.id)
+    const callerCandidates = activeLoops.filter(l => l.id !== lastCallerId.value)
+    const pickCaller = (list) => {
+      if (!list.length) return null
+      // Priorizar densidad de patrón
+      return list.reduce((best, loop) => {
+        const density = Array.isArray(loop.pattern) ? loop.pattern.filter(Boolean).length : 0
+        const bestDensity = Array.isArray(best?.pattern) ? best.pattern.filter(Boolean).length : -1
+        return density > bestDensity ? loop : best
+      }, null) || list[0]
+    }
+    const caller = pickCaller(callerCandidates.length ? callerCandidates : activeLoops)
+    lastCallerId.value = caller?.id ?? null
+
     const scale = useScales().getScale(currentScale.value) || useScales().getScale('major')
+
+    // Fijar base del respondedor cercana a la del caller si existe, con pequeña variación de octava
     const baseNotes = [36, 48, 60, 72]
-    responder.baseNote = baseNotes[Math.floor(Math.random() * baseNotes.length)]
-    
-    responder.notes = loopManager.generateNotesInRange(scale, responder.baseNote, responder.length, 2)
-    
+    const baseFromCaller = (caller?.baseNote ?? null)
+    const octaveShift = Math.random() < 0.5 ? 0 : (Math.random() < 0.5 ? 12 : -12)
+    const chosenBase = baseFromCaller ? Math.max(24, Math.min(72, baseFromCaller + octaveShift))
+                                      : baseNotes[Math.floor(Math.random() * baseNotes.length)]
+    responder.baseNote = chosenBase
+
+    // Generar respuesta derivada del caller si existe; en su defecto, generar notas en rango
+    if (caller) {
+      responder.notes = loopManager.generateResponseFromCall(caller, responder, scale, responder.baseNote)
+    } else {
+      responder.notes = loopManager.generateNotesInRange(scale, responder.baseNote, responder.length, 2)
+    }
+
     return loopsToReharmonize
   }
 
@@ -307,7 +347,10 @@ export const useAudioStore = defineStore('audio', () => {
           newScale = tensionScale || getRandomScale(currentScale.value)
           break
         default: // classic
-          newScale = getRandomScale(currentScale.value)
+          // Si Call & Response está activado, usar una escala relacionada para mantener coherencia
+          newScale = callResponseEnabled.value
+            ? getRelatedScale(currentScale.value)
+            : getRandomScale(currentScale.value)
       }
       
       // Actualizar historial de escalas solo si cambió
@@ -440,6 +483,7 @@ export const useAudioStore = defineStore('audio', () => {
     callResponseEnabled.value = Boolean(enabled)
     if (!enabled) {
       lastResponderId.value = null
+      lastCallerId.value = null
     }
   }
 

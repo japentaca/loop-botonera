@@ -61,6 +61,70 @@ export const useLoopManager = () => {
     })
   }
 
+  // Generar una respuesta derivada de un loop "call"
+  // Aplica transformaciones simples (transposición, retrogradación, inversión) y cuantiza a la escala
+  const generateResponseFromCall = (callLoop, responderLoop, scale, baseNote, options = {}) => {
+    try {
+      const sourceNotes = Array.isArray(callLoop?.notes) ? callLoop.notes : []
+      const targetLength = responderLoop?.length ?? sourceNotes.length
+      const { quantizeToScale } = useNoteUtils()
+
+      // Elegir estrategia de transformación
+      const strategies = ['transposeUp', 'transposeDown', 'retrograde', 'invert']
+      const strategy = options.strategy && strategies.includes(options.strategy)
+        ? options.strategy
+        : strategies[Math.floor(Math.random() * strategies.length)]
+
+      // Delta de transposición (en semitonos) con cuantización posterior a la escala
+      const transposeDelta = options.transposeDelta ?? ([2, 3, 4][Math.floor(Math.random() * 3)])
+
+      const clampMidi = (n) => Math.max(24, Math.min(84, n))
+
+      const transformNote = (note, idx) => {
+        if (typeof note !== 'number') return null
+        let transformed = note
+        switch (strategy) {
+          case 'transposeUp':
+            transformed = note + transposeDelta
+            break
+          case 'transposeDown':
+            transformed = note - transposeDelta
+            break
+          case 'invert': {
+            const pivot = (callLoop?.baseNote ?? baseNote)
+            transformed = pivot - (note - pivot)
+            break
+          }
+          case 'retrograde':
+            // Retrogradación se aplica a la secuencia completa; aquí solo cuantizamos
+            transformed = note
+            break
+          default:
+            transformed = note
+        }
+        transformed = clampMidi(transformed)
+        return quantizeToScale(transformed, scale, baseNote)
+      }
+
+      // Construir la secuencia transformada
+      let seq = sourceNotes.slice()
+      if (strategy === 'retrograde') {
+        seq = seq.reverse()
+      }
+
+      const result = Array.from({ length: targetLength }, (_, i) => {
+        const src = seq.length ? seq[i % seq.length] : null
+        return transformNote(src, i)
+      })
+
+      return result
+    } catch (error) {
+      console.error('Error al generar respuesta desde call:', error)
+      // Fallback: generar notas aleatorias en rango
+      return generateNotesInRange(scale, baseNote, responderLoop?.length ?? 16, 2)
+    }
+  }
+
   // Crear estructura básica de loop (sin objetos de audio)
   const createBasicLoop = (id, scale, adaptiveVolume = 0.5, adaptiveDensity = null) => {
     const baseNote = 36 + Math.floor(Math.random() * 24)
@@ -132,19 +196,33 @@ export const useLoopManager = () => {
 
   // Inicializar todos los loops
   const initializeLoops = (currentScale, audioEngine = null, getAdaptiveVolume = null, getAdaptiveDensity = null) => {
+    console.log('🔄 LOOP MANAGER: Starting loop initialization');
+    console.log('🔄 LOOP MANAGER: Current scale:', currentScale);
+    console.log('🔄 LOOP MANAGER: Audio engine available:', !!audioEngine);
+    console.log('🔄 LOOP MANAGER: Audio engine initialized:', audioEngine?.audioInitialized);
+    
     const scale = useScales().getScale(currentScale)
+    console.log('🔄 LOOP MANAGER: Retrieved scale:', scale);
+    
     loops.value = []
+    console.log('🔄 LOOP MANAGER: Creating', NUM_LOOPS, 'loops');
     
     for (let i = 0; i < NUM_LOOPS; i++) {
       const adaptiveVolume = getAdaptiveVolume ? getAdaptiveVolume(i) : 0.5
       const adaptiveDensity = getAdaptiveDensity ? getAdaptiveDensity() : null
+      
+      console.log(`🔄 LOOP MANAGER: Creating loop ${i}, adaptiveVolume: ${adaptiveVolume}, adaptiveDensity: ${adaptiveDensity}`);
       
       if (audioEngine && audioEngine.audioInitialized) {
         loops.value.push(createLoop(i, scale, audioEngine, adaptiveVolume, adaptiveDensity))
       } else {
         loops.value.push(createBasicLoop(i, scale, adaptiveVolume, adaptiveDensity))
       }
+      
+      console.log(`🔄 LOOP MANAGER: Loop ${i} created successfully`);
     }
+    
+    console.log('🔄 LOOP MANAGER: All loops initialized, total:', loops.value.length);
   }
 
   // Actualizar loops existentes con objetos de audio
@@ -472,6 +550,7 @@ export const useLoopManager = () => {
     generatePattern,
     generateNotes,
     generateNotesInRange,
+    generateResponseFromCall,
     regenerateLoopPattern,
     regenerateLoopNotes,
     regenerateLoop,

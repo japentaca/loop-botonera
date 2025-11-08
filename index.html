@@ -5,6 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Loop Synth Machine</title>
+    <script>
+      console.log('🚀 HTML: DOMContentLoaded event starting');
+      console.log('🚀 HTML: User Agent:', navigator.userAgent);
+      console.log('🚀 HTML: Current time:', new Date().toISOString());
+      
+      document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 HTML: DOMContentLoaded fired');
+        console.log('🚀 HTML: DOM ready, app div exists:', !!document.getElementById('app'));
+      });
+    </script>
   </head>
   <body>
     <div id="app"></div>
