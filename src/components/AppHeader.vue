@@ -31,8 +31,11 @@
           severity="secondary" title="Distribuir canales activos en el panorama estéreo"
           :disabled="!audioStore.audioInitialized" />
 
-        <Button @click="openPresetDialog" class="preset-button-compact" icon="pi pi-save" label="Presets" size="small"
-          title="Gestionar presets" :disabled="!audioStore.audioInitialized" />
+        <div class="preset-control-group">
+          <Button @click="openPresetDialog" class="preset-button-compact" icon="pi pi-save" label="Presets" size="small"
+            title="Gestionar presets" :disabled="!audioStore.audioInitialized" />
+          <span class="preset-name-label">{{ presetStore.currentPreset?.name || 'Sin preset' }}</span>
+        </div>
       </div>
 
       <!-- Visualizador de pulsos integrado -->

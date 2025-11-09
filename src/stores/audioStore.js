@@ -9,6 +9,30 @@ import { useLoopManager } from './modules/loopManager'
 import { useEnergyManager } from './modules/energyManager'
 import { useEvolutionSystem } from './modules/evolutionSystem'
 
+// Importar presetStore para disparar auto-guardado cuando hay cambios
+// Se importa aquí para evitar dependencias circulares, se usa solo cuando es necesario
+let presetStoreInstance = null
+const getPresetStore = async () => {
+  if (!presetStoreInstance) {
+    // Importación dinámica para evitar problemas de ciclo de dependencias
+    const { usePresetStore } = await import('./presetStore')
+    presetStoreInstance = usePresetStore()
+  }
+  return presetStoreInstance
+}
+
+// Función centralizada para notificar cambios al presetStore
+const notifyPresetChanges = async () => {
+  try {
+    const presetStore = await getPresetStore()
+    if (presetStore && presetStore.handleChange) {
+      presetStore.handleChange()
+    }
+  } catch (error) {
+    console.warn('No se pudo notificar cambios al presetStore:', error.message)
+  }
+}
+
 export const useAudioStore = defineStore('audio', () => {
   // Inicializar matriz de notas centralizada primero
   const notesMatrix = useNotesMatrix()
@@ -144,6 +168,9 @@ export const useAudioStore = defineStore('audio', () => {
     if (energyManager.energyManagementEnabled.value) {
       energyManager.adjustAllLoopVolumes(loopManager.loops.value)
     }
+
+    // Notificar cambios para auto-guardado
+    notifyPresetChanges()
   }
 
   // Actualizar parámetros de loop
@@ -155,11 +182,17 @@ export const useAudioStore = defineStore('audio', () => {
     if (param === 'volume') {
       energyManager.checkAndBalanceEnergy(loopManager.loops.value)
     }
+
+    // Disparar notificación de cambios para activar auto-guardado en el preset
+    notifyPresetChanges()
   }
 
   // Actualizar configuración del sintetizador
   const updateLoopSynth = (loopId, synthConfig) => {
     loopManager.updateLoopSynth(loopId, synthConfig, audioEngine)
+
+    // Disparar notificación de cambios para activar auto-guardado en el preset
+    notifyPresetChanges()
   }
 
   // Regenerar loop individualla g 
@@ -200,11 +233,13 @@ export const useAudioStore = defineStore('audio', () => {
   // Control de tempo
   const updateTempo = (newTempo) => {
     audioEngine.updateTempo(newTempo)
+    notifyPresetChanges()
   }
 
   // Control de volumen maestro
   const updateMasterVolume = (volume) => {
     audioEngine.updateMasterVolume(volume)
+    notifyPresetChanges()
   }
 
   // Actualizar escala musical
@@ -227,11 +262,14 @@ export const useAudioStore = defineStore('audio', () => {
       loop.scale = scale
       loopManager.quantizeLoopNotes(loop, scale)
     })
+
+    notifyPresetChanges()
   }
 
   // Actualizar división del delay
   const updateDelayDivision = (division) => {
     audioEngine.updateDelayDivision(division)
+    notifyPresetChanges()
   }
 
   // Sistema de evolución automática

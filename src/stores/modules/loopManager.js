@@ -36,7 +36,7 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   const generateNotes = (scale, baseNote, length) => {
-    console.log('🎶 Generating notes with scale:', scale, 'baseNote:', baseNote, 'length:', length)
+    //console.log('🎶 Generating notes with scale:', scale, 'baseNote:', baseNote, 'length:', length)
 
     const notes = Array.from({ length }, () => {
       const scaleIndex = Math.floor(Math.random() * scale.length)
@@ -263,7 +263,7 @@ export const useLoopManager = (notesMatrix = null) => {
     // Inicializar la matriz de notas centralizada
     if (notesMatrix) {
       notesMatrix.initializeMatrix()
-      console.log('🔄 LOOP MANAGER: Central notes matrix initialized');
+      //console.log('🔄 LOOP MANAGER: Central notes matrix initialized');
     }
 
     const scale = useScales().getScale(currentScale)
@@ -274,7 +274,7 @@ export const useLoopManager = (notesMatrix = null) => {
       const adaptiveVolume = getAdaptiveVolume ? getAdaptiveVolume(i) : 0.5
       const adaptiveDensity = getAdaptiveDensity ? getAdaptiveDensity() : null
 
-      console.log(`🔄 LOOP MANAGER: Creating loop ${i}, adaptiveVolume: ${adaptiveVolume}, adaptiveDensity: ${adaptiveDensity}`);
+      //console.log(`🔄 LOOP MANAGER: Creating loop ${i}, adaptiveVolume: ${adaptiveVolume}, adaptiveDensity: ${adaptiveDensity}`);
 
       if (audioEngine && audioEngine.audioInitialized) {
         loops.value.push(createLoop(i, scale, audioEngine, adaptiveVolume, adaptiveDensity))
@@ -282,10 +282,10 @@ export const useLoopManager = (notesMatrix = null) => {
         loops.value.push(createBasicLoop(i, scale, adaptiveVolume, adaptiveDensity))
       }
 
-      console.log(`🔄 LOOP MANAGER: Loop ${i} created successfully`);
+      // console.log(`🔄 LOOP MANAGER: Loop ${i} created successfully`);
     }
 
-    console.log('🔄 LOOP MANAGER: All loops initialized, total:', loops.value.length);
+    //console.log('🔄 LOOP MANAGER: All loops initialized, total:', loops.value.length);
   }
 
   // Actualizar loops existentes con objetos de audio
@@ -403,7 +403,7 @@ export const useLoopManager = (notesMatrix = null) => {
 
     if (!currentBaseNoteInScale) {
       loop.baseNote = generateScaleBaseNote(scale)
-      console.log(`🎼 Updated baseNote to ${loop.baseNote} for scale compatibility`)
+      //console.log(`🎼 Updated baseNote to ${loop.baseNote} for scale compatibility`)
     }
 
     // Usar la función de cuantización de la matriz centralizada
@@ -432,7 +432,7 @@ export const useLoopManager = (notesMatrix = null) => {
 
       if (!currentBaseNoteInScale) {
         loop.baseNote = generateScaleBaseNote(scale)
-        console.log(`🎼 Updated loop ${loop.id} baseNote to ${loop.baseNote} for scale compatibility`)
+        //console.log(`🎼 Updated loop ${loop.id} baseNote to ${loop.baseNote} for scale compatibility`)
       }
 
       loop.scale = scale
@@ -474,7 +474,7 @@ export const useLoopManager = (notesMatrix = null) => {
 
       if (!currentBaseNoteInScale) {
         loop.baseNote = generateScaleBaseNote(currentScale)
-        console.log(`🎼 Regenerated baseNote to ${loop.baseNote} to ensure it's in scale`)
+        //console.log(`🎼 Regenerated baseNote to ${loop.baseNote} to ensure it's in scale`)
 
         // Actualizar metadatos en la matriz
         notesMatrix.updateLoopMetadata(id, { baseNote: loop.baseNote })

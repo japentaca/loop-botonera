@@ -275,4 +275,116 @@
       grid-template-columns: repeat(2, 1fr);
     }
   }
+
+  /* Mobile Responsive Styles */
+  @media (max-width: 768px) {
+    .synth-editor {
+      width: 95vw;
+      max-width: 100%;
+      padding: 15px;
+      margin: 10px;
+    }
+    
+    .synth-header {
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+    }
+    
+    .synth-header h2 {
+      font-size: 1.1rem;
+      text-align: center;
+    }
+    
+    .synth-controls {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+    
+    .synth-controls button {
+      flex: 1;
+      min-width: 100px;
+      min-height: 44px;
+    }
+    
+    .synth-section {
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    
+    .synth-section h3 {
+      font-size: 1rem;
+      margin-bottom: 12px;
+    }
+    
+    .oscillator-buttons {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .oscillator-buttons button {
+      flex: 1;
+      min-width: 80px;
+      min-height: 44px;
+    }
+    
+    .envelope-controls,
+    .modulation-controls {
+      gap: 12px;
+    }
+    
+    .control-item {
+      padding: 10px;
+    }
+    
+    .control-item label {
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+    }
+    
+    .value-display {
+      font-size: 0.85rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .synth-editor {
+      padding: 12px;
+    }
+    
+    .synth-section {
+      padding: 10px;
+    }
+    
+    .synth-section h3 {
+      font-size: 0.95rem;
+    }
+    
+    .control-item label {
+      font-size: 0.8rem;
+    }
+    
+    .value-display {
+      font-size: 0.8rem;
+    }
+    
+    .oscillator-buttons button {
+      min-width: 70px;
+      font-size: 0.85rem;
+    }
+  }
+
+  /* Touch device optimizations */
+  @media (hover: none) and (pointer: coarse) {
+    button,
+    .oscillator-buttons button {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    input[type="range"] {
+      height: 32px;
+    }
+  }
 </style>

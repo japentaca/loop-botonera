@@ -608,4 +608,103 @@ watch(() => [
 .dialog-content::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #7b2ff7, #00d9ff);
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .dialog-body {
+    padding: 12px;
+  }
+  
+  .config-section {
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+  
+  .config-section h4 {
+    font-size: 1rem;
+    margin-bottom: 12px;
+  }
+  
+  .styles-grid,
+  .controls-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .control-group {
+    padding: 12px;
+  }
+  
+  .control-label {
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+  }
+  
+  .slider-container {
+    gap: 8px;
+  }
+  
+  .value-display {
+    min-width: 40px;
+    font-size: 0.9rem;
+  }
+  
+  .control-description {
+    font-size: 0.75rem;
+  }
+  
+  .field-label {
+    font-size: 0.9rem;
+  }
+  
+  .checkbox-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .checkbox-label {
+    font-size: 0.9rem;
+  }
+  
+  /* Make MultiSelect touch-friendly */
+  .w-full {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .config-section {
+    padding: 10px;
+  }
+  
+  .config-section h4 {
+    font-size: 0.95rem;
+  }
+  
+  .control-label {
+    font-size: 0.85rem;
+  }
+  
+  .value-display {
+    font-size: 0.85rem;
+  }
+  
+  .control-description {
+    font-size: 0.7rem;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .range-slider {
+    height: 32px;
+  }
+  
+  .checkbox-container label {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
 </style>

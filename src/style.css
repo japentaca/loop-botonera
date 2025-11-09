@@ -875,6 +875,30 @@ input[type="range"]::-moz-range-thumb,
   box-shadow: 0 2px 6px rgba(156, 136, 255, 0.3);
 }
 
+/* Estilos para el grupo de control de presets */
+.preset-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+}
+
+/* Estilos para la etiqueta del nombre del preset actual */
+.preset-name-label {
+  font-size: 11px;
+  color: #9c88ff;
+  font-weight: 500;
+  padding: 4px 8px;
+  background: rgba(156, 136, 255, 0.15);
+  border-radius: 4px;
+  border: 1px solid rgba(156, 136, 255, 0.3);
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.3px;
+}
+
 .status-value {
   font-size: 0.9rem;
   font-weight: 500;
@@ -885,7 +909,7 @@ input[type="range"]::-moz-range-thumb,
   .evolution-status {
     flex-direction: column;
   }
-  
+
   .status-indicator {
     min-width: auto;
     width: 100%;
@@ -953,7 +977,8 @@ input[type="range"]::-moz-range-thumb,
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: #1a1a2e; /* Fondo sólido, sin transparencia */
+  background: #1a1a2e;
+  /* Fondo sólido, sin transparencia */
   /* Quitar desenfoque para que sea totalmente opaco */
   display: flex;
   align-items: center;
@@ -1118,8 +1143,13 @@ input[type="range"]::-moz-range-thumb,
 }
 
 @keyframes fadeIn {
-  from { transform: scale(0.95); }
-  to { transform: scale(1); }
+  from {
+    transform: scale(0.95);
+  }
+
+  to {
+    transform: scale(1);
+  }
 }
 
 /* Estilos para controles de las tarjetas de loops */
@@ -1563,4 +1593,403 @@ input[type="range"]::-moz-range-thumb,
   border-color: rgba(0, 217, 255, 0.8) !important;
   font-weight: 600 !important;
   box-shadow: 0 4px 16px rgba(0, 217, 255, 0.4) !important;
+}
+
+/* ========================================
+   MOBILE RESPONSIVE STYLES
+   ======================================== */
+
+/* Mobile devices (up to 768px) */
+@media (max-width: 768px) {
+
+  /* General body adjustments */
+  body {
+    padding: 10px;
+    font-size: 14px;
+  }
+
+  .container {
+    max-width: 100%;
+    padding: 0 5px;
+  }
+
+  /* Header responsive */
+  .header-compact {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .header-row-main {
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .header-row-secondary {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .title-compact {
+    font-size: 16px;
+    text-align: center;
+    width: 100%;
+  }
+
+  .main-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .music-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .evolution-controls-compact {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  /* Make buttons touch-friendly */
+  .play-button-compact,
+  .regen-button-compact,
+  .sparse-button,
+  .preset-button-compact,
+  .evolve-button-compact,
+  .style-config-button-compact {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+  }
+
+  /* Control groups stack vertically */
+  .control-group-compact {
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 140px;
+  }
+
+  .control-label-compact {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+
+  .range-compact,
+  .select-compact {
+    width: 100%;
+    min-width: 100px !important;
+  }
+
+  .value-compact {
+    font-size: 12px;
+  }
+
+  /* Pulse visualizer - make smaller */
+  .pulse-viz-compact {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 8px;
+    width: 100%;
+  }
+
+  .pulse-dot-compact {
+    width: 8px;
+    height: 8px;
+  }
+
+  /* Preset controls */
+  .preset-control-group {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 5px;
+  }
+
+  .preset-name-label {
+    text-align: center;
+    font-size: 11px;
+  }
+
+  /* Loop grid - single column on mobile */
+  .loop-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+    margin-top: 15px;
+  }
+
+  /* Loop card adjustments */
+  .loop-card {
+    padding: 15px;
+  }
+
+  .loop-main {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .loop-button {
+    width: 100%;
+    max-width: 120px;
+    height: 80px;
+    font-size: 16px;
+    align-self: center;
+  }
+
+  .loop-controls {
+    width: 100%;
+  }
+
+  .mini-control {
+    margin-bottom: 10px;
+  }
+
+  .mini-label {
+    font-size: 11px;
+  }
+
+  .mini-slider {
+    width: 100%;
+  }
+
+  .mini-value {
+    font-size: 12px;
+  }
+
+  .loop-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .edit-button {
+    width: 100%;
+    min-height: 44px !important;
+    font-size: 13px !important;
+  }
+
+  /* Synth Editor responsive */
+  .synth-editor-overlay {
+    padding: 10px;
+  }
+
+  .synth-editor {
+    width: 95%;
+    max-width: 100%;
+    max-height: 90vh;
+    padding: 15px;
+  }
+
+  .synth-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .synth-header h2 {
+    font-size: 18px;
+    text-align: center;
+  }
+
+  .synth-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .synth-section {
+    padding: 12px;
+  }
+
+  .synth-section h3 {
+    font-size: 14px;
+  }
+
+  /* Dialog adjustments */
+  .dialog-overlay {
+    padding: 10px;
+  }
+
+  .dialog-content {
+    width: 95%;
+    max-width: 100%;
+    max-height: 85vh;
+    padding: 15px;
+  }
+
+  .dialog-header h2 {
+    font-size: 18px;
+  }
+
+  /* Preset manager */
+  .preset-list {
+    grid-template-columns: 1fr;
+  }
+
+  /* Style config dialog */
+  .style-sliders {
+    grid-template-columns: 1fr;
+  }
+
+  /* Audio start overlay */
+  .audio-start-card {
+    padding: 2rem 1.5rem;
+    margin: 10px;
+  }
+
+  .audio-start-card h2 {
+    font-size: 1.5rem;
+  }
+
+  .audio-start-card p {
+    font-size: 1rem;
+  }
+
+  .start-audio-button {
+    font-size: 1.1rem;
+    padding: 0.8rem 1.5rem;
+    min-width: 180px;
+  }
+
+  /* Evolve progress compact */
+  .evolve-progress-compact {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .progress-bar-compact {
+    flex: 1;
+    min-width: 100px;
+  }
+}
+
+/* Small mobile devices (up to 480px) */
+@media (max-width: 480px) {
+  body {
+    padding: 5px;
+    font-size: 13px;
+  }
+
+  .title-compact {
+    font-size: 14px;
+  }
+
+  .header-compact {
+    padding: 8px;
+  }
+
+  .main-controls,
+  .music-controls,
+  .evolution-controls-compact {
+    gap: 6px;
+  }
+
+  .control-group-compact {
+    min-width: 120px;
+  }
+
+  .loop-grid {
+    gap: 10px;
+  }
+
+  .loop-card {
+    padding: 12px;
+  }
+
+  .loop-button {
+    max-width: 100px;
+    height: 70px;
+    font-size: 14px;
+  }
+
+  .mini-label {
+    font-size: 10px;
+  }
+
+  .mini-value {
+    font-size: 11px;
+  }
+
+  .audio-start-card {
+    padding: 1.5rem 1rem;
+  }
+
+  .audio-start-card h2 {
+    font-size: 1.3rem;
+  }
+
+  .start-audio-button {
+    font-size: 1rem;
+    padding: 0.7rem 1.2rem;
+    min-width: 160px;
+  }
+
+  /* Stack dropdowns and selectors */
+  .select-compact {
+    min-width: 100% !important;
+  }
+}
+
+/* Landscape orientation optimization */
+@media (max-width: 768px) and (orientation: landscape) {
+  .audio-start-card {
+    max-width: 500px;
+    padding: 1.5rem;
+  }
+
+  .loop-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 12px;
+  }
+
+  .header-row-main,
+  .header-row-secondary {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+
+  /* Increase touch targets */
+  button,
+  .loop-button,
+  .edit-button,
+  input[type="range"],
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Remove hover effects on touch devices */
+  .loop-card:hover {
+    border-color: inherit;
+    box-shadow: inherit;
+  }
+
+  .loop-button:hover {
+    border-color: rgba(0, 217, 255, 0.5);
+  }
+
+  /* Make sliders easier to use on touch */
+  input[type="range"] {
+    height: 32px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+  }
 }
