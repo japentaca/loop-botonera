@@ -1,21 +1,24 @@
 <template>
   <div :class="['loop-card', { active: loop.isActive }]">
     <div class="loop-main">
-      <Button @click="audioStore.toggleLoop(loop.id)" :class="['loop-button', { active: loop.isActive }]"
-        :icon="loop.isActive ? 'pi pi-pause' : 'pi pi-play'" :label="`L${loop.id + 1}`" size="large" text
-        :disabled="!audioStore.audioInitialized">
-        <template #default>
-          <i :class="loop.isActive ? 'pi pi-pause' : 'pi pi-play'" class="loop-icon"></i>
-          <span class="loop-label">L{{ loop.id + 1 }}</span>
-        </template>
-      </Button>
+      <div class="loop-button-area">
+        <Button @click="audioStore.toggleLoop(loop.id)" :class="['loop-button', { active: loop.isActive }]"
+          :icon="loop.isActive ? 'pi pi-pause' : 'pi pi-play'" :label="`L${loop.id + 1}`" size="large" text
+          :disabled="!audioStore.audioInitialized">
+          <template #default>
+            <i :class="loop.isActive ? 'pi pi-pause' : 'pi pi-play'" class="loop-icon"></i>
+            <span class="loop-label">L{{ loop.id + 1 }}</span>
+          </template>
+        </Button>
 
-      <div v-if="loop.isActive" class="beat-display">
-        <span class="beat-current">{{ paddedBeatsRemaining }}</span>
-        <span class="beat-remaining">left</span>
-      </div>
-      <div class="beat-indicator">
-        <ProgressBar :value="beatProgress" class="beat-progress" :showValue="false" />
+        <div class="beat-indicator">
+          <ProgressBar :value="beatProgress" class="beat-progress" :showValue="false" />
+        </div>
+
+        <div v-if="loop.isActive" class="beat-display">
+          <span class="beat-current">{{ paddedBeatsRemaining }}</span>
+          <span class="beat-remaining">left</span>
+        </div>
       </div>
 
       <div class="loop-controls">
@@ -147,6 +150,14 @@
   .loop-button:not(.active) {
     background: var(--primary-color) !important;
     color: white !important;
+  }
+
+  /* Container for button and beat display */
+  .loop-button-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   /* Estilos para el contenido del botón del loop */
