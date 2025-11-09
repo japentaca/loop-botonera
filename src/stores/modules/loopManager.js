@@ -194,6 +194,7 @@ export const useLoopManager = (notesMatrix = null) => {
       synthType,
       // notes: removido - ahora se usa la matriz centralizada
       length,
+      currentStep: 0, // Track current beat position
       // Objetos de audio (se asignarán después)
       synth: null,
       panner: null,
@@ -530,6 +531,9 @@ export const useLoopManager = (notesMatrix = null) => {
 
   // Reproducir nota de un loop específico
   const playLoopNote = (loop, audioEngine, step, time) => {
+    // Update current step for this loop
+    loop.currentStep = step
+    
     const midiNote = notesMatrix.getNote(loop.id, step)
     if (midiNote === null || midiNote === undefined) return
     const synthModel = loop.synthModel || 'PolySynth'

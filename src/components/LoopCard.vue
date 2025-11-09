@@ -7,11 +7,16 @@
         <template #default>
           <i :class="loop.isActive ? 'pi pi-pause' : 'pi pi-play'" class="loop-icon"></i>
           <span class="loop-label">L{{ loop.id + 1 }}</span>
-          <div class="beat-indicator">
-            <ProgressBar :value="beatProgress" class="beat-progress" :showValue="false" />
-          </div>
         </template>
       </Button>
+      
+      <div v-if="loop.isActive" class="beat-display">
+        <span class="beat-current">{{ paddedBeatsRemaining }}</span>
+        <span class="beat-remaining">left</span>
+      </div>
+      <div class="beat-indicator">
+        <ProgressBar :value="beatProgress" class="beat-progress" :showValue="false" />
+      </div>
 
       <div class="loop-controls">
         <div class="mini-control">
@@ -111,11 +116,28 @@
     return `${direction}${value}`
   }
 
-  // Progreso del beat (simulado por ahora)
+  // Current beat being played (1-indexed for display)
+  const currentBeat = computed(() => {
+    return props.loop.isActive ? (props.loop.currentStep || 0) + 1 : 0
+  })
+
+  // Beats remaining in the loop
+  const beatsRemaining = computed(() => {
+    if (!props.loop.isActive) return 0
+    const remaining = props.loop.length - (props.loop.currentStep || 0) - 1
+    return Math.max(0, remaining)
+  })
+
+  // Padded beats remaining (with leading zeros)
+  const paddedBeatsRemaining = computed(() => {
+    return String(beatsRemaining.value).padStart(3, '0')
+  })
+
+  // Progreso del beat como porcentaje
   const beatProgress = computed(() => {
-    // Aquí se podría implementar la lógica real del progreso del beat
-    // Por ahora retornamos un valor fijo
-    return props.loop.isActive ? 50 : 0
+    if (!props.loop.isActive) return 0
+    const step = props.loop.currentStep || 0
+    return (step / props.loop.length) * 100
   })
 </script>
 
@@ -143,6 +165,41 @@
   .loop-label {
     font-weight: bold;
     font-size: 0.9rem;
+  }
+
+  .beat-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    margin: 0.5rem 0 0.25rem 0;
+    padding: 0.35rem 0.75rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.95);
+  }
+
+  .beat-current {
+    font-weight: bold;
+    font-size: 1rem;
+    color: #00ff88;
+  }
+
+  .beat-separator {
+    opacity: 0.6;
+    margin: 0 0.15rem;
+  }
+
+  .beat-total {
+    opacity: 0.85;
+    font-weight: 500;
+  }
+
+  .beat-remaining {
+    margin-left: 0.35rem;
+    opacity: 0.65;
+    font-size: 0.75rem;
   }
 
   /* Ajustar el indicador de beat */

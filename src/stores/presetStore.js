@@ -283,9 +283,11 @@ export const usePresetStore = defineStore('preset', () => {
       })
     }
 
-    // Restaurar auto-guardado
-    autoSaveEnabled.value = wasAutoSaveEnabled
+    // Restaurar auto-guardado después de que todos los watchers hayan procesado los cambios
     isLoadingPreset.value = false
+    // Esperar a que se completen los watchers antes de reactivar autosave
+    await nextTick()
+    autoSaveEnabled.value = wasAutoSaveEnabled
   }
 
   // Crear nuevo preset
@@ -471,15 +473,10 @@ export const usePresetStore = defineStore('preset', () => {
     }
 
     // Si estamos en modo batch, solo marcar que hay cambios pendientes
+    // El modo batch se usa durante las evoluciones automáticas para evitar múltiples guardados
     if (isBatchMode.value) {
       pendingSaveAfterBatch = true
       hasUnsavedChanges.value = true
-      return
-    }
-
-    // No guardar automáticamente si la evolución automática está activa
-    const audioStore = useAudioStore()
-    if (audioStore.autoEvolve) {
       return
     }
 
@@ -487,7 +484,7 @@ export const usePresetStore = defineStore('preset', () => {
     if (currentPresetId.value) {
       hasUnsavedChanges.value = true
 
-      // Debounce auto-save to prevent excessive preset loading
+      // Debounce auto-save to prevent excessive saves
       clearTimeout(autoSaveTimer)
       autoSaveTimer = setTimeout(async () => {
         try {
@@ -524,6 +521,9 @@ export const usePresetStore = defineStore('preset', () => {
           console.warn('Auto-save after batch failed:', error.message)
         }
       }, AUTO_SAVE_DELAY)
+    } else {
+      // Siempre limpiar el flag pendiente, incluso si no se guarda
+      pendingSaveAfterBatch = false
     }
   }
 

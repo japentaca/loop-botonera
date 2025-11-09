@@ -529,8 +529,14 @@ export const useAudioStore = defineStore('audio', () => {
       evolveIntervalId = null
     }
 
-    // Guardar preset cuando se detiene la evolución automática
-    notifyPresetChanges()
+    // Finalizar modo batch y guardar cuando se detiene la evolución automática
+    const presetStore = await getPresetStore()
+    if (presetStore && presetStore.endBatchMode) {
+      await presetStore.endBatchMode(true) // Forzar guardado al detener
+    } else {
+      // Fallback si no hay batch mode
+      notifyPresetChanges()
+    }
   }
 
   const updateEvolveInterval = (interval) => {
