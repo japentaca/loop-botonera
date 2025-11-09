@@ -32,8 +32,14 @@ export function useNotesMatrix() {
   }
 
   const resolveScaleIntervals = (candidate) => {
+    // If it's a string (scale name), resolve it to intervals
+    if (typeof candidate === 'string') {
+      return getScale(candidate || matrixState.currentScale)
+    }
+    // If it's already an array, return it (for backward compatibility)
     if (Array.isArray(candidate)) return candidate
-    return getScale(candidate || matrixState.currentScale)
+    // Default to current scale
+    return getScale(matrixState.currentScale)
   }
 
   const refreshMatrixStepCount = () => {
@@ -113,7 +119,7 @@ export function useNotesMatrix() {
     loopMetadata[loopId] = {
       isActive: false,
       length: Math.max(1, Math.min(MAX_STEPS, config.length || 16)),
-      scale: config.scale || matrixState.currentScale,
+      scale: config.scale || matrixState.currentScale, // Store scale NAME not intervals
       baseNote: config.baseNote || matrixState.globalBaseNote,
       density: typeof config.density === 'number' ? config.density : 0.4,
       octaveRange: config.octaveRange || 2,
@@ -303,6 +309,7 @@ export function useNotesMatrix() {
 
   // Cuantizar todos los loops activos
   const quantizeAllActiveLoops = (newScale) => {
+    console.log(`[quantizeAllActiveLoops] Updating global scale to: ${newScale}, active loops:`, Array.from(matrixState.activeLoops))
     matrixState.currentScale = newScale
 
     matrixState.activeLoops.forEach(loopId => {
@@ -316,12 +323,22 @@ export function useNotesMatrix() {
   const transposeLoop = (loopId, semitones) => {
     if (!loopMetadata[loopId]) return false
 
-    const length = loopMetadata[loopId].length
+    const meta = loopMetadata[loopId]
+    const scale = resolveScaleIntervals(meta.scale)
+    const baseNote = meta.baseNote
+    const length = meta.length
+
+    console.log(`[transposeLoop] Loop ${loopId}, semitones: ${semitones}, scale:`, scale, 'baseNote:', baseNote)
+
     for (let i = 0; i < length; i++) {
       const note = notesMatrix.value[loopId][i]
       if (note !== null) {
         const newNote = note + semitones
-        notesMatrix.value[loopId][i] = Math.max(24, Math.min(96, newNote))
+        const clampedNote = Math.max(24, Math.min(96, newNote))
+        // Quantize to scale after transposition
+        const quantizedNote = quantizeToScale(clampedNote, scale, baseNote)
+        console.log(`  [transposeLoop] Step ${i}: ${note} -> ${newNote} -> ${clampedNote} -> ${quantizedNote}`)
+        notesMatrix.value[loopId][i] = quantizedNote
       }
     }
 
@@ -372,6 +389,8 @@ export function useNotesMatrix() {
     const length = meta.length
     const changeCount = Math.max(1, Math.floor(length * intensity))
 
+    console.log(`[mutateLoop] Loop ${loopId}, intensity: ${intensity}, changeCount: ${changeCount}, scale:`, scale, 'baseNote:', meta.baseNote)
+
     for (let i = 0; i < changeCount; i++) {
       const randomIndex = Math.floor(Math.random() * length)
       const currentNote = notesMatrix.value[loopId][randomIndex]
@@ -381,7 +400,9 @@ export function useNotesMatrix() {
         const scaleIndex = Math.floor(Math.random() * scale.length)
         const octave = Math.floor(Math.random() * meta.octaveRange)
         const newNote = meta.baseNote + scale[scaleIndex] + (octave * 12)
-        notesMatrix.value[loopId][randomIndex] = Math.max(24, Math.min(96, newNote))
+        const clampedNote = Math.max(24, Math.min(96, newNote))
+        console.log(`  [mutateLoop] Step ${randomIndex}: ${currentNote} -> ${newNote} (scale[${scaleIndex}]=${scale[scaleIndex]}, octave=${octave}) -> ${clampedNote}`)
+        notesMatrix.value[loopId][randomIndex] = clampedNote
       }
     }
 

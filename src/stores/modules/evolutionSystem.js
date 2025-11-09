@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { useAudioStore } from '../audioStore'
+import { useNoteUtils, useScales } from '../../composables/useMusic'
 
 /**
  * Sistema de evolución automática que modifica loops de forma inteligente
@@ -41,9 +42,18 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       return globalScaleIntervals
     }
 
-    // Fallback to metadata if available
-    if (Array.isArray(notesMatrix?.loopMetadata?.[loop?.id]?.scale)) {
-      return notesMatrix.loopMetadata[loop.id].scale
+    // Fallback to metadata if available - resolve if it's a scale name
+    const metaScale = notesMatrix?.loopMetadata?.[loop?.id]?.scale
+    if (metaScale) {
+      if (typeof metaScale === 'string') {
+        // It's a scale name, resolve it
+        const { getScale } = useScales()
+        return getScale(metaScale)
+      }
+      if (Array.isArray(metaScale)) {
+        // It's already intervals (backward compatibility)
+        return metaScale
+      }
     }
 
     return fallbackScale
@@ -79,16 +89,21 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const changeCount = Math.max(1, Math.floor(loopNotes.length * intensity * 0.5))
     let mutated = false
 
+    console.log(`[mutateLoopRhythm] Loop ${loop.id}, changeCount: ${changeCount}, scale:`, globalScaleIntervals)
+
     for (let i = 0; i < changeCount; i++) {
       const stepIndex = Math.floor(Math.random() * loopNotes.length)
       const currentNote = loopNotes[stepIndex]
 
       if (currentNote === null) {
         if (Math.random() < mutationProbabilities.value.addNote) {
-          notesMatrix.setLoopNote(loop.id, stepIndex, createRandomNoteForLoop(loop, globalScaleIntervals))
+          const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
+          console.log(`  [mutateLoopRhythm] Adding note at step ${stepIndex}: ${newNote}`)
+          notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
           mutated = true
         }
       } else if (Math.random() < mutationProbabilities.value.removeNote) {
+        console.log(`  [mutateLoopRhythm] Removing note at step ${stepIndex}: ${currentNote}`)
         notesMatrix.clearLoopNote(loop.id, stepIndex)
         mutated = true
       }
@@ -121,16 +136,21 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       }
     })
 
+    console.log(`[adjustLoopDensity] Loop ${loop.id}, targetDensity: ${targetDensity}, desired: ${desiredActive}, current: ${activeIndices.length}, scale:`, globalScaleIntervals)
+
     while (activeIndices.length > desiredActive) {
       const removalIndex = Math.floor(Math.random() * activeIndices.length)
       const stepIndex = activeIndices.splice(removalIndex, 1)[0]
+      console.log(`  [adjustLoopDensity] Removing note at step ${stepIndex}`)
       notesMatrix.clearLoopNote(loop.id, stepIndex)
     }
 
     while (activeIndices.length < desiredActive && inactiveIndices.length > 0) {
       const additionIndex = Math.floor(Math.random() * inactiveIndices.length)
       const stepIndex = inactiveIndices.splice(additionIndex, 1)[0]
-      notesMatrix.setLoopNote(loop.id, stepIndex, createRandomNoteForLoop(loop, globalScaleIntervals))
+      const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
+      console.log(`  [adjustLoopDensity] Adding note at step ${stepIndex}: ${newNote}`)
+      notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
       activeIndices.push(stepIndex)
     }
 
@@ -152,6 +172,8 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const newNotes = [...currentNotes]
     const changeCount = Math.floor(newNotes.length * intensity * 0.4)
 
+    console.log(`[evolveNotes] Evolving ${changeCount} notes, intensity: ${intensity}, scale:`, scaleIntervals)
+
     for (let i = 0; i < changeCount; i++) {
       const randomIndex = Math.floor(Math.random() * newNotes.length)
       const currentNote = newNotes[randomIndex]
@@ -159,30 +181,40 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       if (currentNote === null) continue // Skip silent notes
 
       if (Math.random() < mutationProbabilities.value.changeNote) {
-        // Convert current MIDI note to scale degree
-        const baseNote = Math.floor(currentNote / 12) * 12 // Get octave base
-        const interval = currentNote - baseNote
+        // Get the base note from the first octave of the current note
+        const noteInFirstOctave = currentNote % 12
+        const octave = Math.floor(currentNote / 12)
 
-        // Find current scale degree
-        const currentDegree = scaleIntervals.indexOf(interval)
+        // Find current position in scale
+        let closestIntervalIndex = 0
+        let minDistance = Math.abs(noteInFirstOctave - scaleIntervals[0])
 
-        if (currentDegree !== -1) {
-          // Move to adjacent scale degree
-          const direction = Math.random() < 0.5 ? -1 : 1
-          const steps = Math.floor(Math.random() * 2) + 1 // 1-2 steps
-          const newDegree = Math.max(0, Math.min(scaleIntervals.length - 1, currentDegree + (direction * steps)))
-          const newInterval = scaleIntervals[newDegree]
-          newNotes[randomIndex] = baseNote + newInterval
-        } else {
-          // If note not in scale, replace with random scale note in same octave
-          const randomDegree = Math.floor(Math.random() * scaleIntervals.length)
-          const newInterval = scaleIntervals[randomDegree]
-          newNotes[randomIndex] = baseNote + newInterval
-        }
+        scaleIntervals.forEach((interval, idx) => {
+          const distance = Math.abs(noteInFirstOctave - interval)
+          if (distance < minDistance) {
+            minDistance = distance
+            closestIntervalIndex = idx
+          }
+        })
+
+        // Move to adjacent scale degree
+        const direction = Math.random() < 0.5 ? -1 : 1
+        const steps = Math.floor(Math.random() * 2) + 1 // 1-2 steps
+        let newDegree = closestIntervalIndex + (direction * steps)
+
+        // Wrap around the scale if needed
+        while (newDegree < 0) newDegree += scaleIntervals.length
+        while (newDegree >= scaleIntervals.length) newDegree -= scaleIntervals.length
+
+        const newInterval = scaleIntervals[newDegree]
+        let newNote = (octave * 12) + newInterval
 
         // Ensure note stays in valid MIDI range
-        while (newNotes[randomIndex] < 24) newNotes[randomIndex] += 12
-        while (newNotes[randomIndex] > 96) newNotes[randomIndex] -= 12
+        while (newNote < 24) newNote += 12
+        while (newNote > 96) newNote -= 12
+
+        console.log(`  [evolveNotes] Step ${randomIndex}: ${currentNote} (octave ${octave}, interval ${noteInFirstOctave}) -> degree ${closestIntervalIndex} -> ${newDegree} (interval ${newInterval}) -> ${newNote}`)
+        newNotes[randomIndex] = newNote
       }
     }
 
@@ -370,6 +402,16 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const changeCount = Math.floor(loopNotes.length * intensity * 0.4)
     let hasChanges = false
 
+    // Get scale information - ensure we resolve scale name to intervals
+    const meta = notesMatrix.loopMetadata?.[loopId]
+    const scaleName = typeof meta?.scale === 'string' ? meta.scale : 'major'
+    const baseNote = meta?.baseNote || 60
+    const { getScale } = useScales()
+    const scaleIntervals = getScale(scaleName)
+    const { quantizeToScale } = useNoteUtils()
+
+    console.log(`[evolveMatrixLoop] Loop ${loopId}, changeCount: ${changeCount}, scaleName: ${scaleName}, scaleIntervals:`, scaleIntervals, 'baseNote:', baseNote)
+
     for (let i = 0; i < changeCount; i++) {
       const randomStep = Math.floor(Math.random() * loopNotes.length)
 
@@ -377,18 +419,28 @@ export const useEvolutionSystem = (notesMatrix = null) => {
         const currentNote = loopNotes[randomStep]
 
         if (currentNote !== null) {
-          // Transponer la nota existente
+          // Transponer la nota existente respetando la escala
           const transposition = Math.floor(Math.random() * 7) - 3 // -3 a +3 semitonos
-          const newNote = Math.max(21, Math.min(108, currentNote + transposition))
-          notesMatrix.setLoopNote(loopId, randomStep, newNote)
+          const transposedNote = Math.max(21, Math.min(108, currentNote + transposition))
+          // Quantize to scale
+          const quantizedNote = quantizeToScale(transposedNote, scaleIntervals, baseNote)
+          console.log(`  [evolveMatrixLoop] Step ${randomStep}: ${currentNote} + ${transposition} -> ${transposedNote} -> quantized: ${quantizedNote}`)
+          notesMatrix.setLoopNote(loopId, randomStep, quantizedNote)
           hasChanges = true
         } else if (Math.random() < mutationProbabilities.value.addNote) {
-          // Agregar una nueva nota
-          const randomNote = Math.floor(Math.random() * 88) + 21 // C1 a C8
-          notesMatrix.setLoopNote(loopId, randomStep, randomNote)
+          // Agregar una nueva nota dentro de la escala
+          const scaleIndex = Math.floor(Math.random() * scaleIntervals.length)
+          const octave = Math.floor(Math.random() * 3) // 0-2 octavas adicionales
+          let newNote = baseNote + scaleIntervals[scaleIndex] + (octave * 12)
+          // Clamp to valid MIDI range
+          while (newNote < 24) newNote += 12
+          while (newNote > 96) newNote -= 12
+          console.log(`  [evolveMatrixLoop] Adding note at step ${randomStep}: scale[${scaleIndex}]=${scaleIntervals[scaleIndex]}, octave=${octave} -> ${newNote}`)
+          notesMatrix.setLoopNote(loopId, randomStep, newNote)
           hasChanges = true
         }
       } else if (Math.random() < mutationProbabilities.value.removeNote && loopNotes[randomStep] !== null) {
+        console.log(`  [evolveMatrixLoop] Removing note at step ${randomStep}: ${loopNotes[randomStep]}`)
         notesMatrix.clearLoopNote(loopId, randomStep)
         hasChanges = true
       }

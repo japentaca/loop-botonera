@@ -169,7 +169,7 @@ export const useLoopManager = (notesMatrix = null) => {
     if (notesMatrix) {
       notesMatrix.initializeLoop(id, {
         length,
-        scale: scale,
+        scale: 'major', // Store scale NAME, not intervals - will be updated by global scale changes
         baseNote,
         density: adaptiveDensity || 0.4,
         octaveRange: 2
@@ -177,7 +177,7 @@ export const useLoopManager = (notesMatrix = null) => {
 
       // Generar notas en la matriz centralizada
       notesMatrix.generateLoopNotes(id, {
-        scale: scale,
+        scale: 'major', // This will be resolved to intervals by the function
         baseNote,
         length,
         density: adaptiveDensity || 0.4,
