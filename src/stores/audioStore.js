@@ -666,6 +666,7 @@ export const useAudioStore = defineStore('audio', () => {
     isPlaying: audioEngine.isPlaying,
     currentPulse: audioEngine.currentPulse,
     currentBeat: audioEngine.currentBeat,
+    beatFlash: audioEngine.beatFlash,
     tempo: audioEngine.tempo,
     masterVol: audioEngine.masterVol,
     masterVolume: audioEngine.masterVolume,

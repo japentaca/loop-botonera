@@ -17,7 +17,7 @@
 
         <div v-if="loop.isActive" class="beat-display">
           <span class="beat-current">{{ paddedBeatsRemaining }}</span>
-          <span class="beat-remaining">left</span>
+          <span class="beat-remaining">♩</span>
         </div>
       </div>
 
@@ -124,13 +124,13 @@
   // we throttle updates to actual frame rendering
   let animationFrameId = null
   const currentStep = ref(0)
-  const paddedBeatsRemaining = ref('000')
+  const paddedBeatsRemaining = ref('0')
   const beatProgress = ref(0)
 
   const updateBeatIndicators = () => {
     if (!props.loop.isActive) {
       currentStep.value = 0
-      paddedBeatsRemaining.value = '000'
+      paddedBeatsRemaining.value = '0'
       beatProgress.value = 0
       return
     }
@@ -138,8 +138,10 @@
     const step = (audioStore.currentPulse - 1) % props.loop.length
     currentStep.value = step
 
-    const remaining = props.loop.length - step - 1
-    paddedBeatsRemaining.value = String(Math.max(0, remaining)).padStart(3, '0')
+    const remainingPulses = props.loop.length - step - 1
+    // Convert pulses to quarters (4 pulses = 1 quarter note)
+    const remainingQuarters = Math.ceil(remainingPulses / 4)
+    paddedBeatsRemaining.value = String(remainingQuarters)
 
     beatProgress.value = (step / props.loop.length) * 100
   }

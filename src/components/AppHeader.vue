@@ -43,8 +43,7 @@
 
       <!-- Visualizador de pulsos integrado -->
       <div class="pulse-viz-compact">
-        <div v-for="i in 16" :key="i" :class="['pulse-dot-compact', { active: audioStore.currentBeat === i - 1 }]">
-        </div>
+        <div :class="['pulse-light', { flash: audioStore.beatFlash }]"></div>
       </div>
     </div>
 

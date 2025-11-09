@@ -15,6 +15,7 @@ export const useAudioEngine = () => {
   let _internalPulse = 0
   const currentPulse = ref(0)
   const currentBeat = computed(() => currentPulse.value % 16)
+  const beatFlash = ref(false) // Simple toggle for tempo indicator
 
   const tempo = ref(120)
   const masterVol = ref(0.7)
@@ -88,10 +89,10 @@ export const useAudioEngine = () => {
     Tone.Transport.scheduleRepeat((time) => {
       _internalPulse = _internalPulse + 1
 
-      // OPTIMIZATION: Only update reactive ref every 4 steps (quarter note)
-      // This reduces Vue reactivity updates by 75%
+      // Update reactive ref every 4 pulses (quarter note / beat) for tempo indicator
       if (_internalPulse % 4 === 0) {
         currentPulse.value = _internalPulse
+        beatFlash.value = !beatFlash.value // Toggle flash on each beat
       }
 
       callback(time, _internalPulse)
@@ -246,6 +247,7 @@ export const useAudioEngine = () => {
     isPlaying,
     currentPulse,
     currentBeat,
+    beatFlash,
     tempo,
     masterVol,
     masterVolume,
