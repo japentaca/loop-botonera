@@ -1,0 +1,3 @@
+- don´t start development server, it uses HRM
+- don't run eslint or else, just check if  changes are ok
+- don't run deffensive code, I prefer an error and try to fix the root cause.

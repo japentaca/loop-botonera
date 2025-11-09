@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
-import { useScales, useNoteUtils, useMusic } from '../composables/useMusic'
+import { useScales, useMusic } from '../composables/useMusic'
 import { useNotesMatrix } from '../composables/useNotesMatrix'
 
 // Importar los nuevos módulos especializados
@@ -49,20 +49,6 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major')
-  const scaleNamesSpanish = ref({
-    'major': 'Mayor',
-    'minor': 'Menor',
-    'dorian': 'Dórico',
-    'phrygian': 'Frigio',
-    'lydian': 'Lidio',
-    'mixolydian': 'Mixolidio',
-    'locrian': 'Locrio',
-    'harmonicMinor': 'Menor Armónica',
-    'melodicMinor': 'Menor Melódica',
-    'pentatonic': 'Pentatónica',
-    'blues': 'Blues',
-    'chromatic': 'Cromática'
-  })
 
   // Estado de evolución automática (coordinación entre módulos)
   const autoEvolve = ref(false)
@@ -90,7 +76,6 @@ export const useAudioStore = defineStore('audio', () => {
     return scalesList
   })
 
-  const scaleNames = computed(() => Object.keys(scales.value))
   const synthTypes = computed(() => ['sine', 'square', 'sawtooth', 'triangle'])
 
   // Funciones principales que coordinan entre módulos
@@ -643,9 +628,11 @@ export const useAudioStore = defineStore('audio', () => {
 
     // Estado de escalas
     currentScale,
-    scaleNamesSpanish,
     scales,
-    scaleNames,
+    scaleNames: computed(() => {
+      const { scaleNames } = useScales()
+      return scaleNames.value
+    }),
     synthTypes,
     getScale: (scaleName) => useScales().getScale(scaleName),
 

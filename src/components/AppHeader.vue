@@ -31,9 +31,8 @@
           severity="secondary" title="Distribuir canales activos en el panorama estéreo"
           :disabled="!audioStore.audioInitialized" />
 
-        <Button @click="logNotesMatrix" class="debug-button" icon="pi pi-list" size="small"
-          severity="help" title="Log notes matrix to console"
-          :disabled="!audioStore.audioInitialized" />
+        <Button @click="logNotesMatrix" class="debug-button" icon="pi pi-list" size="small" severity="help"
+          title="Log notes matrix to console" :disabled="!audioStore.audioInitialized" />
 
         <div class="preset-control-group">
           <Button @click="openPresetDialog" class="preset-button-compact" icon="pi pi-save" label="Presets" size="small"
@@ -110,7 +109,7 @@
   const scaleOptions = scaleKeys.map(key => ({
     label: scaleNamesSpanish[key],
     value: key
-  }))
+  })).sort((a, b) => a.label.localeCompare(b.label))
 
   // Opciones para el dropdown de delay
   const delayOptions = [
