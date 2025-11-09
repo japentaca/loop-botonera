@@ -11,14 +11,24 @@ Una aplicación web interactiva para crear loops musicales con sintetizadores ba
   - Control completo de envolvente ADSR (Attack, Decay, Sustain, Release)
   - Controles específicos para FM y AM (harmonicity, modulationIndex)
 - **Efectos globales**: Delay y Reverb configurables por canal
-- **Escalas musicales**: Incluye minor, major, pentatonic, blues, dorian, phrygian
+- **Escalas musicales**: Incluye minor, major, pentatonic, blues, dorian, phrygian y más
 - **Interfaz moderna**: Diseño oscuro con efectos visuales y animaciones
 - **Preview en tiempo real**: Escucha los cambios antes de aplicarlos
+
+### 🆕 Nuevas Características
+
+- **Patrones Polirrítmicos**: Loops con diferentes longitudes que crean ritmos complejos (ratios 3:2, 3:4, 5:4, 7:4, etc.)
+- **Progresiones de Acordes**: Sistema avanzado con templates de progresiones (I-IV-V, ii-V-I, etc.) y generación de melodías conscientes de acordes
+- **Modos de Evolución por Estilo**: 7 estilos musicales predefinidos (Ambient, Jazz, Techno, Classical, Minimal, Experimental, World) que controlan el comportamiento de la evolución automática
+
+Ver [FEATURES.md](FEATURES.md) para documentación completa de las nuevas características.
 
 ## Tecnologías Utilizadas
 
 - **Tone.js**: Framework de audio web para síntesis y efectos
 - **Web Audio API**: Para procesamiento de audio de baja latencia
+- **Vue 3**: Framework reactivo para la interfaz
+- **Pinia**: Gestión de estado
 - **HTML5/CSS3**: Interfaz responsiva y moderna
 - **JavaScript ES6+**: Programación funcional y orientada a objetos
 
@@ -57,20 +67,26 @@ Sintetizador para sonidos de percusión y membranas.
 
 ## Desarrollo
 
-Para desarrollo local, puedes usar cualquier servidor web estático:
+Para desarrollo local:
 
 ```bash
-# Con Python 3
-python -m http.server 8000
+# Instalar dependencias
+npm install
 
-# Con Node.js
-npx http-server -p 8000
+# Servidor de desarrollo
+npm run dev
 
-# Con PHP
-php -S localhost:8000
+# Compilar para producción
+npm run build
+
+# Ejecutar tests
+npm run test
+
+# Tests en modo watch
+npm run test:watch
 ```
 
-Luego abre `http://localhost:8000` en tu navegador.
+Luego abre `http://localhost:5173` en tu navegador.
 
 ## Licencia
 
