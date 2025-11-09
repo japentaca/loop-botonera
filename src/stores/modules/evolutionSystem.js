@@ -37,25 +37,23 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   const fallbackScale = [0, 2, 4, 5, 7, 9, 11]
 
   const pickScaleIntervals = (loop, globalScaleIntervals) => {
-    // Use the global scale intervals passed from audioStore
+    // ALWAYS use the global scale intervals passed from audioStore
+    // This ensures all loops use the current global scale
     if (Array.isArray(globalScaleIntervals) && globalScaleIntervals.length > 0) {
       return globalScaleIntervals
     }
 
-    // Fallback to metadata if available - resolve if it's a scale name
+    // Fallback: get scale name from metadata and resolve it
     const metaScale = notesMatrix?.loopMetadata?.[loop?.id]?.scale
-    if (metaScale) {
-      if (typeof metaScale === 'string') {
-        // It's a scale name, resolve it
-        const { getScale } = useScales()
-        return getScale(metaScale)
-      }
-      if (Array.isArray(metaScale)) {
-        // It's already intervals (backward compatibility)
-        return metaScale
-      }
+    if (metaScale && typeof metaScale === 'string') {
+      const { getScale } = useScales()
+      const resolved = getScale(metaScale)
+      console.warn(`[pickScaleIntervals] Using metadata scale "${metaScale}" as fallback for loop ${loop?.id}`)
+      return resolved
     }
 
+    // Final fallback
+    console.warn(`[pickScaleIntervals] Using hardcoded fallback scale for loop ${loop?.id}`)
     return fallbackScale
   }
 
@@ -71,6 +69,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     while (note < 24) note += 12
     while (note > 96) note -= 12
 
+    console.log(`[createRandomNoteForLoop] Loop ${loop?.id}, intervals: [${intervals}], baseNote: ${baseNote}, interval: ${interval}, octave: ${octave}, note: ${note}`)
     return note
   }
 
@@ -89,7 +88,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const changeCount = Math.max(1, Math.floor(loopNotes.length * intensity * 0.5))
     let mutated = false
 
-    console.log(`[mutateLoopRhythm] Loop ${loop.id}, changeCount: ${changeCount}, scale:`, globalScaleIntervals)
+    console.log(`[mutateLoopRhythm] Loop ${loop.id}, changeCount: ${changeCount}, scale intervals: [${globalScaleIntervals}]`)
 
     for (let i = 0; i < changeCount; i++) {
       const stepIndex = Math.floor(Math.random() * loopNotes.length)
@@ -136,7 +135,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       }
     })
 
-    console.log(`[adjustLoopDensity] Loop ${loop.id}, targetDensity: ${targetDensity}, desired: ${desiredActive}, current: ${activeIndices.length}, scale:`, globalScaleIntervals)
+    console.log(`[adjustLoopDensity] Loop ${loop.id}, targetDensity: ${targetDensity}, desired: ${desiredActive}, current: ${activeIndices.length}, scale intervals: [${globalScaleIntervals}]`)
 
     while (activeIndices.length > desiredActive) {
       const removalIndex = Math.floor(Math.random() * activeIndices.length)
@@ -172,7 +171,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const newNotes = [...currentNotes]
     const changeCount = Math.floor(newNotes.length * intensity * 0.4)
 
-    console.log(`[evolveNotes] Evolving ${changeCount} notes, intensity: ${intensity}, scale:`, scaleIntervals)
+    console.log(`[evolveNotes] Evolving ${changeCount} notes, intensity: ${intensity}, scale intervals: [${scaleIntervals}]`)
 
     for (let i = 0; i < changeCount; i++) {
       const randomIndex = Math.floor(Math.random() * newNotes.length)
@@ -213,7 +212,9 @@ export const useEvolutionSystem = (notesMatrix = null) => {
         while (newNote < 24) newNote += 12
         while (newNote > 96) newNote -= 12
 
-        console.log(`  [evolveNotes] Step ${randomIndex}: ${currentNote} (octave ${octave}, interval ${noteInFirstOctave}) -> degree ${closestIntervalIndex} -> ${newDegree} (interval ${newInterval}) -> ${newNote}`)
+        if (i < 3) { // Log first 3 for brevity
+          console.log(`  [evolveNotes] Step ${randomIndex}: ${currentNote} (octave ${octave}, interval ${noteInFirstOctave}) -> degree ${closestIntervalIndex} -> ${newDegree} (interval ${newInterval}) -> ${newNote}`)
+        }
         newNotes[randomIndex] = newNote
       }
     }

@@ -107,16 +107,8 @@ export const usePresetStore = defineStore('preset', () => {
     }
 
     // Capturar configuración de loops - save "as is"
+    // Notes matrix data (including density and notes) is NOT saved - it will be regenerated on load
     const loops = audioStore.loops.map(loop => {
-      // Capturar la densidad actual de notas desde la matriz (style property)
-      let density = 0.4 // default
-      if (audioStore.notesMatrix && typeof audioStore.notesMatrix.getLoopNoteDensity === 'function') {
-        const matrixDensity = audioStore.notesMatrix.getLoopNoteDensity(loop.id)
-        if (typeof matrixDensity === 'number' && !isNaN(matrixDensity)) {
-          density = matrixDensity
-        }
-      }
-
       return {
         id: loop.id,
         isActive: loop.isActive,
@@ -132,8 +124,7 @@ export const usePresetStore = defineStore('preset', () => {
         envelope: { ...loop.envelope },
         harmonicity: loop.harmonicity,
         modulationIndex: loop.modulationIndex,
-        synthConfig: loop.synthConfig,
-        density: density  // Save density as a style property (notes will be regenerated on load)
+        synthConfig: loop.synthConfig
       }
     })
 
@@ -277,7 +268,7 @@ export const usePresetStore = defineStore('preset', () => {
       }
     }
 
-    // Generate notes for all active loops with saved density values
+    // Generate notes for all active loops - use default density since matrix notes are not saved
     if (audioStore.loopManager && Array.isArray(audioStore.loops) && Array.isArray(presetLoops)) {
       // Get global scale from audioStore
       const globalScale = audioStore.getScale(audioStore.currentScale)
@@ -286,11 +277,11 @@ export const usePresetStore = defineStore('preset', () => {
       audioStore.loops.forEach((loop, index) => {
         if (!loop || !loop.isActive) return
 
-        const presetLoop = presetLoops[index]
-        const savedDensity = presetLoop?.density ?? 0.4
+        // Use default density for all loops - notes matrix data is never saved in presets
+        const defaultDensity = 0.4
 
         // Use global scale for all loops
-        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, savedDensity, null)
+        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, defaultDensity, null)
       })
     }
 

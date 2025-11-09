@@ -251,22 +251,33 @@ export const useAudioStore = defineStore('audio', () => {
   // Actualizar escala musical
   const updateScale = (newScale) => {
     const scale = useScales().getScale(newScale)
-    if (!scale) return
+    if (!scale) {
+      console.error(`[updateScale] Invalid scale name: "${newScale}"`)
+      return
+    }
 
+    console.log(`[updateScale] Changing global scale from "${currentScale.value}" to "${newScale}", intervals: [${scale}]`)
     currentScale.value = newScale
+
+    // Update the global scale in the notes matrix
+    if (notesMatrix && notesMatrix.matrixState) {
+      notesMatrix.matrixState.currentScale = newScale
+    }
 
     if (!audioEngine.audioInitialized.value) {
       // If not initialized, just update the scale reference in the matrix
-      // No need to update loop.scale as it no longer exists
+      console.log('[updateScale] Audio not initialized, only updating scale reference')
       return
     }
 
     // Cuantizar notas existentes manteniendo patrón y baseNote
     // Pass both scale intervals and scale name to loopManager
+    console.log(`[updateScale] Quantizing ${loopManager.loops.value.length} loops to new scale`)
     loopManager.loops.value.forEach(loop => {
       loopManager.quantizeLoopNotes(loop, scale, newScale)
     })
 
+    console.log(`[updateScale] Scale update complete, all loops now using "${newScale}"`)
     notifyPresetChanges()
   }
 

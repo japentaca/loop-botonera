@@ -26,9 +26,10 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   const generateNotes = (scale, baseNote, length) => {
-    //console.log('🎶 Generating notes with scale:', scale, 'baseNote:', baseNote, 'length:', length)
+    // scale should be intervals array here
+    console.log(`[generateNotes] Generating notes, scale intervals: [${scale}], baseNote: ${baseNote}, length: ${length}`)
 
-    const notes = Array.from({ length }, () => {
+    const notes = Array.from({ length }, (_, idx) => {
       const scaleIndex = Math.floor(Math.random() * scale.length)
       const octave = Math.floor(Math.random() * 3)
       const note = baseNote + scale[scaleIndex] + (octave * 12)
@@ -44,14 +45,20 @@ export const useLoopManager = (notesMatrix = null) => {
         finalNote -= 12
       }
 
+      if (idx < 3) { // Log first 3 notes
+        console.log(`  [generateNotes] Step ${idx}: scale[${scaleIndex}]=${scale[scaleIndex]}, octave=${octave}, note=${note} -> ${finalNote}`)
+      }
+
       return finalNote
     })
-    //console.log('🎶 Final generated notes:', notes)
     return notes
   }
 
   const generateNotesInRange = (scale, baseNote, length, maxOctaves = 2) => {
-    return Array.from({ length }, () => {
+    // scale should be intervals array here
+    console.log(`[generateNotesInRange] scale intervals: [${scale}], baseNote: ${baseNote}, length: ${length}, maxOctaves: ${maxOctaves}`)
+
+    return Array.from({ length }, (_, idx) => {
       if (Math.random() < 0.3) return null // 30% silencio
 
       const scaleIndex = Math.floor(Math.random() * scale.length)
@@ -67,6 +74,10 @@ export const useLoopManager = (notesMatrix = null) => {
         finalNote -= 12
       }
 
+      if (idx < 3 && finalNote !== null) { // Log first 3 non-null notes
+        console.log(`  [generateNotesInRange] Step ${idx}: scale[${scaleIndex}]=${scale[scaleIndex]}, octave=${octave}, note=${note} -> ${finalNote}`)
+      }
+
       return finalNote
     })
   }
@@ -75,6 +86,9 @@ export const useLoopManager = (notesMatrix = null) => {
   // Aplica transformaciones simples (transposición, retrogradación, inversión) y cuantiza a la escala
   const generateResponseFromCall = (callLoop, responderLoop, scale, baseNote, options = {}) => {
     try {
+      // scale should be intervals array here
+      console.log(`[generateResponseFromCall] scale intervals: [${scale}], baseNote: ${baseNote}, strategy: ${options.strategy || 'random'}`)
+
       // Obtener notas desde la matriz centralizada
       const sourceNotes = notesMatrix ? notesMatrix.getLoopNotes(callLoop.id) : []
 
@@ -89,6 +103,8 @@ export const useLoopManager = (notesMatrix = null) => {
 
       // Delta de transposición (en semitonos) con cuantización posterior a la escala
       const transposeDelta = options.transposeDelta ?? ([2, 3, 4][Math.floor(Math.random() * 3)])
+
+      console.log(`[generateResponseFromCall] Using strategy: ${strategy}, transposeDelta: ${transposeDelta}`)
 
       const clampMidi = (n) => Math.max(24, Math.min(84, n))
 
@@ -115,7 +131,11 @@ export const useLoopManager = (notesMatrix = null) => {
             transformed = note
         }
         transformed = clampMidi(transformed)
-        return quantizeToScale(transformed, scale, baseNote)
+        const quantized = quantizeToScale(transformed, scale, baseNote)
+        if (idx < 3) { // Log first 3 transformations
+          console.log(`  [generateResponseFromCall] Step ${idx}: ${note} -> ${transformed} -> quantized: ${quantized}`)
+        }
+        return quantized
       }
 
       // Construir la secuencia transformada
@@ -153,10 +173,13 @@ export const useLoopManager = (notesMatrix = null) => {
 
   // Crear estructura básica de loop (sin objetos de audio)
   const createBasicLoop = (id, scale, adaptiveVolume = 0.5, adaptiveDensity = null) => {
+    // scale parameter is intervals array for backward compatibility, but we store NAME in metadata
     // Generar nota base que esté garantizada en la escala actual
     const baseNote = generateScaleBaseNote(scale)
     const synthType = synthTypes[Math.floor(Math.random() * synthTypes.length)]
     const length = 16
+
+    console.log(`[createBasicLoop] Loop ${id}, scale intervals: [${scale}], baseNote: ${baseNote}, density: ${adaptiveDensity || 0.4}`)
 
     const envelope = {
       attack: 0.01,
@@ -175,7 +198,7 @@ export const useLoopManager = (notesMatrix = null) => {
         octaveRange: 2
       })
 
-      // Generar notas en la matriz centralizada
+      // Generar notas en la matriz centralizada using scale NAME
       notesMatrix.generateLoopNotes(id, {
         scale: 'major', // This will be resolved to intervals by the function
         baseNote,
@@ -457,15 +480,17 @@ export const useLoopManager = (notesMatrix = null) => {
       const baseNoteInterval = loop.baseNote % 12
       const currentBaseNoteInScale = currentScale.includes(baseNoteInterval)
 
+      console.log(`[regenerateLoopNotes] Loop ${id}, scale: "${currentScaleName}", intervals: [${currentScale}], baseNote: ${loop.baseNote}, inScale: ${currentBaseNoteInScale}`)
+
       if (!currentBaseNoteInScale) {
         loop.baseNote = generateScaleBaseNote(currentScale)
-        //console.log(`🎼 Regenerated baseNote to ${loop.baseNote} to ensure it's in scale`)
+        console.log(`[regenerateLoopNotes] Updated baseNote to ${loop.baseNote} for scale compatibility`)
 
         // Actualizar metadatos en la matriz
         notesMatrix.updateLoopMetadata(id, { baseNote: loop.baseNote })
       }
 
-      // Regenerar notas en la matriz centralizada
+      // Regenerar notas en la matriz centralizada using scale NAME
       notesMatrix.generateLoopNotes(id, {
         scale: currentScaleName,
         baseNote: loop.baseNote,
@@ -484,27 +509,30 @@ export const useLoopManager = (notesMatrix = null) => {
     const loop = loops.value[id]
     if (!loop) return
 
+    console.log(`[regenerateLoop] Loop ${id}, scale: "${currentScaleName}", intervals: [${scale}]`)
+
     // Si hay cambio de escala, regenerar la nota base para que esté en la nueva escala
     if (scale) {
       const newBaseNote = generateScaleBaseNote(scale)
       loop.baseNote = newBaseNote
+      console.log(`[regenerateLoop] Generated new baseNote: ${newBaseNote}`)
     }
 
     // Regenerar notas en la matriz centralizada
     if (notesMatrix) {
-      // Actualizar metadatos si hay cambios de escala
+      // Actualizar metadatos si hay cambios de escala - use scale NAME
       if (scale && currentScaleName) {
         notesMatrix.updateLoopMetadata(id, {
-          scale: currentScaleName,
+          scale: currentScaleName, // Store NAME not intervals
           baseNote: loop.baseNote
         })
       }
 
-      // Regenerar notas en la matriz centralizada
+      // Regenerar notas en la matriz centralizada using scale NAME
       const targetDensity = adaptiveDensity ?? getLoopNoteDensity(id) ?? 0.4
 
       notesMatrix.generateLoopNotes(id, {
-        scale: currentScaleName,
+        scale: currentScaleName, // Pass scale NAME, not intervals
         baseNote: loop.baseNote,
         length: loop.length,
         density: targetDensity,
