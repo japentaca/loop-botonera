@@ -268,7 +268,7 @@ export const usePresetStore = defineStore('preset', () => {
       }
     }
 
-    // Generate notes for all active loops - use default density since matrix notes are not saved
+    // Generate notes for all active loops - calculate density from existing matrix or use default
     if (audioStore.loopManager && Array.isArray(audioStore.loops) && Array.isArray(presetLoops)) {
       // Get global scale from audioStore
       const globalScale = audioStore.getScale(audioStore.currentScale)
@@ -277,11 +277,17 @@ export const usePresetStore = defineStore('preset', () => {
       audioStore.loops.forEach((loop, index) => {
         if (!loop || !loop.isActive) return
 
-        // Use default density for all loops - notes matrix data is never saved in presets
-        const defaultDensity = 0.4
+        // Calculate density from existing notes in matrix if available, otherwise use default
+        let density = 0.4
+        if (audioStore.notesMatrix && audioStore.notesMatrix.getLoopNoteDensity) {
+          const calculatedDensity = audioStore.notesMatrix.getLoopNoteDensity(index)
+          if (calculatedDensity > 0) {
+            density = calculatedDensity
+          }
+        }
 
         // Use global scale for all loops
-        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, defaultDensity, null)
+        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, density, null)
       })
     }
 
