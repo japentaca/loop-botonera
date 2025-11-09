@@ -526,19 +526,19 @@ export const usePresetStore = defineStore('preset', () => {
         handleChange()
       }
     })
-    
+
     watch(() => audioStore.currentScale, () => {
       if (!isLoadingPreset.value && autoSaveEnabled.value) {
         handleChange()
       }
     })
-    
+
     watch(() => audioStore.autoEvolve, () => {
       if (!isLoadingPreset.value && autoSaveEnabled.value) {
         handleChange()
       }
     })
-    
+
     // Watch loop activity changes but not every parameter
     watch(() => audioStore.loops.map(l => l.isActive), () => {
       if (!isLoadingPreset.value && autoSaveEnabled.value) {
