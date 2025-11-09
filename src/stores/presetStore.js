@@ -43,36 +43,27 @@ export const usePresetStore = defineStore('preset', () => {
 
   // Cargar presets desde localStorage
   const loadPresets = async () => {
-    try {
-      isLoading.value = true
-      const loadedPresets = getAllPresets()
-      presets.value = loadedPresets
-    } catch (error) {
-      throw error
-    } finally {
-      isLoading.value = false
-    }
+    isLoading.value = true
+    const loadedPresets = getAllPresets()
+    presets.value = loadedPresets
+    isLoading.value = false
   }
 
   // Crear preset por defecto
   const createDefaultPreset = async () => {
-    try {
-      const audioStore = useAudioStore()
-      const currentState = captureCurrentState(audioStore)
+    const audioStore = useAudioStore()
+    const currentState = captureCurrentState(audioStore)
 
-      const defaultPreset = await createPresetService({
-        name: 'Preset por Defecto',
-        ...currentState
-      })
+    const defaultPreset = await createPresetService({
+      name: 'Preset por Defecto',
+      ...currentState
+    })
 
-      presets.value.push(defaultPreset)
-      currentPresetId.value = defaultPreset.id
-      hasUnsavedChanges.value = false
+    presets.value.push(defaultPreset)
+    currentPresetId.value = defaultPreset.id
+    hasUnsavedChanges.value = false
 
-      return defaultPreset
-    } catch (error) {
-      throw error
-    }
+    return defaultPreset
   }
 
   // Capturar estado actual de la aplicación
@@ -169,76 +160,72 @@ export const usePresetStore = defineStore('preset', () => {
     if (globalConfig.energyReductionFactor !== undefined) audioStore.energyReductionFactor = globalConfig.energyReductionFactor
 
     // Apply loop configuration directly "as is"
-    if (Array.isArray(presetLoops)) {
-      presetLoops.forEach((presetLoop, index) => {
-        if (index < audioStore.loops.length && presetLoop) {
-          const loop = audioStore.loops[index]
+    presetLoops.forEach((presetLoop, index) => {
+      const loop = audioStore.loops[index]
 
-          // Apply loop properties directly without validation
-          // Set active state
-          const targetActiveState = presetLoop.isActive !== undefined ? presetLoop.isActive : false
-          if (audioStore.setLoopActive) {
-            audioStore.setLoopActive(index, targetActiveState)
-          } else {
-            loop.isActive = targetActiveState
-          }
+      // Apply loop properties directly without validation
+      // Set active state
+      const targetActiveState = presetLoop.isActive !== undefined ? presetLoop.isActive : false
+      if (audioStore.setLoopActive) {
+        audioStore.setLoopActive(index, targetActiveState)
+      } else {
+        loop.isActive = targetActiveState
+      }
 
-          // Apply all properties directly
-          // scale removed - uses global scale from audioStore.currentScale
-          if (presetLoop.baseNote !== undefined) loop.baseNote = presetLoop.baseNote
-          if (presetLoop.synthType !== undefined) loop.synthModel = presetLoop.synthType
-          if (presetLoop.oscillatorType !== undefined) loop.synthType = presetLoop.oscillatorType
-          if (presetLoop.synthModel !== undefined) loop.synthModel = presetLoop.synthModel
+      // Apply all properties directly
+      // scale removed - uses global scale from audioStore.currentScale
+      if (presetLoop.baseNote !== undefined) loop.baseNote = presetLoop.baseNote
+      if (presetLoop.synthType !== undefined) loop.synthModel = presetLoop.synthType
+      if (presetLoop.oscillatorType !== undefined) loop.synthType = presetLoop.oscillatorType
+      if (presetLoop.synthModel !== undefined) loop.synthModel = presetLoop.synthModel
 
-          if (presetLoop.length !== undefined) {
-            if (loop.length !== presetLoop.length) {
-              loop.length = presetLoop.length
-              if (audioStore.updateLoopParam) {
-                audioStore.updateLoopParam(index, 'length', presetLoop.length)
-              }
-            } else {
-              loop.length = presetLoop.length
-            }
-          }
-
-          if (presetLoop.delayAmount !== undefined) loop.delayAmount = presetLoop.delayAmount
-          if (presetLoop.reverbAmount !== undefined) loop.reverbAmount = presetLoop.reverbAmount
-          if (presetLoop.volume !== undefined) loop.volume = presetLoop.volume
-          if (presetLoop.pan !== undefined) loop.pan = presetLoop.pan
-
-          // Apply envelope directly
-          if (presetLoop.envelope) {
-            loop.envelope = { ...loop.envelope, ...presetLoop.envelope }
-          }
-
-          // Apply synth parameters directly
-          if (presetLoop.harmonicity !== undefined) loop.harmonicity = presetLoop.harmonicity
-          if (presetLoop.modulationIndex !== undefined) loop.modulationIndex = presetLoop.modulationIndex
-          if (presetLoop.synthConfig) loop.synthConfig = presetLoop.synthConfig
-          // Update synth with direct config application
-          if (audioStore.updateLoopSynth) {
-            const synthConfig = {
-              type: loop.synthModel || 'PolySynth',
-              oscillator: { type: loop.synthType || 'sine' },
-              envelope: { ...loop.envelope }
-            }
-
-            if (loop.harmonicity !== undefined) synthConfig.harmonicity = loop.harmonicity
-            if (loop.modulationIndex !== undefined) synthConfig.modulationIndex = loop.modulationIndex
-
-            audioStore.updateLoopSynth(index, synthConfig)
-          }
-
-          // Update effect parameters
+      if (presetLoop.length !== undefined) {
+        if (loop.length !== presetLoop.length) {
+          loop.length = presetLoop.length
           if (audioStore.updateLoopParam) {
-            if (presetLoop.delayAmount !== undefined) audioStore.updateLoopParam(index, 'delayAmount', presetLoop.delayAmount)
-            if (presetLoop.reverbAmount !== undefined) audioStore.updateLoopParam(index, 'reverbAmount', presetLoop.reverbAmount)
-            if (presetLoop.volume !== undefined) audioStore.updateLoopParam(index, 'volume', presetLoop.volume)
-            if (presetLoop.pan !== undefined) audioStore.updateLoopParam(index, 'pan', presetLoop.pan)
+            audioStore.updateLoopParam(index, 'length', presetLoop.length)
           }
+        } else {
+          loop.length = presetLoop.length
         }
-      })
-    }
+      }
+
+      if (presetLoop.delayAmount !== undefined) loop.delayAmount = presetLoop.delayAmount
+      if (presetLoop.reverbAmount !== undefined) loop.reverbAmount = presetLoop.reverbAmount
+      if (presetLoop.volume !== undefined) loop.volume = presetLoop.volume
+      if (presetLoop.pan !== undefined) loop.pan = presetLoop.pan
+
+      // Apply envelope directly
+      if (presetLoop.envelope) {
+        loop.envelope = { ...loop.envelope, ...presetLoop.envelope }
+      }
+
+      // Apply synth parameters directly
+      if (presetLoop.harmonicity !== undefined) loop.harmonicity = presetLoop.harmonicity
+      if (presetLoop.modulationIndex !== undefined) loop.modulationIndex = presetLoop.modulationIndex
+      if (presetLoop.synthConfig) loop.synthConfig = presetLoop.synthConfig
+      // Update synth with direct config application
+      if (audioStore.updateLoopSynth) {
+        const synthConfig = {
+          type: loop.synthModel || 'PolySynth',
+          oscillator: { type: loop.synthType || 'sine' },
+          envelope: { ...loop.envelope }
+        }
+
+        if (loop.harmonicity !== undefined) synthConfig.harmonicity = loop.harmonicity
+        if (loop.modulationIndex !== undefined) synthConfig.modulationIndex = loop.modulationIndex
+
+        audioStore.updateLoopSynth(index, synthConfig)
+      }
+
+      // Update effect parameters
+      if (audioStore.updateLoopParam) {
+        if (presetLoop.delayAmount !== undefined) audioStore.updateLoopParam(index, 'delayAmount', presetLoop.delayAmount)
+        if (presetLoop.reverbAmount !== undefined) audioStore.updateLoopParam(index, 'reverbAmount', presetLoop.reverbAmount)
+        if (presetLoop.volume !== undefined) audioStore.updateLoopParam(index, 'volume', presetLoop.volume)
+        if (presetLoop.pan !== undefined) audioStore.updateLoopParam(index, 'pan', presetLoop.pan)
+      }
+    })
 
     // Update global parameters directly
     if (audioStore.updateTempo && globalConfig.tempo !== undefined) {
@@ -296,128 +283,97 @@ export const usePresetStore = defineStore('preset', () => {
 
   // Crear nuevo preset
   const createPreset = async (name) => {
-    try {
-      const audioStore = useAudioStore()
-      const currentState = captureCurrentState(audioStore)
+    const audioStore = useAudioStore()
+    const currentState = captureCurrentState(audioStore)
 
-      const newPreset = await createPresetService({
-        name: name || `Preset ${new Date().toLocaleString()}`,
-        ...currentState
-      })
+    const newPreset = await createPresetService({
+      name: name || `Preset ${new Date().toLocaleString()}`,
+      ...currentState
+    })
 
-      presets.value.push(newPreset)
-      currentPresetId.value = newPreset.id
-      hasUnsavedChanges.value = false
-      lastSaveTime.value = new Date()
+    presets.value.push(newPreset)
+    currentPresetId.value = newPreset.id
+    hasUnsavedChanges.value = false
+    lastSaveTime.value = new Date()
 
-      return newPreset
-    } catch (error) {
-      console.error('Error al crear preset:', error)
-      throw error
-    }
+    return newPreset
   }
 
   // Cargar preset
   const loadPreset = async (presetId) => {
-    try {
-      isLoading.value = true
-      const preset = await getPresetById(presetId)
+    isLoading.value = true
+    const preset = await getPresetById(presetId)
 
-      if (!preset) {
-        console.error('Error loading preset - preset not found, aborting')
-        throw new Error('Preset not found')
-      }
-
-      await applyPresetToState(preset)
-      currentPresetId.value = presetId
-      hasUnsavedChanges.value = false
-      lastSaveTime.value = new Date()
-
-      return preset
-    } catch (error) {
-      console.error('Error loading preset - aborting:', error)
-      throw error
-    } finally {
-      isLoading.value = false
+    if (!preset) {
+      console.error('Error loading preset - preset not found, aborting')
+      throw new Error('Preset not found')
     }
+
+    await applyPresetToState(preset)
+    currentPresetId.value = presetId
+    hasUnsavedChanges.value = false
+    lastSaveTime.value = new Date()
+
+    isLoading.value = false
+    return preset
   }
 
   // Guardar preset actual
   const saveCurrentPreset = async () => {
-    try {
-      if (!currentPresetId.value) {
-        // Si no hay preset actual, lanzar error para que el componente maneje la solicitud de nombre
-        throw new Error('NO_PRESET_SELECTED')
-      }
-
-      const audioStore = useAudioStore()
-      const currentState = captureCurrentState(audioStore)
-
-      const updatedPreset = await updatePreset(currentPresetId.value, currentState)
-
-      // Actualizar en el array local
-      const index = presets.value.findIndex(p => p.id === currentPresetId.value)
-      if (index !== -1) {
-        presets.value[index] = updatedPreset
-      }
-
-      hasUnsavedChanges.value = false
-      lastSaveTime.value = new Date()
-
-      return updatedPreset
-    } catch (error) {
-      console.error('Error al guardar preset:', error)
-      throw error
+    if (!currentPresetId.value) {
+      // Si no hay preset actual, lanzar error para que el componente maneje la solicitud de nombre
+      throw new Error('NO_PRESET_SELECTED')
     }
+
+    const audioStore = useAudioStore()
+    const currentState = captureCurrentState(audioStore)
+
+    const updatedPreset = await updatePreset(currentPresetId.value, currentState)
+
+    // Actualizar en el array local
+    const index = presets.value.findIndex(p => p.id === currentPresetId.value)
+    if (index !== -1) {
+      presets.value[index] = updatedPreset
+    }
+
+    hasUnsavedChanges.value = false
+    lastSaveTime.value = new Date()
+
+    return updatedPreset
   }
 
   // Renombrar preset
   const renamePreset = async (presetId, newName) => {
-    try {
-      const updatedPreset = await updatePreset(presetId, { name: newName })
+    const updatedPreset = await updatePreset(presetId, { name: newName })
 
-      const index = presets.value.findIndex(p => p.id === presetId)
-      if (index !== -1) {
-        presets.value[index] = updatedPreset
-      }
-
-      return updatedPreset
-    } catch (error) {
-      console.error('Error al renombrar preset:', error)
-      throw error
+    const index = presets.value.findIndex(p => p.id === presetId)
+    if (index !== -1) {
+      presets.value[index] = updatedPreset
     }
+
+    return updatedPreset
   }
 
   // Eliminar preset
   const deletePresetFromStore = async (presetId) => {
-    try {
-      await deletePreset(presetId)
+    await deletePreset(presetId)
 
-      presets.value = presets.value.filter(p => p.id !== presetId)
+    presets.value = presets.value.filter(p => p.id !== presetId)
 
-      // Si se eliminó el preset actual, limpiar selección
-      if (currentPresetId.value === presetId) {
-        currentPresetId.value = null
-        hasUnsavedChanges.value = true
-      }
-
-      return true
-    } catch (error) {
-      console.error('Error al eliminar preset:', error)
-      throw error
+    // Si se eliminó el preset actual, limpiar selección
+    if (currentPresetId.value === presetId) {
+      currentPresetId.value = null
+      hasUnsavedChanges.value = true
     }
+
+    return true
   }
 
   // Duplicar preset
   const duplicatePresetInStore = async (presetId) => {
-    try {
-      const duplicated = await duplicatePreset(presetId)
-      presets.value.push(duplicated)
-      return duplicated
-    } catch (error) {
-      console.error('Error al duplicar preset:', error)
-      throw error
-    }
+    const duplicated = await duplicatePreset(presetId)
+    presets.value.push(duplicated)
+    return duplicated
   }
 
   // Marcar cambios para auto-guardado (simplified)

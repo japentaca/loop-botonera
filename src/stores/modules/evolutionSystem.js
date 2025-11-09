@@ -39,31 +39,27 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   const pickScaleIntervals = (loop, globalScaleIntervals) => {
     // ALWAYS use the global scale intervals passed from audioStore
     // This ensures all loops use the current global scale
-    if (Array.isArray(globalScaleIntervals) && globalScaleIntervals.length > 0) {
-      return globalScaleIntervals
-    }
+    return globalScaleIntervals
 
     // Fallback: get scale name from metadata and resolve it
-    const metaScale = notesMatrix?.loopMetadata?.[loop?.id]?.scale
-    if (metaScale && typeof metaScale === 'string') {
-      const { getScale } = useScales()
-      const resolved = getScale(metaScale)
-      console.warn(`[pickScaleIntervals] Using metadata scale "${metaScale}" as fallback for loop ${loop?.id}`)
-      return resolved
-    }
+    const metaScale = notesMatrix.loopMetadata[loop.id].scale
+    const { getScale } = useScales()
+    const resolved = getScale(metaScale)
+    console.warn(`[pickScaleIntervals] Using metadata scale "${metaScale}" as fallback for loop ${loop.id}`)
+    return resolved
 
     // Final fallback
-    console.warn(`[pickScaleIntervals] Using hardcoded fallback scale for loop ${loop?.id}`)
+    console.warn(`[pickScaleIntervals] Using hardcoded fallback scale for loop ${loop.id}`)
     return fallbackScale
   }
 
   const createRandomNoteForLoop = (loop, globalScaleIntervals) => {
     const intervals = pickScaleIntervals(loop, globalScaleIntervals)
-    const baseNote = notesMatrix?.loopMetadata?.[loop?.id]?.baseNote ?? loop?.baseNote ?? 60
-    const octaveRange = notesMatrix?.loopMetadata?.[loop?.id]?.octaveRange ?? 2
+    const baseNote = notesMatrix.loopMetadata[loop.id].baseNote
+    const octaveRange = notesMatrix.loopMetadata[loop.id].octaveRange
 
     const interval = intervals[Math.floor(Math.random() * intervals.length)]
-    const octave = Math.floor(Math.random() * Math.max(1, octaveRange))
+    const octave = Math.floor(Math.random() * octaveRange)
     let note = baseNote + interval + (octave * 12)
 
     while (note < 24) note += 12
@@ -136,11 +132,8 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const inactiveIndices = []
 
     loopNotes.forEach((note, index) => {
-      if (note !== null && note !== undefined) {
-        activeIndices.push(index)
-      } else {
-        inactiveIndices.push(index)
-      }
+      activeIndices.push(index)
+      inactiveIndices.push(index)
     })
 
     // Shuffle inactive indices for better distribution
@@ -244,8 +237,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
   // Evolucionar un loop específico
   const evolveLoop = (loop, globalScaleIntervals, options = {}) => {
-    if (!loop || !loop.isActive) return loop
-
     let evolvedLoop = { ...loop }
 
     // Evolución de patrón a través de la matriz centralizada
@@ -259,12 +250,10 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       const currentNotes = notesMatrix.getLoopNotes(loop.id)
 
       // Evolucionar notas using global scale intervals
-      if (globalScaleIntervals && Array.isArray(globalScaleIntervals)) {
-        const evolvedNotes = evolveNotes(currentNotes, globalScaleIntervals)
+      const evolvedNotes = evolveNotes(currentNotes, globalScaleIntervals)
 
-        // Guardar en la matriz centralizada
-        notesMatrix.setLoopNotes(loop.id, evolvedNotes)
-      }
+      // Guardar en la matriz centralizada
+      notesMatrix.setLoopNotes(loop.id, evolvedNotes)
     }
 
     // Los efectos (delay y reverb) no se evolucionan automáticamente
@@ -322,10 +311,10 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       autoEvolutionEnabled.value = settings.enabled
     }
     if (settings.interval !== undefined) {
-      evolutionInterval.value = Math.max(2, Math.min(32, settings.interval)) // límites en compases
+      evolutionInterval.value = settings.interval // límites en compases
     }
     if (settings.intensity !== undefined) {
-      evolutionIntensity.value = Math.max(0.1, Math.min(1.0, settings.intensity))
+      evolutionIntensity.value = settings.intensity
     }
     if (settings.creativeMode !== undefined) {
       creativeModeEnabled.value = settings.creativeMode
@@ -418,7 +407,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
         if (currentNote !== null) {
           // Transponer la nota existente respetando la escala
           const transposition = Math.floor(Math.random() * 7) - 3 // -3 a +3 semitonos
-          const transposedNote = Math.max(21, Math.min(108, currentNote + transposition))
+          const transposedNote = currentNote + transposition
           // Quantize to scale
           const quantizedNote = quantizeToScale(transposedNote, scaleIntervals, baseNote)
           notesMatrix.setLoopNote(loopId, randomStep, quantizedNote)

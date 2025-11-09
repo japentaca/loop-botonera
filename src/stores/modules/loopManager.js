@@ -84,72 +84,63 @@ export const useLoopManager = (notesMatrix = null) => {
   // Generar una respuesta derivada de un loop "call"
   // Aplica transformaciones simples (transposición, retrogradación, inversión) y cuantiza a la escala
   const generateResponseFromCall = (callLoop, responderLoop, scale, baseNote, options = {}) => {
-    try {
-      // scale should be intervals array here
+    // scale should be intervals array here
 
-      // Obtener notas desde la matriz centralizada
-      const sourceNotes = notesMatrix ? notesMatrix.getLoopNotes(callLoop.id) : []
+    // Obtener notas desde la matriz centralizada
+    const sourceNotes = notesMatrix ? notesMatrix.getLoopNotes(callLoop.id) : []
 
-      const targetLength = responderLoop?.length ?? sourceNotes.length
-      const { quantizeToScale } = useNoteUtils()
+    const targetLength = responderLoop?.length ?? sourceNotes.length
+    const { quantizeToScale } = useNoteUtils()
 
-      // Elegir estrategia de transformación
-      const strategies = ['transposeUp', 'transposeDown', 'retrograde', 'invert']
-      const strategy = options.strategy && strategies.includes(options.strategy)
-        ? options.strategy
-        : strategies[Math.floor(Math.random() * strategies.length)]
+    // Elegir estrategia de transformación
+    const strategies = ['transposeUp', 'transposeDown', 'retrograde', 'invert']
+    const strategy = options.strategy && strategies.includes(options.strategy)
+      ? options.strategy
+      : strategies[Math.floor(Math.random() * strategies.length)]
 
-      // Delta de transposición (en semitonos) con cuantización posterior a la escala
-      const transposeDelta = options.transposeDelta ?? ([2, 3, 4][Math.floor(Math.random() * 3)])
+    // Delta de transposición (en semitonos) con cuantización posterior a la escala
+    const transposeDelta = options.transposeDelta ?? ([2, 3, 4][Math.floor(Math.random() * 3)])
 
-      const clampMidi = (n) => Math.max(24, Math.min(84, n))
+    const clampMidi = (n) => n
 
-      const transformNote = (note, idx) => {
-        if (typeof note !== 'number') return null
-        let transformed = note
-        switch (strategy) {
-          case 'transposeUp':
-            transformed = note + transposeDelta
-            break
-          case 'transposeDown':
-            transformed = note - transposeDelta
-            break
-          case 'invert': {
-            const pivot = (callLoop?.baseNote ?? baseNote)
-            transformed = pivot - (note - pivot)
-            break
-          }
-          case 'retrograde':
-            // Retrogradación se aplica a la secuencia completa; aquí solo cuantizamos
-            transformed = note
-            break
-          default:
-            transformed = note
+    const transformNote = (note, idx) => {
+      let transformed = note
+      switch (strategy) {
+        case 'transposeUp':
+          transformed = note + transposeDelta
+          break
+        case 'transposeDown':
+          transformed = note - transposeDelta
+          break
+        case 'invert': {
+          const pivot = callLoop.baseNote
+          transformed = pivot - (note - pivot)
+          break
         }
-        transformed = clampMidi(transformed)
-        const quantized = quantizeToScale(transformed, scale, baseNote)
-        if (idx < 3) { // Log first 3 transformations
-        }
-        return quantized
+        case 'retrograde':
+          // Retrogradación se aplica a la secuencia completa; aquí solo cuantizamos
+          transformed = note
+          break
+        default:
+          transformed = note
       }
-
-      // Construir la secuencia transformada
-      let seq = sourceNotes.slice()
-      if (strategy === 'retrograde') {
-        seq = seq.reverse()
-      }
-
-      const result = Array.from({ length: targetLength }, (_, i) => {
-        const src = seq.length ? seq[i % seq.length] : null
-        return transformNote(src, i)
-      })
-
-      return result
-    } catch (error) {
-      console.error('Error al generar respuesta desde call:', error)
-      // Fallback: generar notas aleatorias en rango
-      return generateNotesInRange(scale, baseNote, responderLoop?.length ?? 16, 2)
+      transformed = clampMidi(transformed)
+      const quantized = quantizeToScale(transformed, scale, baseNote)
+      return quantized
     }
+
+    // Construir la secuencia transformada
+    let seq = sourceNotes.slice()
+    if (strategy === 'retrograde') {
+      seq = seq.reverse()
+    }
+
+    const result = Array.from({ length: targetLength }, (_, i) => {
+      const src = seq.length ? seq[i % seq.length] : null
+      return transformNote(src, i)
+    })
+
+    return result
   }
 
   // Generar nota base que esté en la escala actual  // Generar nota base que esté en la escala actual
@@ -239,17 +230,13 @@ export const useLoopManager = (notesMatrix = null) => {
       synthType: basicLoop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
     }
 
-    try {
-      const audioChain = audioEngine.createAudioChain(synthConfig, effectsConfig)
+    const audioChain = audioEngine.createAudioChain(synthConfig, effectsConfig)
 
-      // Asignar objetos de audio al loop
-      basicLoop.synth = audioChain.synth
-      basicLoop.panner = audioChain.panner
-      basicLoop.delaySend = audioChain.delaySend
-      basicLoop.reverbSend = audioChain.reverbSend
-    } catch (error) {
-      console.error('Error al crear cadena de audio para loop:', error)
-    }
+    // Asignar objetos de audio al loop
+    basicLoop.synth = audioChain.synth
+    basicLoop.panner = audioChain.panner
+    basicLoop.delaySend = audioChain.delaySend
+    basicLoop.reverbSend = audioChain.reverbSend
 
     return basicLoop
   }
@@ -300,21 +287,15 @@ export const useLoopManager = (notesMatrix = null) => {
           synthType: loop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
         }
 
-        try {
-          const audioChain = audioEngine.createAudioChain(synthConfig, effectsConfig)
+        const audioChain = audioEngine.createAudioChain(synthConfig, effectsConfig)
 
-          loop.synth = audioChain.synth
-          loop.panner = audioChain.panner
-          loop.delaySend = audioChain.delaySend
-          loop.reverbSend = audioChain.reverbSend
-        } catch (error) {
-          console.error('Error al actualizar loop con audio:', error)
-        }
+        loop.synth = audioChain.synth
+        loop.panner = audioChain.panner
+        loop.delaySend = audioChain.delaySend
+        loop.reverbSend = audioChain.reverbSend
       }
     })
-  }
-
-  // Activar/desactivar loop
+  }  // Activar/desactivar loop
   const toggleLoop = (id) => {
     const loop = loops.value[id]
     if (loop) {
@@ -586,8 +567,6 @@ export const useLoopManager = (notesMatrix = null) => {
       } else {
         // Múltiples loops: distribuir uniformemente
         panPosition = -1 + (2 * index) / (activeLoops.length - 1)
-        // Limitar el rango para evitar extremos demasiado duros
-        panPosition = Math.max(-0.8, Math.min(0.8, panPosition))
       }
 
       // Aplicar la panoramización
@@ -631,82 +610,78 @@ export const useLoopManager = (notesMatrix = null) => {
       return
     }
 
-    try {
-      // Desconectar y limpiar el sintetizador anterior
-      if (loop.synth) {
-        loop.synth.disconnect()
-        loop.synth.dispose()
-      }
-      if (loop.panner) {
-        loop.panner.disconnect()
-        loop.panner.dispose()
-      }
-      if (loop.delaySend) {
-        loop.delaySend.disconnect()
-        loop.delaySend.dispose()
-      }
-      if (loop.reverbSend) {
-        loop.reverbSend.disconnect()
-        loop.reverbSend.dispose()
-      }
-
-      // Actualizar la configuración del loop
-      loop.synthModel = synthConfig.type || 'PolySynth'
-      loop.synthType = synthConfig.oscillator?.type || 'sine'
-      loop.envelope = synthConfig.envelope || {
-        attack: 0.01,
-        decay: 0.3,
-        sustain: 0.5,
-        release: 0.8
-      }
-
-      // Preparar configuraciones para audioEngine.createAudioChain
-      const newSynthConfig = {
-        oscillator: { type: loop.synthType },
-        envelope: loop.envelope
-      }
-
-      // Agregar configuraciones específicas según el tipo de sintetizador
-      if (loop.synthModel === 'AMSynth') {
-        newSynthConfig.harmonicity = synthConfig.harmonicity || 3
-        newSynthConfig.modulation = { type: loop.synthType }
-        newSynthConfig.modulationEnvelope = {
-          attack: loop.envelope.attack,
-          decay: loop.envelope.decay,
-          sustain: 0.85,
-          release: loop.envelope.release
-        }
-      } else if (loop.synthModel === 'FMSynth') {
-        newSynthConfig.harmonicity = synthConfig.harmonicity || 3
-        newSynthConfig.modulationIndex = synthConfig.modulationIndex || 10
-        newSynthConfig.modulation = { type: loop.synthType }
-      } else if (loop.synthModel === 'PluckSynth') {
-        newSynthConfig.attackNoise = 1
-        newSynthConfig.dampening = 4000
-        newSynthConfig.resonance = 0.7
-      } else if (loop.synthModel === 'MembraneSynth') {
-        newSynthConfig.pitchDecay = 0.05
-        newSynthConfig.octaves = 10
-      }
-
-      const effectsConfig = {
-        delayAmount: loop.delayAmount,
-        reverbAmount: loop.reverbAmount,
-        pan: loop.pan,
-        synthType: loop.synthModel
-      }
-
-      // Crear nueva cadena de audio usando audioEngine
-      const audioChain = audioEngine.createAudioChain(newSynthConfig, effectsConfig)
-
-      // Asignar los nuevos objetos de audio al loop
-      loop.synth = audioChain.synth
-      loop.panner = audioChain.panner
-      loop.delaySend = audioChain.delaySend
-      loop.reverbSend = audioChain.reverbSend
-    } catch (error) {
-      console.error(`Error al actualizar sintetizador del loop ${loopId}:`, error)
+    // Desconectar y limpiar el sintetizador anterior
+    if (loop.synth) {
+      loop.synth.disconnect()
+      loop.synth.dispose()
     }
+    if (loop.panner) {
+      loop.panner.disconnect()
+      loop.panner.dispose()
+    }
+    if (loop.delaySend) {
+      loop.delaySend.disconnect()
+      loop.delaySend.dispose()
+    }
+    if (loop.reverbSend) {
+      loop.reverbSend.disconnect()
+      loop.reverbSend.dispose()
+    }
+
+    // Actualizar la configuración del loop
+    loop.synthModel = synthConfig.type || 'PolySynth'
+    loop.synthType = synthConfig.oscillator?.type || 'sine'
+    loop.envelope = synthConfig.envelope || {
+      attack: 0.01,
+      decay: 0.3,
+      sustain: 0.5,
+      release: 0.8
+    }
+
+    // Preparar configuraciones para audioEngine.createAudioChain
+    const newSynthConfig = {
+      oscillator: { type: loop.synthType },
+      envelope: loop.envelope
+    }
+
+    // Agregar configuraciones específicas según el tipo de sintetizador
+    if (loop.synthModel === 'AMSynth') {
+      newSynthConfig.harmonicity = synthConfig.harmonicity || 3
+      newSynthConfig.modulation = { type: loop.synthType }
+      newSynthConfig.modulationEnvelope = {
+        attack: loop.envelope.attack,
+        decay: loop.envelope.decay,
+        sustain: 0.85,
+        release: loop.envelope.release
+      }
+    } else if (loop.synthModel === 'FMSynth') {
+      newSynthConfig.harmonicity = synthConfig.harmonicity || 3
+      newSynthConfig.modulationIndex = synthConfig.modulationIndex || 10
+      newSynthConfig.modulation = { type: loop.synthType }
+    } else if (loop.synthModel === 'PluckSynth') {
+      newSynthConfig.attackNoise = 1
+      newSynthConfig.dampening = 4000
+      newSynthConfig.resonance = 0.7
+    } else if (loop.synthModel === 'MembraneSynth') {
+      newSynthConfig.pitchDecay = 0.05
+      newSynthConfig.octaves = 10
+    }
+
+    const effectsConfig = {
+      delayAmount: loop.delayAmount,
+      reverbAmount: loop.reverbAmount,
+      pan: loop.pan,
+      synthType: loop.synthModel
+    }
+
+    // Crear nueva cadena de audio usando audioEngine
+    const audioChain = audioEngine.createAudioChain(newSynthConfig, effectsConfig)
+
+    // Asignar los nuevos objetos de audio al loop
+    loop.synth = audioChain.synth
+    loop.panner = audioChain.panner
+    loop.delaySend = audioChain.delaySend
+    loop.reverbSend = audioChain.reverbSend
   }
 
   return {

@@ -4,21 +4,16 @@ import * as Tone from 'tone'
 export function useAudio() {
   const audioContext = ref(null)
   const isInitialized = ref(false)
-  
+
   // Inicializar contexto de audio
   const initializeAudio = async () => {
     if (isInitialized.value) return true
-    
-    try {
-      await Tone.start()
-      audioContext.value = Tone.getContext()
-      isInitialized.value = true
-      // Contexto de audio inicializado
-      return true
-    } catch (error) {
-      console.error('Error al inicializar audio:', error)
-      return false
-    }
+
+    await Tone.start()
+    audioContext.value = Tone.getContext()
+    isInitialized.value = true
+    // Contexto de audio inicializado
+    return true
   }
 
   // Limpiar recursos de audio al desmontar
@@ -40,24 +35,19 @@ export function useEffects() {
   const delay = ref(null)
   const reverb = ref(null)
   const masterGain = ref(null)
-  
+
   // Crear cadena de efectos
   const createEffectsChain = async (masterVolume = 0.7) => {
-    try {
-      // Crear efectos
-      masterGain.value = new Tone.Gain(masterVolume).toDestination()
-      delay.value = new Tone.PingPongDelay("8n", 0.4).connect(masterGain.value)
-      reverb.value = new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain.value)
-      
-      // Generar impulse response para reverb
-      await reverb.value.generate()
-      
-      // Cadena de efectos creada
-      return true
-    } catch (error) {
-      console.error('Error al crear efectos:', error)
-      return false
-    }
+    // Crear efectos
+    masterGain.value = new Tone.Gain(masterVolume).toDestination()
+    delay.value = new Tone.PingPongDelay("8n", 0.4).connect(masterGain.value)
+    reverb.value = new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain.value)
+
+    // Generar impulse response para reverb
+    await reverb.value.generate()
+
+    // Cadena de efectos creada
+    return true
   }
 
   // Actualizar tiempo de delay basado en tempo
@@ -110,11 +100,11 @@ export function useTransport() {
   const isPlaying = ref(false)
   const currentStep = ref(0)
   const tempo = ref(120)
-  
+
   // Configurar transporte
   const setupTransport = (callback) => {
     Tone.Transport.bpm.value = tempo.value
-    
+
     // Programar callback para cada paso
     Tone.Transport.scheduleRepeat((time) => {
       currentStep.value = (currentStep.value + 1) % 16
@@ -188,7 +178,7 @@ export function useSynthesizer() {
     }
 
     const synthConfig = { ...defaultConfig, ...config }
-    
+
     switch (config.type) {
       case 'AMSynth': {
         const amEnvelope = {
@@ -211,7 +201,7 @@ export function useSynthesizer() {
           volume: 6
         })
       }
-      
+
       case 'FMSynth': {
         const fmEnvelope = {
           attack: synthConfig.envelope?.attack ?? 0.03,
@@ -227,14 +217,14 @@ export function useSynthesizer() {
           modulation: { type: synthConfig.oscillator.type }
         })
       }
-      
+
       case 'PluckSynth':
         return new Tone.PluckSynth({
           attackNoise: 1,
           dampening: 4000,
           resonance: 0.7
         })
-      
+
       case 'MembraneSynth':
         return new Tone.MembraneSynth({
           pitchDecay: 0.05,
@@ -242,7 +232,7 @@ export function useSynthesizer() {
           oscillator: synthConfig.oscillator,
           envelope: synthConfig.envelope
         })
-      
+
       default:
         return new Tone.PolySynth(Tone.Synth, synthConfig)
     }
@@ -251,21 +241,21 @@ export function useSynthesizer() {
   // Conectar sintetizador a efectos
   const connectSynthToEffects = (synth, effects) => {
     const { delay, reverb, masterGain } = effects
-    
+
     // Crear sends para efectos
     const panner = new Tone.Panner(0)
     const delaySend = new Tone.Gain(0.2)
     const reverbSend = new Tone.Gain(0.3)
-    
+
     // Conectar cadena
     synth.connect(panner)
     synth.connect(delaySend)
     synth.connect(reverbSend)
-    
+
     panner.toDestination()
     if (delay) delaySend.connect(delay)
     if (reverb) reverbSend.connect(reverb)
-    
+
     return { panner, delaySend, reverbSend }
   }
 
@@ -274,7 +264,7 @@ export function useSynthesizer() {
     if (!synth || typeof synth.triggerAttackRelease !== 'function') return
 
     try {
-      const noteName = typeof note === 'number' 
+      const noteName = typeof note === 'number'
         ? Tone.Frequency(note, "midi").toNote()
         : note
 
@@ -285,7 +275,7 @@ export function useSynthesizer() {
 
       // Si el contexto no está running, disparar inmediatamente para evitar errores de scheduling
       const useTime = ctxState === 'running' ? time : undefined
-      
+
       synth.triggerAttackRelease(noteName, duration, useTime, velocity)
     } catch (error) {
       console.error('Error al reproducir nota:', error)

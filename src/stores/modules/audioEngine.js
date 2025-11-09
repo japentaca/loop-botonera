@@ -28,18 +28,14 @@ export const useAudioEngine = () => {
   // Funciones de utilidad para efectos
   const softResetDelayFeedback = () => {
     if (!audioInitialized.value || !delay) return
-    try {
-      const original = delay.feedback?.value ?? 0.4
-      // Reducir feedback a cero temporalmente
-      if (delay.feedback) delay.feedback.value = 0
-      if (_feedbackResetTimer) clearTimeout(_feedbackResetTimer)
-      const holdMs = Tone.Time('16n').toMilliseconds()
-      _feedbackResetTimer = setTimeout(() => {
-        try {
-          if (delay?.feedback) delay.feedback.value = original
-        } catch (e) { }
-      }, Math.max(10, holdMs))
-    } catch (e) { }
+    const original = delay.feedback?.value ?? 0.4
+    // Reducir feedback a cero temporalmente
+    if (delay.feedback) delay.feedback.value = 0
+    if (_feedbackResetTimer) clearTimeout(_feedbackResetTimer)
+    const holdMs = Tone.Time('16n').toMilliseconds()
+    _feedbackResetTimer = setTimeout(() => {
+      if (delay?.feedback) delay.feedback.value = original
+    }, holdMs)
   }
 
   const updateDelayTime = () => {
@@ -57,27 +53,22 @@ export const useAudioEngine = () => {
       return
     }
 
-    try {
-      await Tone.start()
+    await Tone.start()
 
-      // Crear cadena de efectos globales
-      masterGain = markRaw(new Tone.Gain(masterVol.value).toDestination())
+    // Crear cadena de efectos globales
+    masterGain = markRaw(new Tone.Gain(masterVol.value).toDestination())
 
-      if (!BYPASS_EFFECTS_FOR_TEST) {
-        delay = markRaw(new Tone.PingPongDelay(delayDivision.value, 0.4).connect(masterGain))
-        reverb = markRaw(new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain))
-        await reverb.generate()
-      }
-
-      // Configurar transporte
-      Tone.Transport.bpm.value = tempo.value
-      updateDelayTime()
-
-      audioInitialized.value = true
-    } catch (error) {
-      console.error('🔴 AUDIO ENGINE: Error al inicializar motor de audio:', error)
-      throw error
+    if (!BYPASS_EFFECTS_FOR_TEST) {
+      delay = markRaw(new Tone.PingPongDelay(delayDivision.value, 0.4).connect(masterGain))
+      reverb = markRaw(new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain))
+      await reverb.generate()
     }
+
+    // Configurar transporte
+    Tone.Transport.bpm.value = tempo.value
+    updateDelayTime()
+
+    audioInitialized.value = true
   }
 
   // Configurar el callback del transporte
@@ -221,24 +212,15 @@ export const useAudioEngine = () => {
 
   // Reproducir una nota individual
   const playNote = (audioChain, midiNote, duration = '16n', velocity = 1, time = undefined) => {
-    try {
-      const { synth } = audioChain
+    const { synth } = audioChain
 
-      // Validaciones
-      if (!synth || typeof synth.triggerAttackRelease !== 'function') return
-      if (!Tone.context || Tone.context.state !== 'running') return
-      if (Number.isNaN(midiNote) || midiNote < 0 || midiNote > 127) return
+    // Calcular frecuencia
+    const freq = Tone.Frequency(midiNote, 'midi').toFrequency()
+    const safeVelocity = velocity
+    const useTime = time
 
-      // Calcular frecuencia
-      const freq = Tone.Frequency(midiNote, 'midi').toFrequency()
-      const safeVelocity = Math.max(0, Math.min(1, velocity))
-      const useTime = typeof time === 'number' && isFinite(time) ? time : undefined
-
-      // Disparar la nota
-      synth.triggerAttackRelease(freq, duration, useTime, safeVelocity)
-    } catch (error) {
-      console.error('Error al reproducir nota:', error)
-    }
+    // Disparar la nota
+    synth.triggerAttackRelease(freq, duration, useTime, safeVelocity)
   }
 
   return {

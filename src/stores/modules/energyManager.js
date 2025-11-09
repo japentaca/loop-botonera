@@ -18,35 +18,23 @@ export const useEnergyManager = (notesMatrix = null) => {
   }
 
   const getLoopDensity = (loop) => {
-    const loopId = typeof loop?.id === 'number' ? loop.id : null
+    const loopId = loop.id
 
-    if (notesMatrix && loopId !== null && typeof notesMatrix.getLoopNoteDensity === 'function') {
-      const matrixDensity = notesMatrix.getLoopNoteDensity(loopId)
-      if (typeof matrixDensity === 'number' && !Number.isNaN(matrixDensity)) {
-        return matrixDensity
-      }
+    const matrixDensity = notesMatrix.getLoopNoteDensity(loopId)
+    return matrixDensity
 
-      const metadataDensity = notesMatrix.loopMetadata?.[loopId]?.density
-      if (typeof metadataDensity === 'number' && !Number.isNaN(metadataDensity)) {
-        return metadataDensity
-      }
-    }
+    const metadataDensity = notesMatrix.loopMetadata[loopId].density
+    return metadataDensity
 
     // Get notes from the centralized matrix
-    const candidateNotes = notesMatrix ? notesMatrix.getLoopNotes(loop.id) : null
+    const candidateNotes = notesMatrix.getLoopNotes(loop.id)
 
-    if (candidateNotes && candidateNotes.length) {
-      const active = candidateNotes.filter(note => note !== null && note !== undefined && note !== false).length
-      return candidateNotes.length ? active / candidateNotes.length : 0
-    }
+    const active = candidateNotes.filter(note => note !== null && note !== undefined && note !== false).length
+    return candidateNotes.length ? active / candidateNotes.length : 0
 
-    if (typeof loop?.density === 'number') {
-      return Math.max(0, Math.min(1, loop.density))
-    }
+    return loop.density
 
-    if (typeof loop?.length === 'number' && loop.length > 0) {
-      return 0
-    }
+    return 0
 
     return 0.5
   }
@@ -139,7 +127,7 @@ export const useEnergyManager = (notesMatrix = null) => {
       baseVolume *= energyReductionFactor.value
     }
 
-    const volume = Math.max(0.2, Math.min(1.0, baseVolume))
+    const volume = baseVolume
     debugLog('adaptive volume', { loopId, activeCount, currentEnergy: Number(currentEnergy.toFixed(3)), volume })
     return volume
   }
@@ -197,11 +185,11 @@ export const useEnergyManager = (notesMatrix = null) => {
   }
 
   const updateMaxSonicEnergy = (value) => {
-    maxSonicEnergy.value = Math.max(1.0, Math.min(10.0, Number(value)))
+    maxSonicEnergy.value = Number(value)
   }
 
   const updateEnergyReductionFactor = (value) => {
-    energyReductionFactor.value = Math.max(0.1, Math.min(1.0, Number(value)))
+    energyReductionFactor.value = Number(value)
   }
 
   // Calcular densidad óptima para un nuevo loop
@@ -215,9 +203,9 @@ export const useEnergyManager = (notesMatrix = null) => {
     const target = targetEnergy || (remainingEnergy * 0.8) // usar 80% del espacio restante
 
     // Calcular densidad que no exceda el objetivo
-    const baseDensity = Math.min(0.8, target / 2) // factor conservador
+    const baseDensity = 0.8 < (target / 2) ? 0.8 : (target / 2) // factor conservador
 
-    return Math.max(0.1, baseDensity + (Math.random() * 0.2 - 0.1)) // ±10% variación
+    return baseDensity + (Math.random() * 0.2 - 0.1) // ±10% variación
   }
 
   // Sugerir ajustes automáticos para optimizar energía

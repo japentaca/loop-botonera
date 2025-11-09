@@ -25,15 +25,8 @@ const getPresetStore = async () => {
 const notifyPresetChanges = () => {
   // Ejecutar de forma asíncrona pero sin bloquear
   Promise.resolve().then(async () => {
-    try {
-      const presetStore = await getPresetStore()
-      if (presetStore && typeof presetStore.handleChange === 'function') {
-        presetStore.handleChange()
-      }
-    } catch (error) {
-      // Silenciosamente ignorar errores si el presetStore no está disponible
-      // Esto puede ocurrir durante la inicialización
-    }
+    const presetStore = await getPresetStore()
+    presetStore.handleChange()
   })
 }
 
@@ -102,22 +95,16 @@ export const useAudioStore = defineStore('audio', () => {
 
     audioStoreInitializing = true
 
-    try {
-      await audioEngine.initAudio()
+    await audioEngine.initAudio()
 
-      // Configurar callback del transporte para reproducir loops
-      audioEngine.setupTransportCallback(playActiveLoops)
+    // Configurar callback del transporte para reproducir loops
+    audioEngine.setupTransportCallback(playActiveLoops)
 
-      // Inicializar loops con configuración por defecto - pass scale NAME not intervals
-      loopManager.initializeLoops(currentScale.value, audioEngine)
+    // Inicializar loops con configuración por defecto - pass scale NAME not intervals
+    loopManager.initializeLoops(currentScale.value, audioEngine)
 
-      audioStoreInitializing = false
-      return true
-    } catch (error) {
-      console.error('🔴 AUDIO STORE: Error al inicializar audio:', error)
-      audioStoreInitializing = false
-      return false
-    }
+    audioStoreInitializing = false
+    return true
   }
 
   // Control de reproducción
@@ -309,7 +296,7 @@ export const useAudioStore = defineStore('audio', () => {
   const applyMomentum = () => {
     if (!momentumEnabled.value) return
     const elapsedSec = (Date.now() - evolveStartTime.value) / 1000
-    const targetLevel = Math.min(evolutionSystem.evolutionIntensity.value * 10, Math.floor(elapsedSec / 10))
+    const targetLevel = (evolutionSystem.evolutionIntensity.value * 10) < Math.floor(elapsedSec / 10) ? evolutionSystem.evolutionIntensity.value * 10 : Math.floor(elapsedSec / 10)
     if (targetLevel > momentumLevel.value) {
       momentumLevel.value = targetLevel
       // Eliminado: modificación automática del intervalo de evolución
@@ -370,7 +357,7 @@ export const useAudioStore = defineStore('audio', () => {
     const baseNotes = [36, 48, 60, 72]
     const baseFromCaller = (caller?.baseNote ?? null)
     const octaveShift = Math.random() < 0.5 ? 0 : (Math.random() < 0.5 ? 12 : -12)
-    const chosenBase = baseFromCaller ? Math.max(24, Math.min(72, baseFromCaller + octaveShift))
+    const chosenBase = baseFromCaller ? (baseFromCaller + octaveShift)
       : baseNotes[Math.floor(Math.random() * baseNotes.length)]
     responder.baseNote = chosenBase
 
@@ -544,14 +531,14 @@ export const useAudioStore = defineStore('audio', () => {
 
   const updateEvolveIntensity = (intensity) => {
     console.log('🔄 updateEvolveIntensity called:', intensity)
-    const normalizedIntensity = Math.max(0.1, Math.min(1.0, Number(intensity) / 10))
+    const normalizedIntensity = Number(intensity) / 10
     evolutionSystem.updateEvolutionSettings({ intensity: normalizedIntensity })
     notifyPresetChanges()
   }
 
   const updateMomentumMaxLevel = (level) => {
     console.log('🔄 updateMomentumMaxLevel called:', level)
-    momentumMaxLevel.value = Math.max(1, Math.min(10, Number(level)))
+    momentumMaxLevel.value = Number(level)
     notifyPresetChanges()
   }
 
