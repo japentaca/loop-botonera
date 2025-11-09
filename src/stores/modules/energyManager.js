@@ -3,7 +3,7 @@ import { ref } from 'vue'
 // Performance optimization: cache energy calculations to avoid redundant computations
 let energyCache = new Map() // loopId -> last calculated energy
 let lastEnergyCheckTime = 0
-const ENERGY_CACHE_TTL = 80 // milliseconds - cache lasts 80ms
+const ENERGY_CACHE_TTL = 500 // OPTIMIZED: increased from 80ms to 500ms to reduce recalculations
 
 const clearEnergyCache = () => {
   energyCache.clear()

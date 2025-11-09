@@ -78,7 +78,7 @@
 </template>
 
 <script setup>
-  import { computed, onMounted, onUnmounted, onBeforeMount, onBeforeUnmount } from 'vue'
+  import { computed, ref, watch, onMounted, onUnmounted, onBeforeMount, onBeforeUnmount } from 'vue'
   import { useAudioStore } from '../stores/audioStore'
   import { useSynthStore } from '../stores/synthStore'
 
@@ -119,33 +119,57 @@
     return `${direction}${value}`
   }
 
-  // Calculate current step based on global pulse instead of storing in loop
-  const currentStep = computed(() => {
-    if (!props.loop.isActive) return 0
-    return (audioStore.currentPulse - 1) % props.loop.length
+  // OPTIMIZATION: Use requestAnimationFrame for beat indicators
+  // Instead of computed properties that recalculate every 4 steps,
+  // we throttle updates to actual frame rendering
+  let animationFrameId = null
+  const currentStep = ref(0)
+  const paddedBeatsRemaining = ref('000')
+  const beatProgress = ref(0)
+
+  const updateBeatIndicators = () => {
+    if (!props.loop.isActive) {
+      currentStep.value = 0
+      paddedBeatsRemaining.value = '000'
+      beatProgress.value = 0
+      return
+    }
+
+    const step = (audioStore.currentPulse - 1) % props.loop.length
+    currentStep.value = step
+
+    const remaining = props.loop.length - step - 1
+    paddedBeatsRemaining.value = String(Math.max(0, remaining)).padStart(3, '0')
+
+    beatProgress.value = (step / props.loop.length) * 100
+  }
+
+  // Watch for pulse updates, but throttle with requestAnimationFrame
+  watch(() => audioStore.currentPulse, () => {
+    if (animationFrameId) return // Already scheduled
+
+    animationFrameId = requestAnimationFrame(() => {
+      updateBeatIndicators()
+      animationFrameId = null
+    })
   })
 
-  // Current beat being played (1-indexed for display)
-  const currentBeat = computed(() => {
-    return props.loop.isActive ? currentStep.value + 1 : 0
+  // Also watch for active state changes
+  watch(() => props.loop.isActive, () => {
+    updateBeatIndicators()
   })
 
-  // Beats remaining in the loop
-  const beatsRemaining = computed(() => {
-    if (!props.loop.isActive) return 0
-    const remaining = props.loop.length - currentStep.value - 1
-    return Math.max(0, remaining)
+  // Initialize on mount
+  onMounted(() => {
+    updateBeatIndicators()
   })
 
-  // Padded beats remaining (with leading zeros)
-  const paddedBeatsRemaining = computed(() => {
-    return String(beatsRemaining.value).padStart(3, '0')
-  })
-
-  // Progreso del beat como porcentaje
-  const beatProgress = computed(() => {
-    if (!props.loop.isActive) return 0
-    return (currentStep.value / props.loop.length) * 100
+  // Cleanup animation frame on unmount
+  onUnmounted(() => {
+    if (animationFrameId) {
+      cancelAnimationFrame(animationFrameId)
+      animationFrameId = null
+    }
   })
 </script>
 

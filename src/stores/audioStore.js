@@ -74,7 +74,7 @@ export const useAudioStore = defineStore('audio', () => {
   // Debounced energy balance check to avoid excessive calculations during rapid param changes
   const debouncedEnergyCheck = debounce((loops) => {
     energyManager.checkAndBalanceEnergy(loops)
-  }, 200) // 200ms debounce - slightly longer reduces CPU spikes during slider dragging
+  }, 500) // OPTIMIZED: increased from 200ms to 500ms to better handle slider drag
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major')

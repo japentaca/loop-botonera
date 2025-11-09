@@ -17,6 +17,10 @@ const clampToMidiRange = (note, maxNote = 96) => {
 }
 
 export function useScales() {
+  // OPTIMIZATION: Cache for scale lookups to avoid repeated object property access
+  // Scale intervals are immutable, so caching is safe and beneficial
+  const _scaleCache = new Map()
+
   const scales = {
     // Escalas diatónicas
     major: [0, 2, 4, 5, 7, 9, 11],
@@ -101,7 +105,18 @@ export function useScales() {
 
   // Obtener escala por nombre
   const getScale = (name) => {
-    return scales[name] || scales.minor
+    // OPTIMIZATION: Check cache first before property access
+    if (_scaleCache.has(name)) {
+      return _scaleCache.get(name)
+    }
+
+    // Fallback to minor if scale not found
+    const scaleIntervals = scales[name] || scales.minor
+
+    // Cache the result (scales are immutable)
+    _scaleCache.set(name, scaleIntervals)
+
+    return scaleIntervals
   }
 
   // Generar notas de una escala

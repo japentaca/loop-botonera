@@ -9,8 +9,13 @@ export const useAudioEngine = () => {
   // Estado del motor de audio
   const audioInitialized = ref(false)
   const isPlaying = ref(false)
+
+  // OPTIMIZATION: Use non-reactive counter for high-frequency updates
+  // Only update ref on measure boundaries to reduce reactivity cascade
+  let _internalPulse = 0
   const currentPulse = ref(0)
   const currentBeat = computed(() => currentPulse.value % 16)
+
   const tempo = ref(120)
   const masterVol = ref(0.7)
   const delayDivision = ref('8n')
@@ -61,7 +66,12 @@ export const useAudioEngine = () => {
     if (!BYPASS_EFFECTS_FOR_TEST) {
       delay = markRaw(new Tone.PingPongDelay(delayDivision.value, 0.4).connect(masterGain))
       reverb = markRaw(new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain))
-      await reverb.generate()
+
+      // OPTIMIZATION: Generate reverb in background to avoid blocking initialization
+      // Allow playback to start immediately with dry reverb
+      reverb.generate().catch(err => {
+        console.warn('Reverb generation failed:', err)
+      })
     }
 
     // Configurar transporte
@@ -76,8 +86,15 @@ export const useAudioEngine = () => {
     if (!audioInitialized.value) return
 
     Tone.Transport.scheduleRepeat((time) => {
-      currentPulse.value = currentPulse.value + 1
-      callback(time, currentPulse.value)
+      _internalPulse = _internalPulse + 1
+
+      // OPTIMIZATION: Only update reactive ref every 4 steps (quarter note)
+      // This reduces Vue reactivity updates by 75%
+      if (_internalPulse % 4 === 0) {
+        currentPulse.value = _internalPulse
+      }
+
+      callback(time, _internalPulse)
     }, "16n")
   }
 

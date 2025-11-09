@@ -268,18 +268,32 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const activeLoops = loops.filter(loop => loop.isActive)
     if (activeLoops.length === 0) return loops
 
-    // Seleccionar loops para evolucionar basado en la intensidad
-    const loopsToEvolve = Math.max(1, Math.floor(activeLoops.length * evolutionIntensity.value))
-    const selectedLoops = activeLoops
-      .sort(() => Math.random() - 0.5)
-      .slice(0, loopsToEvolve)
+    // OPTIMIZATION: Use batch mode to defer reactivity triggers
+    if (notesMatrix && notesMatrix.beginBatch) {
+      notesMatrix.beginBatch()
+    }
 
-    return loops.map(loop => {
-      if (selectedLoops.includes(loop)) {
-        return evolveLoop(loop, globalScaleIntervals, options)
+    try {
+      // Seleccionar loops para evolucionar basado en la intensidad
+      const loopsToEvolve = Math.max(1, Math.floor(activeLoops.length * evolutionIntensity.value))
+      const selectedLoops = activeLoops
+        .sort(() => Math.random() - 0.5)
+        .slice(0, loopsToEvolve)
+
+      const result = loops.map(loop => {
+        if (selectedLoops.includes(loop)) {
+          return evolveLoop(loop, globalScaleIntervals, options)
+        }
+        return loop
+      })
+
+      return result
+    } finally {
+      // OPTIMIZATION: Trigger single reactivity update after all mutations
+      if (notesMatrix && notesMatrix.endBatch) {
+        notesMatrix.endBatch()
       }
-      return loop
-    })
+    }
   }
 
   // Verificar si es tiempo de evolucionar

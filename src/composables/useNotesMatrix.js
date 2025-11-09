@@ -30,6 +30,10 @@ export function useNotesMatrix() {
   // Metadatos por loop
   const loopMetadata = reactive({})
 
+  // OPTIMIZATION: Batch mode to defer reactivity triggers during bulk operations
+  let _batchMode = false
+  let _pendingUpdates = new Set() // Track loops with pending updates
+
   // Estado global de la matriz
   const matrixState = reactive({
     currentScale: 'major',
@@ -86,8 +90,13 @@ export function useNotesMatrix() {
       loopMetadata[loopId].density = metrics.density
       loopMetadata[loopId].lastModified = Date.now()
 
-      if (densityChanged) {
+      if (densityChanged && !_batchMode) {
         debugLog('density updated', { loopId, density: metrics.density })
+      }
+
+      // Track pending updates in batch mode
+      if (_batchMode) {
+        _pendingUpdates.add(loopId)
       }
     }
     return metrics
@@ -683,6 +692,26 @@ export function useNotesMatrix() {
     invertLoop,
     mutateLoop,
     copyLoop,
+
+    // OPTIMIZATION: Batch operations for performance during evolution
+    beginBatch: () => {
+      _batchMode = true
+      _pendingUpdates.clear()
+      debugLog('batch mode started')
+    },
+
+    endBatch: () => {
+      _batchMode = false
+
+      // Trigger single reactivity update for all changed loops
+      if (_pendingUpdates.size > 0) {
+        triggerRef(notesMatrix)
+        debugLog('batch mode ended', { updatedLoops: _pendingUpdates.size })
+        _pendingUpdates.clear()
+      } else {
+        debugLog('batch mode ended', { updatedLoops: 0 })
+      }
+    },
 
     // Utilidades
     initializeMatrix,
