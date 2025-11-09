@@ -533,7 +533,7 @@ export const useLoopManager = (notesMatrix = null) => {
   const playLoopNote = (loop, audioEngine, step, time) => {
     // Update current step for this loop
     loop.currentStep = step
-    
+
     const midiNote = notesMatrix.getNote(loop.id, step)
     if (midiNote === null || midiNote === undefined) return
     const synthModel = loop.synthModel || 'PolySynth'

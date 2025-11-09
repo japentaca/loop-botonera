@@ -9,7 +9,7 @@
           <span class="loop-label">L{{ loop.id + 1 }}</span>
         </template>
       </Button>
-      
+
       <div v-if="loop.isActive" class="beat-display">
         <span class="beat-current">{{ paddedBeatsRemaining }}</span>
         <span class="beat-remaining">left</span>
