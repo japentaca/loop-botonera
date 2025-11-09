@@ -1,6 +1,23 @@
 import { ref } from 'vue'
 import { useScales, useNoteUtils } from '../../composables/useMusic'
 
+// Helper function for efficient MIDI note clamping
+const clampToMidiRange = (note) => {
+  const MIN_MIDI = 24
+  const MAX_MIDI = 96
+  const OCTAVE = 12
+
+  if (note < MIN_MIDI) {
+    const octavesBelow = Math.ceil((MIN_MIDI - note) / OCTAVE)
+    return note + (octavesBelow * OCTAVE)
+  }
+  if (note > MAX_MIDI) {
+    const octavesAbove = Math.ceil((note - MAX_MIDI) / OCTAVE)
+    return note - (octavesAbove * OCTAVE)
+  }
+  return note
+}
+
 /**
  * Gestor de loops que maneja la creación, configuración y 
  * reproducción de patrones musicales
@@ -37,15 +54,7 @@ export const useLoopManager = (notesMatrix = null) => {
       const note = baseNote + scale[scaleIndex] + (octave * 12)
 
       // Asegurar que la nota esté en rango MIDI válido SIN salirse de la escala
-      let finalNote = note
-
-      // Si la nota está fuera del rango, transponer por octavas completas para mantener la escala
-      while (finalNote < 24) {
-        finalNote += 12
-      }
-      while (finalNote > 96) {
-        finalNote -= 12
-      }
+      const finalNote = clampToMidiRange(note)
 
       if (idx < 3) { // Log first 3 notes
       }
@@ -66,13 +75,8 @@ export const useLoopManager = (notesMatrix = null) => {
       const note = baseNote + scale[scaleIndex] + (octave * 12)
 
       // Asegurar rango MIDI válido manteniendo la nota en escala
-      let finalNote = note
-      while (finalNote < 24) {
-        finalNote += 12
-      }
-      while (finalNote > 84) {
-        finalNote -= 12
-      }
+      // Note: using 84 as upper limit instead of 96 for this function
+      const finalNote = Math.min(84, clampToMidiRange(note))
 
       if (idx < 3 && finalNote !== null) { // Log first 3 non-null notes
       }

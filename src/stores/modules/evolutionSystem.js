@@ -7,6 +7,28 @@ import { useNoteUtils, useScales } from '../../composables/useMusic'
  * para crear variaciones musicales dinámicas
  * Ahora integrado con la matriz centralizada de notas
  */
+
+// Helper functions for efficient note operations
+const clampToMidiRange = (note) => {
+  const MIN_MIDI = 24
+  const MAX_MIDI = 96
+  const OCTAVE = 12
+
+  if (note < MIN_MIDI) {
+    const octavesBelow = Math.ceil((MIN_MIDI - note) / OCTAVE)
+    return note + (octavesBelow * OCTAVE)
+  }
+  if (note > MAX_MIDI) {
+    const octavesAbove = Math.ceil((note - MAX_MIDI) / OCTAVE)
+    return note - (octavesAbove * OCTAVE)
+  }
+  return note
+}
+
+const wrapScaleDegree = (degree, scaleLength) => {
+  return ((degree % scaleLength) + scaleLength) % scaleLength
+}
+
 export const useEvolutionSystem = (notesMatrix = null) => {
   // Estado de evolución automática
   const autoEvolutionEnabled = ref(false)
@@ -19,10 +41,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   // Configuración de tipos de evolución
   const evolutionTypes = ref({
     pattern: true,      // evolucionar patrones rítmicos
-    notes: true,        // evolucionar notas/melodías
-    effects: false,     // evolución de efectos deshabilitada - solo aspectos musicales
-    volume: false,      // evolucionar volúmenes (puede ser disruptivo)
-    tempo: false        // evolucionar tempo (experimental)
+    notes: true         // evolucionar notas/melodías
   })
 
   // Probabilidades de diferentes tipos de mutación
@@ -31,26 +50,14 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     removeNote: 0.2,    // probabilidad de quitar una nota
     shiftPattern: 0.25, // probabilidad de desplazar el patrón
     changeNote: 0.4,    // probabilidad de cambiar una nota existente
-    effectChange: 0.3   // probabilidad de cambiar efectos
   })
 
-  const fallbackScale = [0, 2, 4, 5, 7, 9, 11]
 
   const pickScaleIntervals = (loop, globalScaleIntervals) => {
     // ALWAYS use the global scale intervals passed from audioStore
     // This ensures all loops use the current global scale
     return globalScaleIntervals
 
-    // Fallback: get scale name from metadata and resolve it
-    const metaScale = notesMatrix.loopMetadata[loop.id].scale
-    const { getScale } = useScales()
-    const resolved = getScale(metaScale)
-    console.warn(`[pickScaleIntervals] Using metadata scale "${metaScale}" as fallback for loop ${loop.id}`)
-    return resolved
-
-    // Final fallback
-    console.warn(`[pickScaleIntervals] Using hardcoded fallback scale for loop ${loop.id}`)
-    return fallbackScale
   }
 
   const createRandomNoteForLoop = (loop, globalScaleIntervals) => {
@@ -60,10 +67,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
     const interval = intervals[Math.floor(Math.random() * intervals.length)]
     const octave = Math.floor(Math.random() * octaveRange)
-    let note = baseNote + interval + (octave * 12)
-
-    while (note < 24) note += 12
-    while (note > 96) note -= 12
+    const note = clampToMidiRange(baseNote + interval + (octave * 12))
 
     return note
   }
@@ -193,18 +197,10 @@ export const useEvolutionSystem = (notesMatrix = null) => {
         // Move to adjacent scale degree
         const direction = Math.random() < 0.5 ? -1 : 1
         const steps = Math.floor(Math.random() * 2) + 1 // 1-2 steps
-        let newDegree = closestIntervalIndex + (direction * steps)
-
-        // Wrap around the scale if needed
-        while (newDegree < 0) newDegree += scaleIntervals.length
-        while (newDegree >= scaleIntervals.length) newDegree -= scaleIntervals.length
+        const newDegree = wrapScaleDegree(closestIntervalIndex + (direction * steps), scaleIntervals.length)
 
         const newInterval = scaleIntervals[newDegree]
-        let newNote = (octave * 12) + newInterval
-
-        // Ensure note stays in valid MIDI range
-        while (newNote < 24) newNote += 12
-        while (newNote > 96) newNote -= 12
+        const newNote = clampToMidiRange((octave * 12) + newInterval)
 
         newNotes[randomIndex] = newNote
       }
@@ -258,12 +254,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
     // Los efectos (delay y reverb) no se evolucionan automáticamente
     // Se mantienen estables para preservar la configuración del usuario
-
-    // Evolución de volumen (si está habilitada)
-    if (evolutionTypes.value.volume && Math.random() < 0.3) {
-      const volumeChange = (Math.random() - 0.5) * 0.2 * evolutionIntensity.value
-      evolvedLoop.volume = Math.max(0.1, Math.min(1.0, evolvedLoop.volume + volumeChange))
-    }
 
     // Aplicar evolución creativa si está habilitada
     if (creativeModeEnabled.value) {
@@ -416,10 +406,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
           // Agregar una nueva nota dentro de la escala
           const scaleIndex = Math.floor(Math.random() * scaleIntervals.length)
           const octave = Math.floor(Math.random() * 3) // 0-2 octavas adicionales
-          let newNote = baseNote + scaleIntervals[scaleIndex] + (octave * 12)
-          // Clamp to valid MIDI range
-          while (newNote < 24) newNote += 12
-          while (newNote > 96) newNote -= 12
+          const newNote = clampToMidiRange(baseNote + scaleIntervals[scaleIndex] + (octave * 12))
           notesMatrix.setLoopNote(loopId, randomStep, newNote)
           hasChanges = true
         }

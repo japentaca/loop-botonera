@@ -1,5 +1,21 @@
 import { ref, computed } from 'vue'
 
+// Helper function for efficient MIDI note clamping
+const clampToMidiRange = (note, maxNote = 96) => {
+  const MIN_MIDI = 24
+  const OCTAVE = 12
+
+  if (note < MIN_MIDI) {
+    const octavesBelow = Math.ceil((MIN_MIDI - note) / OCTAVE)
+    return note + (octavesBelow * OCTAVE)
+  }
+  if (note > maxNote) {
+    const octavesAbove = Math.ceil((note - maxNote) / OCTAVE)
+    return note - (octavesAbove * OCTAVE)
+  }
+  return note
+}
+
 export function useScales() {
   const scales = {
     // Escalas diatónicas
@@ -246,15 +262,7 @@ export function useNoteUtils() {
     })
 
     // Devolver la nota cuantizada en rango válido manteniendo la escala
-    let quantizedNote = baseNote + (octave * 12) + closestInterval
-
-    // Si está fuera del rango, transponer por octavas completas para mantener la escala
-    while (quantizedNote < 24) {
-      quantizedNote += 12
-    }
-    while (quantizedNote > 84) {
-      quantizedNote -= 12
-    }
+    const quantizedNote = clampToMidiRange(baseNote + (octave * 12) + closestInterval, 84)
 
     return quantizedNote
   }

@@ -1,6 +1,23 @@
 import { ref, computed, reactive, readonly } from 'vue'
 import { useScales, useNoteUtils } from './useMusic'
 
+// Helper function for efficient MIDI note clamping
+const clampToMidiRange = (note) => {
+  const MIN_MIDI = 24
+  const MAX_MIDI = 96
+  const OCTAVE = 12
+
+  if (note < MIN_MIDI) {
+    const octavesBelow = Math.ceil((MIN_MIDI - note) / OCTAVE)
+    return note + (octavesBelow * OCTAVE)
+  }
+  if (note > MAX_MIDI) {
+    const octavesAbove = Math.ceil((note - MAX_MIDI) / OCTAVE)
+    return note - (octavesAbove * OCTAVE)
+  }
+  return note
+}
+
 export function useNotesMatrix() {
   // Configuración de la matriz
   const MAX_LOOPS = 16
@@ -80,10 +97,7 @@ export function useNotesMatrix() {
 
     const scaleIndex = Math.floor(Math.random() * scaleIntervals.length)
     const octave = Math.floor(Math.random() * octaveRange)
-    let note = baseNote + scaleIntervals[scaleIndex] + (octave * 12)
-
-    while (note < 24) note += 12
-    while (note > 96) note -= 12
+    const note = clampToMidiRange(baseNote + scaleIntervals[scaleIndex] + (octave * 12))
 
     return note
   }
@@ -260,13 +274,7 @@ export function useNotesMatrix() {
       const note = baseNote + scale[scaleIndex] + (octave * 12)
 
       // Asegurar rango MIDI válido manteniendo la nota en escala
-      let finalNote = note
-      while (finalNote < 24) {
-        finalNote += 12
-      }
-      while (finalNote > 96) {
-        finalNote -= 12
-      }
+      const finalNote = clampToMidiRange(note)
 
       return finalNote
     })
