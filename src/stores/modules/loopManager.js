@@ -188,7 +188,7 @@ export const useLoopManager = (notesMatrix = null) => {
     return {
       id,
       isActive: false,
-      scale,
+      // scale removed - uses global scale from audioStore
       baseNote,
       synthModel: 'PolySynth',
       synthType,
@@ -385,59 +385,59 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   // Cuantizar notas de un loop a una nueva escala
-  const quantizeLoopNotes = (loop, newScale) => {
-    loop.scale = newScale
+  const quantizeLoopNotes = (loop, newScale, currentScaleName) => {
+    // newScale is the actual scale array (intervals)
+    // currentScaleName is the scale name (e.g., 'major', 'minor')
 
     // Verificar y ajustar la nota base si es necesario
-    const scale = useScales().getScale(newScale)
     const baseNoteInterval = loop.baseNote % 12
-    const currentBaseNoteInScale = scale.includes(baseNoteInterval)
+    const currentBaseNoteInScale = newScale.includes(baseNoteInterval)
 
     if (!currentBaseNoteInScale) {
-      loop.baseNote = generateScaleBaseNote(scale)
+      loop.baseNote = generateScaleBaseNote(newScale)
       //console.log(`🎼 Updated baseNote to ${loop.baseNote} for scale compatibility`)
     }
 
     // Usar la función de cuantización de la matriz centralizada
     // Esta función maneja internamente la actualización de metadatos
     if (notesMatrix) {
-      notesMatrix.quantizeLoop(loop.id, newScale)
+      notesMatrix.quantizeLoop(loop.id, currentScaleName)
 
       // También actualizar el metadato de escala y baseNote explícitamente
       notesMatrix.updateLoopMetadata(loop.id, {
-        scale: newScale,
+        scale: currentScaleName,
         baseNote: loop.baseNote
       })
     }
   }
 
   // Actualizar escala de todos los loops
-  const updateAllLoopsScale = (newScale) => {
-    const scale = useScales().getScale(newScale)
-    if (!scale) return
+  const updateAllLoopsScale = (newScale, currentScaleName) => {
+    // newScale is the actual scale array (intervals)
+    // currentScaleName is the scale name (e.g., 'major', 'minor')
+
+    if (!newScale) return
 
     // Actualizar cada loop individualmente para asegurar compatibilidad de base note
     loops.value.forEach(loop => {
       // Verificar y ajustar la nota base si es necesario
       const baseNoteInterval = loop.baseNote % 12
-      const currentBaseNoteInScale = scale.includes(baseNoteInterval)
+      const currentBaseNoteInScale = newScale.includes(baseNoteInterval)
 
       if (!currentBaseNoteInScale) {
-        loop.baseNote = generateScaleBaseNote(scale)
+        loop.baseNote = generateScaleBaseNote(newScale)
         //console.log(`🎼 Updated loop ${loop.id} baseNote to ${loop.baseNote} for scale compatibility`)
       }
-
-      loop.scale = scale
     })
 
     // Usar la función centralizada para cuantizar todos los loops activos
     if (notesMatrix) {
-      notesMatrix.quantizeAllActiveLoops(newScale)
+      notesMatrix.quantizeAllActiveLoops(currentScaleName)
 
       // Actualizar metadatos para todos los loops
       loops.value.forEach(loop => {
         notesMatrix.updateLoopMetadata(loop.id, {
-          scale: newScale,
+          scale: currentScaleName,
           baseNote: loop.baseNote
         })
       })
@@ -445,12 +445,13 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   // Regenerar notas de un loop
-  const regenerateLoopNotes = (id) => {
+  const regenerateLoopNotes = (id, currentScale, currentScaleName) => {
+    // currentScale is the actual scale array (intervals)
+    // currentScaleName is the scale name (e.g., 'major', 'minor')
+
     const loop = loops.value[id]
     if (loop && notesMatrix) {
       // Asegurar que la nota base esté en la escala actual
-      const currentScale = useScales().getScale(loop.scale)
-
       // Verificar si la nota base actual está en la escala
       // La nota base debe estar en los intervalos de la escala (mod 12)
       const baseNoteInterval = loop.baseNote % 12
@@ -466,7 +467,7 @@ export const useLoopManager = (notesMatrix = null) => {
 
       // Regenerar notas en la matriz centralizada
       notesMatrix.generateLoopNotes(id, {
-        scale: loop.scale,
+        scale: currentScaleName,
         baseNote: loop.baseNote,
         length: loop.length,
         density: 0.4,
@@ -476,26 +477,25 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   // Regenerar loop completo (notas y ajustes relacionados)
-  const regenerateLoop = (id, scale, adaptiveDensity = null, adaptiveVolume = null) => {
+  const regenerateLoop = (id, scale, currentScaleName, adaptiveDensity = null, adaptiveVolume = null) => {
+    // scale is the actual scale array (intervals)
+    // currentScaleName is the scale name (e.g., 'major', 'minor')
+
     const loop = loops.value[id]
     if (!loop) return
 
-    // Actualizar escala si se proporciona
+    // Si hay cambio de escala, regenerar la nota base para que esté en la nueva escala
     if (scale) {
-      loop.scale = scale
-
-      // Si hay cambio de escala, regenerar la nota base para que esté en la nueva escala
       const newBaseNote = generateScaleBaseNote(scale)
       loop.baseNote = newBaseNote
-
     }
 
     // Regenerar notas en la matriz centralizada
     if (notesMatrix) {
       // Actualizar metadatos si hay cambios de escala
-      if (scale) {
+      if (scale && currentScaleName) {
         notesMatrix.updateLoopMetadata(id, {
-          scale: loop.scale,
+          scale: currentScaleName,
           baseNote: loop.baseNote
         })
       }
@@ -504,7 +504,7 @@ export const useLoopManager = (notesMatrix = null) => {
       const targetDensity = adaptiveDensity ?? getLoopNoteDensity(id) ?? 0.4
 
       notesMatrix.generateLoopNotes(id, {
-        scale: loop.scale,
+        scale: currentScaleName,
         baseNote: loop.baseNote,
         length: loop.length,
         density: targetDensity,

@@ -35,16 +35,22 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
   const fallbackScale = [0, 2, 4, 5, 7, 9, 11]
 
-  const pickScaleIntervals = (loop) => {
-    if (Array.isArray(loop?.scale)) return loop.scale
+  const pickScaleIntervals = (loop, globalScaleIntervals) => {
+    // Use the global scale intervals passed from audioStore
+    if (Array.isArray(globalScaleIntervals) && globalScaleIntervals.length > 0) {
+      return globalScaleIntervals
+    }
+
+    // Fallback to metadata if available
     if (Array.isArray(notesMatrix?.loopMetadata?.[loop?.id]?.scale)) {
       return notesMatrix.loopMetadata[loop.id].scale
     }
+
     return fallbackScale
   }
 
-  const createRandomNoteForLoop = (loop) => {
-    const intervals = pickScaleIntervals(loop)
+  const createRandomNoteForLoop = (loop, globalScaleIntervals) => {
+    const intervals = pickScaleIntervals(loop, globalScaleIntervals)
     const baseNote = notesMatrix?.loopMetadata?.[loop?.id]?.baseNote ?? loop?.baseNote ?? 60
     const octaveRange = notesMatrix?.loopMetadata?.[loop?.id]?.octaveRange ?? 2
 
@@ -58,15 +64,15 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     return note
   }
 
-  const ensureLoopHasNotes = (loopId) => {
+  const ensureLoopHasNotes = (loopId, globalScaleIntervals) => {
     const density = notesMatrix.getLoopNoteDensity(loopId)
     if (density > 0) return
 
     const loop = audioStore.loops[loopId]
-    notesMatrix.setLoopNote(loopId, 0, createRandomNoteForLoop(loop))
+    notesMatrix.setLoopNote(loopId, 0, createRandomNoteForLoop(loop, globalScaleIntervals))
   }
 
-  const mutateLoopRhythm = (loop, intensity = evolutionIntensity.value) => {
+  const mutateLoopRhythm = (loop, globalScaleIntervals, intensity = evolutionIntensity.value) => {
     const loopNotes = notesMatrix.getLoopNotes(loop.id)
     if (loopNotes.length === 0) return false
 
@@ -79,7 +85,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
       if (currentNote === null) {
         if (Math.random() < mutationProbabilities.value.addNote) {
-          notesMatrix.setLoopNote(loop.id, stepIndex, createRandomNoteForLoop(loop))
+          notesMatrix.setLoopNote(loop.id, stepIndex, createRandomNoteForLoop(loop, globalScaleIntervals))
           mutated = true
         }
       } else if (Math.random() < mutationProbabilities.value.removeNote) {
@@ -88,7 +94,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       }
     }
 
-    ensureLoopHasNotes(loop.id)
+    ensureLoopHasNotes(loop.id, globalScaleIntervals)
     if (mutated && typeof window !== 'undefined' && window.__LOOP_DEBUG) {
       // console.log('[EvolutionSystem] Rhythm mutated', {
       //   loopId: loop.id,
@@ -99,7 +105,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     return mutated
   }
 
-  const adjustLoopDensity = (loop, targetDensity) => {
+  const adjustLoopDensity = (loop, targetDensity, globalScaleIntervals) => {
     const loopNotes = notesMatrix.getLoopNotes(loop.id)
     if (loopNotes.length === 0) return false
 
@@ -124,11 +130,11 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     while (activeIndices.length < desiredActive && inactiveIndices.length > 0) {
       const additionIndex = Math.floor(Math.random() * inactiveIndices.length)
       const stepIndex = inactiveIndices.splice(additionIndex, 1)[0]
-      notesMatrix.setLoopNote(loop.id, stepIndex, createRandomNoteForLoop(loop))
+      notesMatrix.setLoopNote(loop.id, stepIndex, createRandomNoteForLoop(loop, globalScaleIntervals))
       activeIndices.push(stepIndex)
     }
 
-    ensureLoopHasNotes(loop.id)
+    ensureLoopHasNotes(loop.id, globalScaleIntervals)
 
     if (typeof window !== 'undefined' && window.__LOOP_DEBUG) {
       // console.log('[EvolutionSystem] Density adjusted', {
@@ -186,48 +192,34 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
 
   // Aplicar evolución creativa más experimental
-  const applyCreativeEvolution = (loop, availableScales) => {
+  const applyCreativeEvolution = (loop, availableScales, globalScaleIntervals) => {
     if (!creativeModeEnabled.value) return loop
 
     const evolvedLoop = { ...loop }
 
-    // Cambio de escala ocasional en modo creativo - solo si no está bloqueada
-    if (Math.random() < 0.1 && availableScales && availableScales.length > 1 && !audioStore.scaleLocked) {
-      const currentScaleIndex = availableScales.findIndex(s => s.name === loop.scale?.name)
-      if (currentScaleIndex !== -1) {
-        const newScaleIndex = (currentScaleIndex + 1) % availableScales.length
-        evolvedLoop.scale = availableScales[newScaleIndex].notes
-
-        // Reajustar notas a la nueva escala usando la matriz centralizada
-        const newScaleNotes = availableScales[newScaleIndex].notes
-        const newNotes = Array(evolvedLoop.length).fill(null).map(() => {
-          const noteIndex = Math.floor(Math.random() * newScaleNotes.length)
-          return newScaleNotes[noteIndex]
-        })
-
-        notesMatrix.setLoopNotes(loop.id, newNotes)
-      }
-    }
+    // Cambio de escala ocasional en modo creativo - DISABLED
+    // Scale changes should only happen at the global level via audioStore
+    // Individual loops no longer have their own scales
 
     // Cambios de densidad más dramáticos
     if (Math.random() < 0.15 && notesMatrix) {
       const currentDensity = notesMatrix.getLoopNoteDensity(loop.id)
       const targetDensity = currentDensity < 0.3 ? 0.6 : 0.2
-      adjustLoopDensity(loop, targetDensity)
+      adjustLoopDensity(loop, targetDensity, globalScaleIntervals)
     }
 
     return evolvedLoop
   }
 
   // Evolucionar un loop específico
-  const evolveLoop = (loop, availableScales = null, options = {}) => {
+  const evolveLoop = (loop, globalScaleIntervals, options = {}) => {
     if (!loop || !loop.isActive) return loop
 
     let evolvedLoop = { ...loop }
 
     // Evolución de patrón a través de la matriz centralizada
     if (evolutionTypes.value.pattern) {
-      mutateLoopRhythm(loop)
+      mutateLoopRhythm(loop, globalScaleIntervals)
     }
 
     // Evolución de notas usando la matriz centralizada
@@ -235,9 +227,9 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       // Obtener notas desde la matriz centralizada
       const currentNotes = notesMatrix.getLoopNotes(loop.id)
 
-      // Evolucionar notas
-      if (evolvedLoop.scale) {
-        const evolvedNotes = evolveNotes(currentNotes, evolvedLoop.scale)
+      // Evolucionar notas using global scale intervals
+      if (globalScaleIntervals && Array.isArray(globalScaleIntervals)) {
+        const evolvedNotes = evolveNotes(currentNotes, globalScaleIntervals)
 
         // Guardar en la matriz centralizada
         notesMatrix.setLoopNotes(loop.id, evolvedNotes)
@@ -255,14 +247,14 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
     // Aplicar evolución creativa si está habilitada
     if (creativeModeEnabled.value) {
-      evolvedLoop = applyCreativeEvolution(evolvedLoop, availableScales)
+      evolvedLoop = applyCreativeEvolution(evolvedLoop, null, globalScaleIntervals)
     }
 
     return evolvedLoop
   }
 
   // Evolucionar múltiples loops de forma coordinada
-  const evolveMultipleLoops = (loops, availableScales = null, options = {}) => {
+  const evolveMultipleLoops = (loops, globalScaleIntervals, options = {}) => {
     const activeLoops = loops.filter(loop => loop.isActive)
     if (activeLoops.length === 0) return loops
 
@@ -274,7 +266,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
     return loops.map(loop => {
       if (selectedLoops.includes(loop)) {
-        return evolveLoop(loop, availableScales, options)
+        return evolveLoop(loop, globalScaleIntervals, options)
       }
       return loop
     })
@@ -338,8 +330,8 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   }
 
   // Forzar evolución inmediata
-  const forceEvolution = (loops, availableScales = null, options = {}) => {
-    const evolvedLoops = evolveMultipleLoops(loops, availableScales, options)
+  const forceEvolution = (loops, globalScaleIntervals, options = {}) => {
+    const evolvedLoops = evolveMultipleLoops(loops, globalScaleIntervals, options)
     markEvolution()
     return evolvedLoops
   }

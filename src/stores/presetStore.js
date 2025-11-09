@@ -120,7 +120,7 @@ export const usePresetStore = defineStore('preset', () => {
       return {
         id: loop.id,
         isActive: loop.isActive,
-        scale: [...loop.scale],
+        // scale removed - uses global scale from audioStore.currentScale
         baseNote: loop.baseNote,
         synthType: loop.synthModel || loop.synthType || 'PolySynth',
         oscillatorType: loop.synthType || loop.oscillatorType || 'sine',
@@ -197,7 +197,7 @@ export const usePresetStore = defineStore('preset', () => {
           }
 
           // Apply all properties directly
-          if (presetLoop.scale !== undefined) loop.scale = [...presetLoop.scale]
+          // scale removed - uses global scale from audioStore.currentScale
           if (presetLoop.baseNote !== undefined) loop.baseNote = presetLoop.baseNote
           if (presetLoop.synthType !== undefined) loop.synthModel = presetLoop.synthType
           if (presetLoop.oscillatorType !== undefined) loop.synthType = presetLoop.oscillatorType
@@ -279,17 +279,18 @@ export const usePresetStore = defineStore('preset', () => {
 
     // Generate notes for all active loops with saved density values
     if (audioStore.loopManager && Array.isArray(audioStore.loops) && Array.isArray(presetLoops)) {
+      // Get global scale from audioStore
+      const globalScale = audioStore.getScale(audioStore.currentScale)
+      const globalScaleName = audioStore.currentScale
+
       audioStore.loops.forEach((loop, index) => {
         if (!loop || !loop.isActive) return
 
         const presetLoop = presetLoops[index]
         const savedDensity = presetLoop?.density ?? 0.4
 
-        // Get scale for regeneration
-        const scale = loop.scale || audioStore.currentScale
-
-        // Regenerate with saved density (bypassing adaptive density)
-        audioStore.loopManager.regenerateLoop(index, scale, savedDensity, null)
+        // Use global scale for all loops
+        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, savedDensity, null)
       })
     }
 
