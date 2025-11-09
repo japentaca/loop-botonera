@@ -6,5 +6,9 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     port: 5173
+  },
+  test: {
+    globals: true,
+    environment: 'node'
   }
 })

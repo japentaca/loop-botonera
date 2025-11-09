@@ -277,7 +277,37 @@ export function useChords() {
     minor7: [0, 3, 7, 10],
     dominant7: [0, 4, 7, 10],
     sus2: [0, 2, 7],
-    sus4: [0, 5, 7]
+    sus4: [0, 5, 7],
+    diminished7: [0, 3, 6, 9],
+    halfDiminished7: [0, 3, 6, 10],
+    major9: [0, 4, 7, 11, 14],
+    minor9: [0, 3, 7, 10, 14],
+    add9: [0, 4, 7, 14]
+  }
+
+  // Common chord progressions by scale type
+  const chordProgressionTemplates = {
+    major: [
+      { name: 'I-IV-V-I', degrees: [0, 3, 4, 0], types: ['major', 'major', 'major', 'major'] },
+      { name: 'I-V-vi-IV', degrees: [0, 4, 5, 3], types: ['major', 'major', 'minor', 'major'] },
+      { name: 'ii-V-I', degrees: [1, 4, 0], types: ['minor', 'major', 'major'] },
+      { name: 'I-vi-IV-V', degrees: [0, 5, 3, 4], types: ['major', 'minor', 'major', 'major'] },
+      { name: 'I-iii-IV-V', degrees: [0, 2, 3, 4], types: ['major', 'minor', 'major', 'major'] }
+    ],
+    minor: [
+      { name: 'i-iv-v', degrees: [0, 3, 4], types: ['minor', 'minor', 'minor'] },
+      { name: 'i-VI-VII', degrees: [0, 5, 6], types: ['minor', 'major', 'major'] },
+      { name: 'i-iv-VII-VI', degrees: [0, 3, 6, 5], types: ['minor', 'minor', 'major', 'major'] },
+      { name: 'i-v-i', degrees: [0, 4, 0], types: ['minor', 'minor', 'minor'] }
+    ],
+    dorian: [
+      { name: 'i-IV-i', degrees: [0, 3, 0], types: ['minor', 'major', 'minor'] },
+      { name: 'i-IV-VII', degrees: [0, 3, 6], types: ['minor', 'major', 'minor'] }
+    ],
+    blues: [
+      { name: 'I-IV-V', degrees: [0, 3, 4], types: ['dominant7', 'dominant7', 'dominant7'] },
+      { name: 'I7-IV7-I7-V7', degrees: [0, 3, 0, 4], types: ['dominant7', 'dominant7', 'dominant7', 'dominant7'] }
+    ]
   }
 
   // Generar acorde
@@ -286,24 +316,229 @@ export function useChords() {
     return intervals.map(interval => rootNote + interval)
   }
 
-  // Generar progresión de acordes
-  const generateChordProgression = (scale, baseNote, length = 4) => {
+  // Generar progresión de acordes basada en escala
+  const generateChordProgression = (scale, baseNote, length = 4, scaleName = 'major') => {
     const progression = []
-
-    for (let i = 0; i < length; i++) {
+    
+    // Get template for this scale type if available
+    const templates = chordProgressionTemplates[scaleName] || chordProgressionTemplates.major
+    const template = templates[Math.floor(Math.random() * templates.length)]
+    
+    // Generate progression from template
+    const progressionLength = Math.min(length, template.degrees.length)
+    
+    for (let i = 0; i < progressionLength; i++) {
+      const degreeIndex = template.degrees[i % template.degrees.length]
+      const chordType = template.types[i % template.types.length]
+      const chordRoot = baseNote + scale[degreeIndex % scale.length]
+      
+      progression.push({
+        notes: generateChord(chordRoot, chordType),
+        root: chordRoot,
+        type: chordType,
+        degree: degreeIndex
+      })
+    }
+    
+    // Fill remaining with random chords if needed
+    for (let i = progressionLength; i < length; i++) {
       const scaleIndex = Math.floor(Math.random() * scale.length)
       const chordRoot = baseNote + scale[scaleIndex]
       const chordType = Math.random() > 0.7 ? 'minor' : 'major'
-      progression.push(generateChord(chordRoot, chordType))
+      
+      progression.push({
+        notes: generateChord(chordRoot, chordType),
+        root: chordRoot,
+        type: chordType,
+        degree: scaleIndex
+      })
     }
 
     return progression
   }
 
+  // Get chord for a specific scale degree
+  const getScaleDegreeChord = (scale, baseNote, degree, chordType = 'major') => {
+    const rootNote = baseNote + scale[degree % scale.length]
+    return {
+      notes: generateChord(rootNote, chordType),
+      root: rootNote,
+      type: chordType,
+      degree
+    }
+  }
+
+  // Detect which chord a note belongs to in a progression
+  const detectChordFromNote = (note, progression) => {
+    for (const chord of progression) {
+      if (chord.notes.some(chordNote => (note % 12) === (chordNote % 12))) {
+        return chord
+      }
+    }
+    return null
+  }
+
   return {
     chordTypes,
+    chordProgressionTemplates,
     generateChord,
-    generateChordProgression
+    generateChordProgression,
+    getScaleDegreeChord,
+    detectChordFromNote
+  }
+}
+
+// Polyrhythmic pattern utilities
+export function usePolyrhythm() {
+  // Calculate least common multiple for syncing different loop lengths
+  const lcm = (a, b) => {
+    const gcd = (x, y) => y === 0 ? x : gcd(y, x % y)
+    return Math.abs(a * b) / gcd(a, b)
+  }
+
+  // Find the cycle length for multiple loops
+  const calculatePolyrythmCycle = (lengths) => {
+    return lengths.reduce((acc, len) => lcm(acc, len), 1)
+  }
+
+  // Generate polyrhythmic pattern ratios (e.g., 3:4, 5:7)
+  const polyrhythmRatios = [
+    { name: '3:2', lengths: [3, 2], description: 'Hemiola' },
+    { name: '3:4', lengths: [3, 4], description: 'Triple against quadruple' },
+    { name: '5:4', lengths: [5, 4], description: 'Quintuple against quadruple' },
+    { name: '7:4', lengths: [7, 4], description: 'Septuple against quadruple' },
+    { name: '5:3', lengths: [5, 3], description: 'Quintuple against triple' },
+    { name: '7:5', lengths: [7, 5], description: 'Septuple against quintuple' }
+  ]
+
+  // Generate a polyrhythmic pattern set for multiple loops
+  const generatePolyrhythmicSet = (numLoops, baseLength = 16) => {
+    const ratios = polyrhythmRatios[Math.floor(Math.random() * polyrhythmRatios.length)]
+    const patterns = []
+
+    for (let i = 0; i < numLoops; i++) {
+      const lengthIndex = i % ratios.lengths.length
+      const patternLength = ratios.lengths[lengthIndex] * Math.floor(baseLength / Math.max(...ratios.lengths))
+      patterns.push({
+        length: patternLength,
+        ratio: ratios.lengths[lengthIndex],
+        cycle: calculatePolyrythmCycle(ratios.lengths)
+      })
+    }
+
+    return {
+      name: ratios.name,
+      description: ratios.description,
+      patterns
+    }
+  }
+
+  // Check if loops are aligned in polyrhythmic cycle
+  const isPolyrythmicAlignment = (step, loopLength, cycleLength) => {
+    return step % cycleLength === 0
+  }
+
+  return {
+    lcm,
+    calculatePolyrythmCycle,
+    polyrhythmRatios,
+    generatePolyrhythmicSet,
+    isPolyrythmicAlignment
+  }
+}
+
+// Musical style definitions for evolution
+export function useMusicalStyles() {
+  const styles = {
+    ambient: {
+      name: 'Ambient',
+      description: 'Atmospheric, sparse, evolving textures',
+      scalePreferences: ['major', 'lydian', 'pentatonic', 'wholeTone'],
+      density: { min: 0.1, max: 0.3 },
+      evolutionIntensity: 0.2,
+      chordTypes: ['major', 'major7', 'sus2', 'sus4'],
+      tempo: { min: 60, max: 90 }
+    },
+    jazz: {
+      name: 'Jazz',
+      description: 'Complex harmonies, swing feel, sophisticated',
+      scalePreferences: ['dorian', 'mixolydian', 'altered', 'bebop'],
+      density: { min: 0.4, max: 0.7 },
+      evolutionIntensity: 0.5,
+      chordTypes: ['major7', 'minor7', 'dominant7', 'halfDiminished7', 'major9'],
+      tempo: { min: 120, max: 180 }
+    },
+    techno: {
+      name: 'Techno',
+      description: 'Repetitive, driving, minimal variation',
+      scalePreferences: ['minor', 'phrygian', 'harmonicMinor'],
+      density: { min: 0.6, max: 0.9 },
+      evolutionIntensity: 0.3,
+      chordTypes: ['minor', 'minor7', 'diminished'],
+      tempo: { min: 120, max: 140 }
+    },
+    classical: {
+      name: 'Classical',
+      description: 'Traditional progressions, balanced',
+      scalePreferences: ['major', 'minor', 'harmonicMinor'],
+      density: { min: 0.4, max: 0.6 },
+      evolutionIntensity: 0.4,
+      chordTypes: ['major', 'minor', 'diminished', 'dominant7'],
+      tempo: { min: 80, max: 140 }
+    },
+    minimal: {
+      name: 'Minimal',
+      description: 'Very sparse, slow evolution',
+      scalePreferences: ['pentatonic', 'minorPentatonic', 'major'],
+      density: { min: 0.1, max: 0.2 },
+      evolutionIntensity: 0.1,
+      chordTypes: ['major', 'minor'],
+      tempo: { min: 80, max: 110 }
+    },
+    experimental: {
+      name: 'Experimental',
+      description: 'Unpredictable, dissonant, avant-garde',
+      scalePreferences: ['chromatic', 'wholeTone', 'diminished', 'altered'],
+      density: { min: 0.3, max: 0.8 },
+      evolutionIntensity: 0.8,
+      chordTypes: ['diminished', 'augmented', 'diminished7'],
+      tempo: { min: 60, max: 160 }
+    },
+    world: {
+      name: 'World',
+      description: 'Ethnic scales, exotic flavors',
+      scalePreferences: ['hirajoshi', 'kumoi', 'pelog', 'pentatonic'],
+      density: { min: 0.3, max: 0.6 },
+      evolutionIntensity: 0.4,
+      chordTypes: ['major', 'minor', 'sus4'],
+      tempo: { min: 90, max: 130 }
+    }
+  }
+
+  const getStyle = (styleName) => {
+    return styles[styleName] || styles.classical
+  }
+
+  const getStyleNames = () => {
+    return Object.keys(styles)
+  }
+
+  const getRandomStyleScale = (styleName) => {
+    const style = getStyle(styleName)
+    return style.scalePreferences[Math.floor(Math.random() * style.scalePreferences.length)]
+  }
+
+  const getStyleChordType = (styleName) => {
+    const style = getStyle(styleName)
+    return style.chordTypes[Math.floor(Math.random() * style.chordTypes.length)]
+  }
+
+  return {
+    styles,
+    getStyle,
+    getStyleNames,
+    getRandomStyleScale,
+    getStyleChordType
   }
 }
 

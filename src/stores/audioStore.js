@@ -2,12 +2,15 @@ import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
 import { useScales, useMusic } from '../composables/useMusic'
 import { useNotesMatrix } from '../composables/useNotesMatrix'
+import { useChordProgression } from '../composables/useChordProgression'
 
 // Importar los nuevos módulos especializados
 import { useAudioEngine } from './modules/audioEngine'
 import { useLoopManager } from './modules/loopManager'
 import { useEnergyManager } from './modules/energyManager'
 import { useEvolutionSystem } from './modules/evolutionSystem'
+import { useStyleEvolution } from './modules/styleEvolution'
+import { usePolyrhythmManager } from './modules/polyrhythmManager'
 
 // Importar presetStore para disparar auto-guardado cuando hay cambios
 // Se importa aquí para evitar dependencias circulares, se usa solo cuando es necesario
@@ -46,6 +49,9 @@ export const useAudioStore = defineStore('audio', () => {
   const loopManager = useLoopManager(notesMatrix)
   const energyManager = useEnergyManager(notesMatrix)
   const evolutionSystem = useEvolutionSystem(notesMatrix)
+  const styleEvolution = useStyleEvolution()
+  const polyrhythmManager = usePolyrhythmManager()
+  const chordProgression = useChordProgression()
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major')
@@ -110,6 +116,10 @@ export const useAudioStore = defineStore('audio', () => {
 
       // Inicializar loops con configuración por defecto - pass scale NAME not intervals
       loopManager.initializeLoops(currentScale.value, audioEngine)
+
+      // Initialize chord progression
+      const baseNote = 60 // C4
+      chordProgression.initializeProgression(currentScale.value, baseNote, 4)
 
       audioStoreInitializing = false
       return true
@@ -245,6 +255,12 @@ export const useAudioStore = defineStore('audio', () => {
     // Update the global scale in the notes matrix using setter
     if (notesMatrix && notesMatrix.setGlobalScale) {
       notesMatrix.setGlobalScale(newScale)
+    }
+
+    // Update chord progression to match new scale
+    const baseNote = 60 // C4
+    if (chordProgression && chordProgression.updateProgressionForScale) {
+      chordProgression.updateProgressionForScale(newScale, baseNote)
     }
 
     if (!audioEngine.audioInitialized.value) {
@@ -612,6 +628,88 @@ export const useAudioStore = defineStore('audio', () => {
     notifyPresetChanges()
   }
 
+  // New functions for polyrhythm support
+  const enablePolyrhythm = (ratio = null) => {
+    if (!audioEngine.audioInitialized.value) return
+
+    const activeLoops = loopManager.getActiveLoops()
+    if (activeLoops.length < 2) {
+      console.warn('[AudioStore] Need at least 2 active loops for polyrhythm')
+      return
+    }
+
+    if (ratio) {
+      polyrhythmManager.applyRatio(ratio, loopManager.loops.value, loopManager)
+    } else {
+      polyrhythmManager.initializePolyrhythm(activeLoops.length)
+      polyrhythmManager.applyPolyrhythmToLoops(loopManager.loops.value, loopManager)
+    }
+
+    notifyPresetChanges()
+  }
+
+  const disablePolyrhythm = () => {
+    if (!audioEngine.audioInitialized.value) return
+    
+    polyrhythmManager.disablePolyrhythm(loopManager.loops.value, loopManager)
+    notifyPresetChanges()
+  }
+
+  // New functions for style-based evolution
+  const setMusicalStyle = (styleName) => {
+    const success = styleEvolution.setStyle(styleName)
+    if (!success) return
+
+    // Apply style settings to evolution and energy systems
+    styleEvolution.applyStyleToEvolution(evolutionSystem, energyManager)
+
+    // Optionally change to a style-appropriate scale
+    const styleScale = styleEvolution.getStyleAppropriateScale()
+    if (styleScale && !scaleLocked.value) {
+      updateScale(styleScale)
+    }
+
+    // Optionally adjust tempo for style
+    const styleTempo = styleEvolution.getStyleTempo()
+    updateTempo(styleTempo)
+
+    notifyPresetChanges()
+  }
+
+  // New functions for chord progression
+  const initializeChordProgression = (length = 4) => {
+    if (!audioEngine.audioInitialized.value) return
+
+    const baseNote = 60 // C4
+    chordProgression.initializeProgression(currentScale.value, baseNote, length)
+    notifyPresetChanges()
+  }
+
+  const advanceChordInProgression = () => {
+    chordProgression.advanceChord()
+  }
+
+  const regenerateWithChordProgression = (loopId) => {
+    if (!audioEngine.audioInitialized.value) return
+
+    const scale = useScales().getScale(currentScale.value)
+    const baseNote = 60
+    const loop = loopManager.loops.value[loopId]
+    
+    if (!loop) return
+
+    // Generate chord-aware melody
+    const melody = chordProgression.generateChordAwareMelody(
+      loop.length,
+      currentScale.value,
+      baseNote
+    )
+
+    // Set notes in matrix
+    notesMatrix.setLoopNotes(loopId, melody)
+    notifyPresetChanges()
+  }
+
   return {
     // Estado del motor de audio
     audioInitialized: audioEngine.audioInitialized,
@@ -694,6 +792,27 @@ export const useAudioStore = defineStore('audio', () => {
     getAdaptiveDensity: energyManager.getAdaptiveDensity,
     getAdaptiveVolume: energyManager.getAdaptiveVolume,
     adjustAllLoopVolumes: () => energyManager.adjustAllLoopVolumes(loopManager.loops.value),
+
+    // Polyrhythm functions
+    polyrhythmEnabled: computed(() => polyrhythmManager.polyrhythmEnabled.value),
+    polyrhythmInfo: computed(() => polyrhythmManager.getPolyrhythmInfo()),
+    enablePolyrhythm,
+    disablePolyrhythm,
+    getPolyrhythmRatios: polyrhythmManager.getAvailableRatios,
+
+    // Style-based evolution functions
+    currentStyle: computed(() => styleEvolution.currentStyle.value),
+    availableStyles: computed(() => styleEvolution.getAvailableStyles()),
+    currentStyleInfo: computed(() => styleEvolution.getCurrentStyleInfo()),
+    setMusicalStyle,
+
+    // Chord progression functions
+    chordProgressionEnabled: ref(false),
+    currentChord: computed(() => chordProgression.getCurrentChord.value),
+    progressionInfo: computed(() => chordProgression.getProgressionInfo()),
+    initializeChordProgression,
+    advanceChordInProgression,
+    regenerateWithChordProgression,
 
     // Expose loopManager for preset operations
     loopManager,
