@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, shallowRef, triggerRef } from 'vue'
 import { useScales, useNoteUtils } from '../../composables/useMusic'
 
 // Helper function for efficient MIDI note clamping
@@ -24,8 +24,9 @@ const clampToMidiRange = (note) => {
  * Ahora integrado con la matriz de notas centralizada
  */
 export const useLoopManager = (notesMatrix = null) => {
-  // Estado de los loops
-  const loops = ref([])
+  // Estado de los loops - using shallowRef for performance
+  // We don't need deep reactivity since currentStep is now computed in components
+  const loops = shallowRef([])
   const NUM_LOOPS = 8
 
   // Global root note for harmonic consistency - all loops use the same root
@@ -271,6 +272,9 @@ export const useLoopManager = (notesMatrix = null) => {
 
       // console.log(`🔄 LOOP MANAGER: Loop ${i} created successfully`);
     }
+
+    // Trigger reactivity for shallowRef after initial setup
+    triggerRef(loops)
 
     //console.log('🔄 LOOP MANAGER: All loops initialized, total:', loops.value.length);
   }
@@ -526,8 +530,7 @@ export const useLoopManager = (notesMatrix = null) => {
 
   // Reproducir nota de un loop específico
   const playLoopNote = (loop, audioEngine, step, time) => {
-    // Update current step for this loop
-    loop.currentStep = step
+    // No need to update currentStep - it's now computed in components based on currentPulse
 
     const midiNote = notesMatrix.getNote(loop.id, step)
     if (midiNote === null || midiNote === undefined) return

@@ -1,4 +1,4 @@
-import { ref, computed, reactive, readonly } from 'vue'
+import { ref, computed, reactive, readonly, shallowRef, triggerRef } from 'vue'
 import { useScales, useNoteUtils } from './useMusic'
 
 // Helper function for efficient MIDI note clamping
@@ -24,7 +24,8 @@ export function useNotesMatrix() {
   const MAX_STEPS = 32
 
   // Matriz principal de notas [loopId][stepIndex] = midiNote | null
-  const notesMatrix = ref(Array(MAX_LOOPS).fill(null).map(() => Array(MAX_STEPS).fill(null)))
+  // Using shallowRef for performance as this matrix changes frequently during playback
+  const notesMatrix = shallowRef(Array(MAX_LOOPS).fill(null).map(() => Array(MAX_STEPS).fill(null)))
 
   // Metadatos por loop
   const loopMetadata = reactive({})

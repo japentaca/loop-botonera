@@ -9,6 +9,15 @@ import { useLoopManager } from './modules/loopManager'
 import { useEnergyManager } from './modules/energyManager'
 import { useEvolutionSystem } from './modules/evolutionSystem'
 
+// Debounce utility function for performance optimization
+const debounce = (fn, delay) => {
+  let timeoutId = null
+  return (...args) => {
+    if (timeoutId) clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => fn(...args), delay)
+  }
+}
+
 // Importar presetStore para disparar auto-guardado cuando hay cambios
 // Se importa aquí para evitar dependencias circulares, se usa solo cuando es necesario
 let presetStoreInstance = null
@@ -22,13 +31,14 @@ const getPresetStore = async () => {
 }
 
 // Función centralizada para notificar cambios al presetStore
-const notifyPresetChanges = () => {
+// Debounced to avoid excessive calls during rapid parameter changes
+const notifyPresetChanges = debounce(() => {
   // Ejecutar de forma asíncrona pero sin bloquear
   Promise.resolve().then(async () => {
     const presetStore = await getPresetStore()
     presetStore.handleChange()
   })
-}
+}, 300) // 300ms debounce delay
 
 export const useAudioStore = defineStore('audio', () => {
   // Inicializar matriz de notas centralizada primero
@@ -39,6 +49,11 @@ export const useAudioStore = defineStore('audio', () => {
   const loopManager = useLoopManager(notesMatrix)
   const energyManager = useEnergyManager(notesMatrix)
   const evolutionSystem = useEvolutionSystem(notesMatrix)
+
+  // Debounced energy balance check to avoid excessive calculations during rapid param changes
+  const debouncedEnergyCheck = debounce((loops) => {
+    energyManager.checkAndBalanceEnergy(loops)
+  }, 150) // 150ms debounce for energy checks
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major')
@@ -155,8 +170,9 @@ export const useAudioStore = defineStore('audio', () => {
 
     // Verificar balance energético solo cuando se cambia el volumen
     // Los efectos (delay/reverb) no deben activar la gestión automática de energía
+    // Using debounced version to avoid excessive calculations
     if (param === 'volume') {
-      energyManager.checkAndBalanceEnergy(loopManager.loops.value)
+      debouncedEnergyCheck(loopManager.loops.value)
     }
 
     // Disparar notificación de cambios para activar auto-guardado en el preset

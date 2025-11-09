@@ -119,15 +119,21 @@
     return `${direction}${value}`
   }
 
+  // Calculate current step based on global pulse instead of storing in loop
+  const currentStep = computed(() => {
+    if (!props.loop.isActive) return 0
+    return (audioStore.currentPulse - 1) % props.loop.length
+  })
+
   // Current beat being played (1-indexed for display)
   const currentBeat = computed(() => {
-    return props.loop.isActive ? (props.loop.currentStep || 0) + 1 : 0
+    return props.loop.isActive ? currentStep.value + 1 : 0
   })
 
   // Beats remaining in the loop
   const beatsRemaining = computed(() => {
     if (!props.loop.isActive) return 0
-    const remaining = props.loop.length - (props.loop.currentStep || 0) - 1
+    const remaining = props.loop.length - currentStep.value - 1
     return Math.max(0, remaining)
   })
 
@@ -139,8 +145,7 @@
   // Progreso del beat como porcentaje
   const beatProgress = computed(() => {
     if (!props.loop.isActive) return 0
-    const step = props.loop.currentStep || 0
-    return (step / props.loop.length) * 100
+    return (currentStep.value / props.loop.length) * 100
   })
 </script>
 
