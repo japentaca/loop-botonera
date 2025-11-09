@@ -9,7 +9,6 @@ import {
   updatePreset,
   deletePreset,
   duplicatePreset,
-  validatePreset,
   getStorageStats
 } from '../services/presetService'
 
@@ -103,17 +102,14 @@ export const usePresetStore = defineStore('preset', () => {
       energyReductionFactor: audioStore.energyReductionFactor
     }
 
-    // Capturar configuración de loops (sin incluir las notas generadas)
+    // Capturar configuración de loops - save "as is"
     const loops = audioStore.loops.map(loop => ({
       id: loop.id,
       isActive: loop.isActive,
       scale: [...loop.scale],
       baseNote: loop.baseNote,
-      // Nomenclatura correcta: synthType es el tipo de sintetizador, oscillatorType es la forma de onda
-      synthType: loop.synthModel || loop.synthType || 'PolySynth', // Tipo de sintetizador
-      oscillatorType: loop.synthType || loop.oscillatorType || 'sine', // Forma de onda
-      pattern: [...loop.pattern],
-      // notes: [...loop.notes], // No guardar las notas generadas - se generarán al cargar
+      synthType: loop.synthModel || loop.synthType || 'PolySynth',
+      oscillatorType: loop.synthType || loop.oscillatorType || 'sine',
       length: loop.length,
       delayAmount: loop.delayAmount,
       reverbAmount: loop.reverbAmount,
@@ -122,7 +118,7 @@ export const usePresetStore = defineStore('preset', () => {
       envelope: { ...loop.envelope },
       harmonicity: loop.harmonicity,
       modulationIndex: loop.modulationIndex,
-      synthConfig: loop.synthConfig ? { ...loop.synthConfig } : null
+      synthConfig: loop.synthConfig
     }))
 
     return {
@@ -134,10 +130,10 @@ export const usePresetStore = defineStore('preset', () => {
   // Aplicar preset al estado de la aplicación
   const applyPresetToState = async (preset, options = {}) => {
     try {
-
-      // Validar preset antes de aplicar
-      if (!validatePreset(preset)) {
-        throw new Error('Preset inválido')
+      // No validation - apply preset "as is"
+      if (!preset) {
+        console.error('Error applying preset - preset is null or undefined, aborting')
+        throw new Error('Preset is null or undefined')
       }
 
       isLoadingPreset.value = true
@@ -147,66 +143,60 @@ export const usePresetStore = defineStore('preset', () => {
       const wasAutoSaveEnabled = autoSaveEnabled.value
       autoSaveEnabled.value = false
 
-      // Aplicar configuración global
+      // Aplicar configuración global - read values "as is"
       const { globalConfig, loops: presetLoops } = preset
 
-      // Actualizar configuración global con validación de tipos
-      if (typeof globalConfig.tempo === 'number') audioStore.updateTempo(globalConfig.tempo)
-      if (typeof globalConfig.masterVol === 'number') audioStore.updateMasterVolume(globalConfig.masterVol * 100)
-      if (typeof globalConfig.currentScale === 'string') audioStore.currentScale = globalConfig.currentScale
-      // delayDivision se actualiza al final para asegurar que la interfaz se actualice correctamente
+      // Update global config directly without type validation
+      if (globalConfig.tempo !== undefined) audioStore.updateTempo(globalConfig.tempo)
+      if (globalConfig.masterVol !== undefined) audioStore.updateMasterVolume(globalConfig.masterVol * 100)
+      if (globalConfig.currentScale !== undefined) audioStore.currentScale = globalConfig.currentScale
 
-      // Configuración de evolución automática
-      if (typeof globalConfig.autoEvolve === 'boolean') audioStore.autoEvolve = globalConfig.autoEvolve
+      // Evolution config
+      if (globalConfig.autoEvolve !== undefined) audioStore.autoEvolve = globalConfig.autoEvolve
 
-      // Solo aplicar valores de evolución si no se especifica preservarlos
+      // Only apply evolution values if not preserving them
       if (!options.preserveEvolutionSettings) {
-        if (typeof globalConfig.evolveInterval === 'number') audioStore.updateEvolveInterval(globalConfig.evolveInterval)
-        if (typeof globalConfig.evolveIntensity === 'number') audioStore.updateEvolveIntensity(globalConfig.evolveIntensity)
+        if (globalConfig.evolveInterval !== undefined) audioStore.updateEvolveInterval(globalConfig.evolveInterval)
+        if (globalConfig.evolveIntensity !== undefined) audioStore.updateEvolveIntensity(globalConfig.evolveIntensity)
       }
-      if (typeof globalConfig.momentumMaxLevel === 'number') audioStore.momentumMaxLevel = globalConfig.momentumMaxLevel
-      if (typeof globalConfig.scaleLocked === 'boolean') audioStore.scaleLocked = globalConfig.scaleLocked
+      if (globalConfig.momentumMaxLevel !== undefined) audioStore.momentumMaxLevel = globalConfig.momentumMaxLevel
+      if (globalConfig.scaleLocked !== undefined) audioStore.scaleLocked = globalConfig.scaleLocked
 
-      // Tipos de evolución
-      if (typeof globalConfig.momentumEnabled === 'boolean') audioStore.setMomentumEnabled(globalConfig.momentumEnabled)
-      if (typeof globalConfig.callResponseEnabled === 'boolean') audioStore.setCallResponseEnabled(globalConfig.callResponseEnabled)
-      if (typeof globalConfig.tensionReleaseMode === 'boolean') audioStore.setTensionReleaseMode(globalConfig.tensionReleaseMode)
+      // Evolution types
+      if (globalConfig.momentumEnabled !== undefined) audioStore.setMomentumEnabled(globalConfig.momentumEnabled)
+      if (globalConfig.callResponseEnabled !== undefined) audioStore.setCallResponseEnabled(globalConfig.callResponseEnabled)
+      if (globalConfig.tensionReleaseMode !== undefined) audioStore.setTensionReleaseMode(globalConfig.tensionReleaseMode)
 
-      // Gestión de energía sonora
-      if (typeof globalConfig.energyManagementEnabled === 'boolean') audioStore.energyManagementEnabled = globalConfig.energyManagementEnabled
-      if (typeof globalConfig.maxSonicEnergy === 'number') audioStore.maxSonicEnergy = globalConfig.maxSonicEnergy
-      if (typeof globalConfig.energyReductionFactor === 'number') audioStore.energyReductionFactor = globalConfig.energyReductionFactor
+      // Energy management
+      if (globalConfig.energyManagementEnabled !== undefined) audioStore.energyManagementEnabled = globalConfig.energyManagementEnabled
+      if (globalConfig.maxSonicEnergy !== undefined) audioStore.maxSonicEnergy = globalConfig.maxSonicEnergy
+      if (globalConfig.energyReductionFactor !== undefined) audioStore.energyReductionFactor = globalConfig.energyReductionFactor
 
-      // Aplicar configuración de loops con validación
+      // Apply loop configuration directly "as is"
       if (Array.isArray(presetLoops)) {
         presetLoops.forEach((presetLoop, index) => {
           if (index < audioStore.loops.length && presetLoop) {
             const loop = audioStore.loops[index]
 
-            // Actualizar propiedades del loop con validación de tipos
-            if (typeof presetLoop.isActive === 'boolean') loop.isActive = presetLoop.isActive
-            if (Array.isArray(presetLoop.scale)) loop.scale = [...presetLoop.scale]
-            if (typeof presetLoop.baseNote === 'number') loop.baseNote = presetLoop.baseNote
-
-            // Corregir aplicación de tipo de sintetizador y forma de onda
-            // Priorizar la nueva nomenclatura, pero mantener compatibilidad
-            if (typeof presetLoop.synthType === 'string') {
-              loop.synthModel = presetLoop.synthType // Tipo de sintetizador
-            } else if (typeof presetLoop.synthModel === 'string') {
-              loop.synthModel = presetLoop.synthModel // Compatibilidad hacia atrás
+            // Apply loop properties directly without validation
+            // Set active state
+            const targetActiveState = presetLoop.isActive !== undefined ? presetLoop.isActive : false
+            if (audioStore.setLoopActive) {
+              audioStore.setLoopActive(index, targetActiveState)
+            } else {
+              loop.isActive = targetActiveState
             }
 
-            if (typeof presetLoop.oscillatorType === 'string') {
-              loop.synthType = presetLoop.oscillatorType // Forma de onda
-            } else if (typeof presetLoop.synthType === 'string' && !presetLoop.oscillatorType) {
-              // Si solo existe synthType en preset antiguo, asumimos que es la forma de onda
-              loop.synthType = presetLoop.synthType
-            }
-            if (typeof presetLoop.length === 'number') {
-              // Si el tamaño cambió, actualizar y regenerar patrón y notas
+            // Apply all properties directly
+            if (presetLoop.scale !== undefined) loop.scale = [...presetLoop.scale]
+            if (presetLoop.baseNote !== undefined) loop.baseNote = presetLoop.baseNote
+            if (presetLoop.synthType !== undefined) loop.synthModel = presetLoop.synthType
+            if (presetLoop.oscillatorType !== undefined) loop.synthType = presetLoop.oscillatorType
+            if (presetLoop.synthModel !== undefined) loop.synthModel = presetLoop.synthModel
+
+            if (presetLoop.length !== undefined) {
               if (loop.length !== presetLoop.length) {
                 loop.length = presetLoop.length
-                // Usar updateLoopParam para regenerar patrón y notas correctamente
                 if (audioStore.updateLoopParam) {
                   audioStore.updateLoopParam(index, 'length', presetLoop.length)
                 }
@@ -214,103 +204,97 @@ export const usePresetStore = defineStore('preset', () => {
                 loop.length = presetLoop.length
               }
             }
-            // Aplicar patrón del preset (las notas se generarán después)
-            if (Array.isArray(presetLoop.pattern)) loop.pattern = [...presetLoop.pattern]
-            // No aplicar las notas del preset - se generarán automáticamente
-            // if (Array.isArray(presetLoop.notes)) loop.notes = [...presetLoop.notes]
-            if (typeof presetLoop.delayAmount === 'number') loop.delayAmount = presetLoop.delayAmount
-            if (typeof presetLoop.reverbAmount === 'number') loop.reverbAmount = presetLoop.reverbAmount
-            if (typeof presetLoop.volume === 'number') loop.volume = presetLoop.volume
-            if (typeof presetLoop.pan === 'number') loop.pan = presetLoop.pan
 
-            // Envelope con validación
-            if (presetLoop.envelope && typeof presetLoop.envelope === 'object') {
+            if (presetLoop.delayAmount !== undefined) loop.delayAmount = presetLoop.delayAmount
+            if (presetLoop.reverbAmount !== undefined) loop.reverbAmount = presetLoop.reverbAmount
+            if (presetLoop.volume !== undefined) loop.volume = presetLoop.volume
+            if (presetLoop.pan !== undefined) loop.pan = presetLoop.pan
+
+            // Apply envelope directly
+            if (presetLoop.envelope) {
               loop.envelope = { ...loop.envelope, ...presetLoop.envelope }
             }
 
-            if (typeof presetLoop.harmonicity === 'number') loop.harmonicity = presetLoop.harmonicity
-            if (typeof presetLoop.modulationIndex === 'number') loop.modulationIndex = presetLoop.modulationIndex
-            if (presetLoop.synthConfig && typeof presetLoop.synthConfig === 'object') {
-              loop.synthConfig = { ...presetLoop.synthConfig }
-            }
-
-            // Actualizar sintetizador con la configuración correcta
+            // Apply synth parameters directly
+            if (presetLoop.harmonicity !== undefined) loop.harmonicity = presetLoop.harmonicity
+            if (presetLoop.modulationIndex !== undefined) loop.modulationIndex = presetLoop.modulationIndex
+            if (presetLoop.synthConfig) loop.synthConfig = presetLoop.synthConfig
+            // Update synth with direct config application
             if (audioStore.updateLoopSynth) {
               try {
-                // Crear configuración del sintetizador basada en los valores del preset
                 const synthConfig = {
-                  type: loop.synthModel || 'PolySynth', // Tipo de sintetizador
-                  oscillator: { type: loop.synthType || 'sine' }, // Forma de onda
-                  envelope: { ...loop.envelope },
-                  harmonicity: loop.harmonicity,
-                  modulationIndex: loop.modulationIndex
+                  type: loop.synthModel || 'PolySynth',
+                  oscillator: { type: loop.synthType || 'sine' },
+                  envelope: { ...loop.envelope }
                 }
 
-                // Si hay configuración específica del sintetizador, usarla
-                if (presetLoop.synthConfig && typeof presetLoop.synthConfig === 'object') {
-                  Object.assign(synthConfig, presetLoop.synthConfig)
-                }
+                if (loop.harmonicity !== undefined) synthConfig.harmonicity = loop.harmonicity
+                if (loop.modulationIndex !== undefined) synthConfig.modulationIndex = loop.modulationIndex
 
                 audioStore.updateLoopSynth(index, synthConfig)
               } catch (synthError) {
-                console.warn(`Error actualizando sintetizador del loop ${index}:`, synthError)
+                console.warn(`Error updating synth for loop ${index}:`, synthError)
               }
             }
 
-            // Actualizar parámetros de efectos
+            // Update effect parameters
             if (audioStore.updateLoopParam) {
               try {
-                audioStore.updateLoopParam(index, 'delayAmount', presetLoop.delayAmount)
-                audioStore.updateLoopParam(index, 'reverbAmount', presetLoop.reverbAmount)
-                audioStore.updateLoopParam(index, 'volume', presetLoop.volume)
-                audioStore.updateLoopParam(index, 'pan', presetLoop.pan)
+                if (presetLoop.delayAmount !== undefined) audioStore.updateLoopParam(index, 'delayAmount', presetLoop.delayAmount)
+                if (presetLoop.reverbAmount !== undefined) audioStore.updateLoopParam(index, 'reverbAmount', presetLoop.reverbAmount)
+                if (presetLoop.volume !== undefined) audioStore.updateLoopParam(index, 'volume', presetLoop.volume)
+                if (presetLoop.pan !== undefined) audioStore.updateLoopParam(index, 'pan', presetLoop.pan)
               } catch (paramError) {
-                console.warn(`Error actualizando parámetros del loop ${index}:`, paramError)
+                console.warn(`Error updating parameters for loop ${index}:`, paramError)
               }
             }
           }
         })
       }
 
-      // Actualizar tempo y otros parámetros globales
-      if (audioStore.updateTempo && typeof globalConfig.tempo === 'number') {
+      // Update global parameters directly
+      if (audioStore.updateTempo && globalConfig.tempo !== undefined) {
         audioStore.updateTempo(globalConfig.tempo)
       }
-      if (audioStore.updateMasterVolume && typeof globalConfig.masterVol === 'number') {
+      if (audioStore.updateMasterVolume && globalConfig.masterVol !== undefined) {
         audioStore.updateMasterVolume(Math.round(globalConfig.masterVol * 100))
       }
-      if (audioStore.updateScale && typeof globalConfig.currentScale === 'string') {
+      if (audioStore.updateScale && globalConfig.currentScale !== undefined) {
         audioStore.updateScale(globalConfig.currentScale)
       }
-      // Aplicar delayDivision al final para asegurar que se actualice correctamente
-      if (audioStore.updateDelayDivision && typeof globalConfig.delayDivision === 'string') {
+      if (audioStore.updateDelayDivision && globalConfig.delayDivision !== undefined) {
         audioStore.updateDelayDivision(globalConfig.delayDivision)
 
-        // Esperar múltiples ticks para asegurar que la interfaz se actualice
+        // Wait for UI updates
         await nextTick()
         await nextTick()
 
-        // Forzar una segunda actualización para asegurar que el DOM se actualice
-        audioStore.updateDelayDivision(globalConfig.delayDivision)
-        await nextTick()
+        // Force second update
+        if (globalConfig.delayDivision !== undefined) {
+          audioStore.updateDelayDivision(globalConfig.delayDivision)
+          await nextTick()
+        }
       }
 
-      // Generar notas para todos los loops después de aplicar la configuración del preset
+      // Generate notes for active loops
       if (audioStore.loops && audioStore.generateRandomNotes && Array.isArray(audioStore.loops)) {
         audioStore.loops.forEach((loop, index) => {
-          if (loop && loop.isActive) {
-            // Generar notas usando la configuración del loop cargado
-            try {
-              audioStore.generateRandomNotes(index, {
-                scale: loop.scale,
-                baseNote: loop.baseNote,
-                length: loop.length,
-                density: 0.4, // Densidad por defecto
-                octaveRange: 2 // Rango de octavas por defecto
-              })
-            } catch (error) {
-              console.warn(`Error generando notas para loop ${index}:`, error)
-            }
+          if (!loop || !loop.isActive) return
+
+          const sourcePresetLoop = Array.isArray(presetLoops) ? presetLoops[index] : null
+          const desiredDensity = sourcePresetLoop?.density || 0.4
+
+          // Generate notes with current loop config
+          try {
+            audioStore.generateRandomNotes(index, {
+              scale: loop.scale,
+              baseNote: loop.baseNote,
+              length: loop.length,
+              density: Math.max(0.05, Math.min(0.95, desiredDensity)),
+              octaveRange: 2
+            })
+          } catch (error) {
+            console.warn(`Error generating notes for loop ${index}:`, error)
           }
         })
       }
@@ -319,8 +303,8 @@ export const usePresetStore = defineStore('preset', () => {
       autoSaveEnabled.value = wasAutoSaveEnabled
 
     } catch (error) {
-      console.error('Error al aplicar preset:', error)
-      // Restaurar auto-guardado en caso de error
+      console.error('Error applying preset - aborting:', error)
+      // Restore auto-save in case of error
       autoSaveEnabled.value = true
       throw error
     } finally {
@@ -358,7 +342,8 @@ export const usePresetStore = defineStore('preset', () => {
       const preset = await getPresetById(presetId)
 
       if (!preset) {
-        throw new Error('Preset no encontrado')
+        console.error('Error loading preset - preset not found, aborting')
+        throw new Error('Preset not found')
       }
 
       await applyPresetToState(preset)
@@ -368,7 +353,7 @@ export const usePresetStore = defineStore('preset', () => {
 
       return preset
     } catch (error) {
-      console.error('Error al cargar preset:', error)
+      console.error('Error loading preset - aborting:', error)
       throw error
     } finally {
       isLoading.value = false
@@ -531,21 +516,35 @@ export const usePresetStore = defineStore('preset', () => {
     }
   }
 
-  // Configurar watchers para auto-guardado (temporarily disabled to debug infinite loop)
+  // Configure watchers for auto-save
   const setupAutoSave = () => {
-    console.log('🔄 PRESET STORE: setupAutoSave called but watchers disabled for debugging');
-    // Temporarily disable watchers to fix infinite loop
-    /*
     const audioStore = useAudioStore()
 
-    // Only watch major configuration changes, not every slider movement
-    watch(() => audioStore.tempo, handleChange)
-    watch(() => audioStore.currentScale, handleChange)
-    watch(() => audioStore.autoEvolve, handleChange)
+    // Watch only major configuration changes to avoid infinite loops
+    watch(() => audioStore.tempo, () => {
+      if (!isLoadingPreset.value && autoSaveEnabled.value) {
+        handleChange()
+      }
+    })
+    
+    watch(() => audioStore.currentScale, () => {
+      if (!isLoadingPreset.value && autoSaveEnabled.value) {
+        handleChange()
+      }
+    })
+    
+    watch(() => audioStore.autoEvolve, () => {
+      if (!isLoadingPreset.value && autoSaveEnabled.value) {
+        handleChange()
+      }
+    })
     
     // Watch loop activity changes but not every parameter
-    watch(() => audioStore.loops.map(l => l.isActive), handleChange)
-    */
+    watch(() => audioStore.loops.map(l => l.isActive), () => {
+      if (!isLoadingPreset.value && autoSaveEnabled.value) {
+        handleChange()
+      }
+    })
   }
 
   // Abrir/cerrar diálogo

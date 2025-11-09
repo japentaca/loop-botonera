@@ -40,7 +40,7 @@ export const useAudioStore = defineStore('audio', () => {
   // Inicializar módulos especializados con acceso a la matriz
   const audioEngine = useAudioEngine()
   const loopManager = useLoopManager(notesMatrix)
-  const energyManager = useEnergyManager()
+  const energyManager = useEnergyManager(notesMatrix)
   const evolutionSystem = useEvolutionSystem(notesMatrix)
 
   // Estado específico del store principal (coordinación entre módulos)
@@ -96,9 +96,8 @@ export const useAudioStore = defineStore('audio', () => {
 
     activeLoops.forEach(loop => {
       const step = (pulse - 1) % loop.length
-      if (loop.pattern[step]) {
-        loopManager.playLoopNote(loop, audioEngine, step, time)
-      }
+      // Trigger based on centralized notes matrix only; pattern array is deprecated
+      loopManager.playLoopNote(loop, audioEngine, step, time)
     })
   }
 
@@ -170,6 +169,26 @@ export const useAudioStore = defineStore('audio', () => {
     }
 
     // Notificar cambios para auto-guardado
+    notifyPresetChanges()
+  }
+
+  // Establecer explícitamente el estado activo de un loop (idempotente)
+  const setLoopActive = (id, active) => {
+    const loop = loopManager.loops.value[id]
+    if (!loop) return
+
+    const desired = Boolean(active)
+    if (loop.isActive === desired) return
+
+    // Usar la misma ruta que toggle para mantener sincronización con la matriz
+    loopManager.toggleLoop(id)
+
+    // Ajustar energía tras el cambio
+    if (energyManager.energyManagementEnabled.value) {
+      energyManager.adjustAllLoopVolumes(loopManager.loops.value)
+    }
+
+    // Notificar cambios (será ignorado si el presetStore está cargando)
     notifyPresetChanges()
   }
 
@@ -346,11 +365,21 @@ export const useAudioStore = defineStore('audio', () => {
     const callerCandidates = activeLoops.filter(l => l.id !== lastCallerId.value)
     const pickCaller = (list) => {
       if (!list.length) return null
-      // Priorizar densidad de patrón
+
+      const densityForLoop = (loop) => {
+        if (!loop) return 0
+        try {
+          return notesMatrix.getLoopNoteDensity(loop.id) || 0
+        } catch (error) {
+          console.warn('No se pudo obtener densidad del loop', loop.id, error)
+          return 0
+        }
+      }
+
       return list.reduce((best, loop) => {
-        const density = Array.isArray(loop.pattern) ? loop.pattern.filter(Boolean).length : 0
-        const bestDensity = Array.isArray(best?.pattern) ? best.pattern.filter(Boolean).length : -1
-        return density > bestDensity ? loop : best
+        const candidateDensity = densityForLoop(loop)
+        const bestDensity = densityForLoop(best)
+        return candidateDensity > bestDensity ? loop : best
       }, null) || list[0]
     }
     const caller = pickCaller(callerCandidates.length ? callerCandidates : activeLoops)
@@ -593,6 +622,7 @@ export const useAudioStore = defineStore('audio', () => {
     initAudio,
     togglePlay,
     toggleLoop,
+    setLoopActive,
     updateLoopParam,
     updateLoopSynth,
     regenerateLoop,

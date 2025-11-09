@@ -1,4 +1,4 @@
-import { ref, computed, reactive, watch, readonly } from 'vue'
+import { ref, computed, reactive, readonly } from 'vue'
 import { useScales, useNoteUtils } from './useMusic'
 
 export function useNotesMatrix() {
@@ -21,12 +21,89 @@ export function useNotesMatrix() {
     syncMode: 'all' // 'all', 'selected', 'none'
   })
 
-  const { getScale, generateScaleNotes } = useScales()
+  const { getScale } = useScales()
   const { quantizeToScale } = useNoteUtils()
+
+  const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
+  const debugLog = (label, payload = {}) => {
+    if (isDebugEnabled()) {
+      console.log(`[NotesMatrix] ${label}`, payload)
+    }
+  }
+
+  const resolveScaleIntervals = (candidate) => {
+    if (Array.isArray(candidate)) return candidate
+    return getScale(candidate || matrixState.currentScale)
+  }
+
+  const refreshMatrixStepCount = () => {
+    let maxLength = 0
+    matrixState.activeLoops.forEach(loopId => {
+      const meta = loopMetadata[loopId]
+      if (meta && typeof meta.length === 'number') {
+        maxLength = Math.max(maxLength, meta.length)
+      }
+    })
+    matrixState.stepCount = maxLength || 16
+  }
+
+  const computeLoopDensityMetrics = (loopId) => {
+    const meta = loopMetadata[loopId]
+    if (!meta) {
+      return { noteCount: 0, length: 0, density: 0 }
+    }
+
+    const length = Math.max(0, Math.min(MAX_STEPS, meta.length || 0))
+    if (length === 0) {
+      return { noteCount: 0, length: 0, density: 0 }
+    }
+
+    const notes = notesMatrix.value[loopId]?.slice(0, length) || []
+    const noteCount = notes.filter(note => note !== null && note !== undefined).length
+    const density = length > 0 ? noteCount / length : 0
+    return { noteCount, length, density }
+  }
+
+  const updateDensityCache = (loopId) => {
+    const metrics = computeLoopDensityMetrics(loopId)
+    if (loopMetadata[loopId]) {
+      loopMetadata[loopId].density = metrics.density
+      loopMetadata[loopId].lastModified = Date.now()
+    }
+    return metrics
+  }
+
+  const generateRandomNoteForLoop = (loopId) => {
+    const meta = loopMetadata[loopId]
+    if (!meta) return null
+
+    const scaleIntervals = resolveScaleIntervals(meta.scale)
+    const baseNote = meta.baseNote || matrixState.globalBaseNote
+    const octaveRange = Math.max(1, meta.octaveRange || 1)
+
+    const scaleIndex = Math.floor(Math.random() * scaleIntervals.length)
+    const octave = Math.floor(Math.random() * octaveRange)
+    let note = baseNote + scaleIntervals[scaleIndex] + (octave * 12)
+
+    while (note < 24) note += 12
+    while (note > 96) note -= 12
+
+    return note
+  }
+
+  const ensureAtLeastOneNote = (loopId) => {
+    const metrics = computeLoopDensityMetrics(loopId)
+    if (metrics.length === 0 || metrics.noteCount > 0) return
+
+    const fallbackNote = generateRandomNoteForLoop(loopId)
+    notesMatrix.value[loopId][0] = fallbackNote
+    updateDensityCache(loopId)
+    debugLog('fallback note injected', { loopId, fallbackNote })
+  }
 
   // Computed para obtener la escala actual
   const currentScaleNotes = computed(() => {
-    return getScale(matrixState.currentScale)
+    return resolveScaleIntervals(matrixState.currentScale)
   })
 
   // Inicializar metadatos de un loop
@@ -35,15 +112,16 @@ export function useNotesMatrix() {
 
     loopMetadata[loopId] = {
       isActive: false,
-      length: config.length || 16,
+      length: Math.max(1, Math.min(MAX_STEPS, config.length || 16)),
       scale: config.scale || matrixState.currentScale,
       baseNote: config.baseNote || matrixState.globalBaseNote,
-      density: config.density || 0.4,
+      density: typeof config.density === 'number' ? config.density : 0.4,
       octaveRange: config.octaveRange || 2,
       lastModified: Date.now(),
       ...config
     }
 
+    debugLog('initialize loop', { loopId, metadata: { ...loopMetadata[loopId] } })
     return true
   }
 
@@ -57,14 +135,28 @@ export function useNotesMatrix() {
     } else {
       matrixState.activeLoops.delete(loopId)
     }
+    refreshMatrixStepCount()
+    debugLog('set loop active', { loopId, active })
   }
 
   // Actualizar metadatos de un loop
   const updateLoopMetadata = (loopId, updates) => {
     if (!loopMetadata[loopId]) initializeLoop(loopId)
 
-    Object.assign(loopMetadata[loopId], updates)
+    const sanitizedUpdates = { ...updates }
+
+    if (sanitizedUpdates.length !== undefined) {
+      loopMetadata[loopId].length = Math.max(1, Math.min(MAX_STEPS, sanitizedUpdates.length))
+      delete sanitizedUpdates.length
+      refreshMatrixStepCount()
+    }
+
+    Object.assign(loopMetadata[loopId], sanitizedUpdates)
     loopMetadata[loopId].lastModified = Date.now()
+    if (sanitizedUpdates.baseNote !== undefined || sanitizedUpdates.density !== undefined) {
+      updateDensityCache(loopId)
+    }
+    debugLog('update metadata', { loopId, updates: sanitizedUpdates })
     return true
   }
 
@@ -81,29 +173,41 @@ export function useNotesMatrix() {
 
     if (!loopMetadata[loopId]) initializeLoop(loopId)
 
-    // Limpiar el array del loop
+    const targetLength = Math.max(1, Math.min(MAX_STEPS, notes.length || loopMetadata[loopId].length || 16))
+    loopMetadata[loopId].length = targetLength
+
     notesMatrix.value[loopId].fill(null)
 
-    // Establecer las nuevas notas
     notes.forEach((note, index) => {
       if (index < MAX_STEPS) {
         notesMatrix.value[loopId][index] = note
       }
     })
 
-    loopMetadata[loopId].lastModified = Date.now()
+    const metrics = updateDensityCache(loopId)
+    ensureAtLeastOneNote(loopId)
+    refreshMatrixStepCount()
+    debugLog('set loop notes', { loopId, metrics })
     return true
   }
 
   // Establecer una nota específica
-  const setNote = (loopId, stepIndex, note) => {
+  const setLoopNote = (loopId, stepIndex, note) => {
     if (loopId >= MAX_LOOPS || stepIndex >= MAX_STEPS) return false
 
     notesMatrix.value[loopId][stepIndex] = note
-    if (loopMetadata[loopId]) {
-      loopMetadata[loopId].lastModified = Date.now()
-    }
+    const metrics = updateDensityCache(loopId)
+    ensureAtLeastOneNote(loopId)
+    debugLog('set loop note', { loopId, stepIndex, note, metrics })
     return true
+  }
+
+  const clearLoopNote = (loopId, stepIndex) => {
+    const success = setLoopNote(loopId, stepIndex, null)
+    if (success) {
+      debugLog('clear loop note', { loopId, stepIndex })
+    }
+    return success
   }
 
   // Obtener una nota específica
@@ -117,10 +221,10 @@ export function useNotesMatrix() {
     if (!loopMetadata[loopId]) initializeLoop(loopId, config)
 
     const meta = loopMetadata[loopId]
-    const scale = getScale(config.scale || meta.scale)
+    const scale = resolveScaleIntervals(config.scale || meta.scale)
     const baseNote = config.baseNote || meta.baseNote
-    const length = config.length || meta.length
-    const density = config.density || meta.density
+    const length = Math.max(1, Math.min(MAX_STEPS, config.length || meta.length || 16))
+    const density = typeof config.density === 'number' ? config.density : (meta.density ?? 0.4)
     const octaveRange = config.octaveRange || meta.octaveRange
 
     const newNotes = Array(length).fill(null).map(() => {
@@ -142,8 +246,37 @@ export function useNotesMatrix() {
       return finalNote
     })
 
+    meta.length = length
+    meta.density = density
     setLoopNotes(loopId, newNotes)
+    debugLog('generate loop notes', { loopId, length, density })
     return newNotes
+  }
+
+  const resizeLoop = (loopId, newLength, options = {}) => {
+    if (!loopMetadata[loopId]) initializeLoop(loopId)
+
+    const meta = loopMetadata[loopId]
+    const targetLength = Math.max(1, Math.min(MAX_STEPS, Math.round(newLength)))
+    const currentNotes = getLoopNotes(loopId)
+    const density = options.density ?? computeLoopDensityMetrics(loopId).density ?? meta.density ?? 0.4
+
+    let nextNotes
+    if (targetLength <= currentNotes.length) {
+      nextNotes = currentNotes.slice(0, targetLength)
+    } else {
+      nextNotes = [...currentNotes]
+      const extraSteps = targetLength - currentNotes.length
+      for (let i = 0; i < extraSteps; i++) {
+        nextNotes.push(Math.random() < density ? generateRandomNoteForLoop(loopId) : null)
+      }
+    }
+
+    meta.length = targetLength
+    meta.density = density
+    setLoopNotes(loopId, nextNotes)
+    debugLog('resize loop', { loopId, newLength: targetLength, density })
+    return nextNotes
   }
 
   // Cuantizar un loop a una nueva escala
@@ -151,7 +284,7 @@ export function useNotesMatrix() {
     if (!loopMetadata[loopId]) return false
 
     const targetScale = newScale || matrixState.currentScale
-    const scale = getScale(targetScale)
+    const scale = resolveScaleIntervals(targetScale)
     const baseNote = loopMetadata[loopId].baseNote
     const length = loopMetadata[loopId].length
 
@@ -163,7 +296,8 @@ export function useNotesMatrix() {
     }
 
     loopMetadata[loopId].scale = targetScale
-    loopMetadata[loopId].lastModified = Date.now()
+    updateDensityCache(loopId)
+    debugLog('quantize loop', { loopId, targetScale })
     return true
   }
 
@@ -191,7 +325,9 @@ export function useNotesMatrix() {
       }
     }
 
-    loopMetadata[loopId].lastModified = Date.now()
+    updateDensityCache(loopId)
+    ensureAtLeastOneNote(loopId)
+    debugLog('transpose loop', { loopId, semitones })
     return true
   }
 
@@ -200,19 +336,19 @@ export function useNotesMatrix() {
     if (!loopMetadata[loopId]) return false
 
     const length = loopMetadata[loopId].length
-    const notes = getLoopNotes(loopId)
+    if (length === 0) return false
 
+    const notes = getLoopNotes(loopId)
     if (notes.length === 0) return false
 
-    const rotatedNotes = [...notes]
-    const actualSteps = ((steps % length) + length) % length
+    const rotated = Array.from({ length }, (_, index) => {
+      const originalIndex = (index - steps) % length
+      const safeIndex = originalIndex < 0 ? originalIndex + length : originalIndex
+      return notes[safeIndex]
+    })
 
-    for (let i = 0; i < length; i++) {
-      const newIndex = (i + actualSteps) % length
-      rotatedNotes[newIndex] = notes[i]
-    }
-
-    setLoopNotes(loopId, rotatedNotes)
+    setLoopNotes(loopId, rotated)
+    debugLog('rotate loop', { loopId, steps })
     return true
   }
 
@@ -223,6 +359,7 @@ export function useNotesMatrix() {
     const notes = getLoopNotes(loopId)
     const reversedNotes = [...notes].reverse()
     setLoopNotes(loopId, reversedNotes)
+    debugLog('invert loop', { loopId })
     return true
   }
 
@@ -231,9 +368,9 @@ export function useNotesMatrix() {
     if (!loopMetadata[loopId]) return false
 
     const meta = loopMetadata[loopId]
-    const scale = getScale(meta.scale)
+    const scale = resolveScaleIntervals(meta.scale)
     const length = meta.length
-    const changeCount = Math.floor(length * intensity)
+    const changeCount = Math.max(1, Math.floor(length * intensity))
 
     for (let i = 0; i < changeCount; i++) {
       const randomIndex = Math.floor(Math.random() * length)
@@ -248,7 +385,9 @@ export function useNotesMatrix() {
       }
     }
 
-    meta.lastModified = Date.now()
+    updateDensityCache(loopId)
+    ensureAtLeastOneNote(loopId)
+    debugLog('mutate loop', { loopId, intensity })
     return true
   }
 
@@ -266,7 +405,9 @@ export function useNotesMatrix() {
       ...loopMetadata[sourceLoopId],
       lastModified: Date.now()
     })
-
+    updateDensityCache(targetLoopId)
+    refreshMatrixStepCount()
+    debugLog('copy loop', { sourceLoopId, targetLoopId })
     return true
   }
 
@@ -280,14 +421,14 @@ export function useNotesMatrix() {
     }
 
     matrixState.activeLoops.forEach(loopId => {
-      const notes = getLoopNotes(loopId)
-      const noteCount = notes.filter(note => note !== null).length
-      stats.totalNotes += noteCount
-      stats.notesPerLoop[loopId] = noteCount
+      const metrics = computeLoopDensityMetrics(loopId)
+      stats.totalNotes += metrics.noteCount
+      stats.notesPerLoop[loopId] = metrics
     })
 
-    if (matrixState.activeLoops.size > 0) {
-      stats.averageDensity = stats.totalNotes / (matrixState.activeLoops.size * matrixState.stepCount)
+    if (matrixState.activeLoops.size > 0 && matrixState.stepCount > 0) {
+      const totalSteps = matrixState.activeLoops.size * matrixState.stepCount
+      stats.averageDensity = totalSteps ? stats.totalNotes / totalSteps : 0
     }
 
     return stats
@@ -311,6 +452,7 @@ export function useNotesMatrix() {
     matrixState.globalBaseNote = 60
     matrixState.stepCount = 16
     matrixState.syncMode = 'all'
+    debugLog('initialize matrix')
   }
 
   // Limpiar matriz completa
@@ -318,6 +460,8 @@ export function useNotesMatrix() {
     notesMatrix.value.forEach(loop => loop.fill(null))
     Object.keys(loopMetadata).forEach(key => delete loopMetadata[key])
     matrixState.activeLoops.clear()
+    matrixState.stepCount = 16
+    debugLog('clear matrix')
   }
 
   // Exportar/importar matriz
@@ -334,9 +478,17 @@ export function useNotesMatrix() {
 
     try {
       notesMatrix.value = data.notes
+      Object.keys(loopMetadata).forEach(key => delete loopMetadata[key])
       Object.assign(loopMetadata, data.metadata)
-      Object.assign(matrixState, data.state)
-      matrixState.activeLoops = new Set(data.state.activeLoops || [])
+      matrixState.activeLoops = new Set(data.state?.activeLoops || [])
+      matrixState.currentScale = data.state?.currentScale || 'major'
+      matrixState.globalBaseNote = data.state?.globalBaseNote || 60
+      matrixState.stepCount = data.state?.stepCount || 16
+      matrixState.syncMode = data.state?.syncMode || 'all'
+
+      Object.keys(loopMetadata).forEach(loopId => updateDensityCache(Number(loopId)))
+      refreshMatrixStepCount()
+      debugLog('import matrix', { activeLoops: Array.from(matrixState.activeLoops) })
       return true
     } catch (error) {
       console.error('Error importing matrix:', error)
@@ -357,11 +509,16 @@ export function useNotesMatrix() {
     updateLoopMetadata,
     getLoopNotes,
     setLoopNotes,
-    setNote,
+    setLoopNote,
+    clearLoopNote,
     getNote,
+
+    getLoopNoteDensity: (loopId) => computeLoopDensityMetrics(loopId).density,
+    getLoopDensityMetrics: computeLoopDensityMetrics,
 
     // Generación
     generateLoopNotes,
+    resizeLoop,
 
     // Cuantización
     quantizeLoop,

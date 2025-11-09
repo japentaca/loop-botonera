@@ -100,7 +100,7 @@
     </div>
 
     <template #footer>
-      <Button @click="synthStore.closeSynthEditor" label="OK" icon="pi pi-check" class="p-button-success" />
+      <Button @click="handleSynthEditorClose" label="OK" icon="pi pi-check" class="p-button-success" />
     </template>
   </Dialog>
 </template>
@@ -109,6 +109,7 @@
   import { onMounted, onUnmounted, onBeforeMount, onBeforeUnmount, computed } from 'vue'
   import { useSynthStore } from '../stores/synthStore'
   import { useAudioStore } from '../stores/audioStore'
+  import { usePresetStore } from '../stores/presetStore'
   import Dialog from 'primevue/dialog'
   import Button from 'primevue/button'
   import Dropdown from 'primevue/dropdown'
@@ -119,9 +120,19 @@
 
   const synthStore = useSynthStore()
   const audioStore = useAudioStore()
+  const presetStore = usePresetStore()
 
   // Check if audio is initialized for enabling/disabling controls
   const audioInitialized = computed(() => audioStore.audioInitialized)
+
+  // Handler to close synth editor and trigger autosave
+  const handleSynthEditorClose = async () => {
+    synthStore.closeSynthEditor()
+    // Trigger autosave to persist synth changes to preset
+    if (presetStore.currentPresetId) {
+      presetStore.handleChange()
+    }
+  }
 
   onBeforeMount(() => {
     console.log('🔴 SYNTH_EDITOR: onBeforeMount fired - Instance ID:', componentId);

@@ -14,25 +14,21 @@ export const useLoopManager = (notesMatrix = null) => {
   // Configuración
   const synthTypes = ['sine', 'triangle', 'square', 'sawtooth']
 
-  // Funciones de generación de patrones
-  const generatePattern = (length, density = null) => {
-    const pattern = new Array(length).fill(false)
-
-    // Usar densidad proporcionada o calcular una aleatoria
-    const patternDensity = density !== null ? density : (0.3 + Math.random() * 0.4)
-
-    for (let i = 0; i < length; i++) {
-      if (Math.random() < patternDensity) {
-        pattern[i] = true
-      }
+  const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
+  const debugLog = (label, payload = {}) => {
+    if (isDebugEnabled()) {
+      console.log(`[LoopManager] ${label}`, payload)
     }
+  }
 
-    // Asegurar al menos una nota activa
-    if (!pattern.some(Boolean)) {
-      pattern[0] = true
+  const getLoopNoteDensity = (loopId) => {
+    if (!notesMatrix || typeof loopId !== 'number') return 0
+    try {
+      return notesMatrix.getLoopNoteDensity(loopId) || 0
+    } catch (error) {
+      console.warn('No se pudo calcular densidad del loop', loopId, error)
+      return 0
     }
-
-    return pattern
   }
 
   const generateNotes = (scale, baseNote, length) => {
@@ -207,7 +203,6 @@ export const useLoopManager = (notesMatrix = null) => {
       baseNote,
       synthModel: 'PolySynth',
       synthType,
-      pattern: generatePattern(length, adaptiveDensity),
       // notes: removido - ahora se usa la matriz centralizada
       length,
       // Objetos de audio (se asignarán después)
@@ -328,6 +323,20 @@ export const useLoopManager = (notesMatrix = null) => {
       if (notesMatrix) {
         notesMatrix.setLoopActive(id, loop.isActive)
       }
+
+      if (isDebugEnabled()) {
+        const activeIds = loops.value.filter(l => l.isActive).map(l => l.id)
+        const densities = activeIds.map(loopId => ({
+          id: loopId,
+          density: getLoopNoteDensity(loopId)
+        }))
+        debugLog('toggle loop', {
+          id,
+          isActive: loop.isActive,
+          activeIds,
+          densities
+        })
+      }
     }
   }
 
@@ -340,19 +349,12 @@ export const useLoopManager = (notesMatrix = null) => {
       case 'length': {
         const newLen = Math.max(1, Math.round(Number(value)))
         loop.length = newLen
-        loop.pattern = generatePattern(newLen)
 
-        // Actualizar en la matriz centralizada
         if (notesMatrix) {
-          // Actualizar metadatos y regenerar notas con nueva longitud
+          const density = getLoopNoteDensity(id) || 0.4
           notesMatrix.updateLoopMetadata(id, { length: newLen })
-          notesMatrix.generateLoopNotes(id, {
-            scale: loop.scale,
-            baseNote: loop.baseNote,
-            length: newLen,
-            density: 0.4,
-            octaveRange: 2
-          })
+          notesMatrix.resizeLoop(id, newLen, { density })
+          debugLog('loop length resized', { id, newLen, density })
         }
         break
       }
@@ -452,14 +454,6 @@ export const useLoopManager = (notesMatrix = null) => {
     }
   }
 
-  // Regenerar patrón de un loop
-  const regenerateLoopPattern = (id, density = null) => {
-    const loop = loops.value[id]
-    if (loop) {
-      loop.pattern = generatePattern(loop.length, density)
-    }
-  }
-
   // Regenerar notas de un loop
   const regenerateLoopNotes = (id) => {
     const loop = loops.value[id]
@@ -489,12 +483,12 @@ export const useLoopManager = (notesMatrix = null) => {
         octaveRange: 2
       })
     }
-  }  // Regenerar loop completo (patrón y notas)
+  }
+
+  // Regenerar loop completo (notas y ajustes relacionados)
   const regenerateLoop = (id, scale, adaptiveDensity = null, adaptiveVolume = null) => {
     const loop = loops.value[id]
     if (!loop) return
-
-
 
     // Actualizar escala si se proporciona
     if (scale) {
@@ -505,9 +499,6 @@ export const useLoopManager = (notesMatrix = null) => {
       loop.baseNote = newBaseNote
 
     }
-
-    // Regenerar patrón con densidad adaptiva
-    loop.pattern = generatePattern(loop.length, adaptiveDensity)
 
     // Regenerar notas en la matriz centralizada
     if (notesMatrix) {
@@ -520,12 +511,20 @@ export const useLoopManager = (notesMatrix = null) => {
       }
 
       // Regenerar notas en la matriz centralizada
+      const targetDensity = adaptiveDensity ?? getLoopNoteDensity(id) ?? 0.4
+
       notesMatrix.generateLoopNotes(id, {
         scale: loop.scale,
         baseNote: loop.baseNote,
         length: loop.length,
-        density: adaptiveDensity || 0.4,
+        density: targetDensity,
         octaveRange: 2
+      })
+      debugLog('regenerate loop', {
+        id,
+        scaleChanged: Boolean(scale),
+        newLength: loop.length,
+        density: targetDensity
       })
     }
 
@@ -614,7 +613,7 @@ export const useLoopManager = (notesMatrix = null) => {
 
   const setLoopNoteInMatrix = (loopId, stepIndex, midiNote) => {
     if (!notesMatrix) return false
-    return notesMatrix.setNote(loopId, stepIndex, midiNote)
+    return notesMatrix.setLoopNote(loopId, stepIndex, midiNote)
   }
 
   const getMatrixStats = () => {
@@ -732,12 +731,10 @@ export const useLoopManager = (notesMatrix = null) => {
     applySparseDistribution,
 
     // Funciones de generación
-    generatePattern,
     generateNotes,
     generateNotesInRange,
     generateScaleBaseNote,
     generateResponseFromCall,
-    regenerateLoopPattern,
     regenerateLoopNotes,
     regenerateLoop,
 
@@ -752,6 +749,7 @@ export const useLoopManager = (notesMatrix = null) => {
     // Acceso a matriz centralizada
     getLoopNotesFromMatrix,
     setLoopNoteInMatrix,
+    getLoopNoteDensity,
     getMatrixStats
   }
 }
