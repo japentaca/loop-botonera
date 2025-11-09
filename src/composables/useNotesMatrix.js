@@ -240,8 +240,24 @@ export function useNotesMatrix() {
 
     console.log(`[generateLoopNotes] Loop ${loopId}, scale: "${scaleName}", intervals: [${scale}], baseNote: ${baseNote}, length: ${length}, density: ${density}`)
 
+    // Calculate how many notes should be placed
+    const targetNoteCount = Math.max(1, Math.round(length * density))
+
+    // Create array of available positions
+    const availablePositions = Array.from({ length }, (_, i) => i)
+
+    // Shuffle positions to distribute notes randomly but evenly
+    for (let i = availablePositions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+        ;[availablePositions[i], availablePositions[j]] = [availablePositions[j], availablePositions[i]]
+    }
+
+    // Select the first targetNoteCount positions
+    const notePositions = new Set(availablePositions.slice(0, targetNoteCount))
+
+    // Generate the notes array with distributed positions
     const newNotes = Array(length).fill(null).map((_, idx) => {
-      if (Math.random() > density) return null // Silencio según densidad
+      if (!notePositions.has(idx)) return null
 
       const scaleIndex = Math.floor(Math.random() * scale.length)
       const octave = Math.floor(Math.random() * octaveRange)

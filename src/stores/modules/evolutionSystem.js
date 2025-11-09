@@ -87,18 +87,38 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const changeCount = Math.max(1, Math.floor(loopNotes.length * intensity * 0.5))
     let mutated = false
 
-    for (let i = 0; i < changeCount; i++) {
-      const stepIndex = Math.floor(Math.random() * loopNotes.length)
-      const currentNote = loopNotes[stepIndex]
+    // Get positions of existing notes and empty positions
+    const activePositions = []
+    const emptyPositions = []
+    loopNotes.forEach((note, idx) => {
+      if (note === null || note === undefined) {
+        emptyPositions.push(idx)
+      } else {
+        activePositions.push(idx)
+      }
+    })
 
-      if (currentNote === null) {
-        if (Math.random() < mutationProbabilities.value.addNote) {
-          const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
-          notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
-          mutated = true
-        }
-      } else if (Math.random() < mutationProbabilities.value.removeNote) {
+    // Shuffle empty positions for better distribution
+    for (let i = emptyPositions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+        ;[emptyPositions[i], emptyPositions[j]] = [emptyPositions[j], emptyPositions[i]]
+    }
+
+    for (let i = 0; i < changeCount; i++) {
+      const action = Math.random()
+
+      if (action < mutationProbabilities.value.addNote && emptyPositions.length > 0) {
+        // Add note to a distributed empty position
+        const stepIndex = emptyPositions.shift()
+        const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
+        notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
+        mutated = true
+      } else if (action < mutationProbabilities.value.addNote + mutationProbabilities.value.removeNote && activePositions.length > 1) {
+        // Remove note from random active position (keep at least 1)
+        const randomIdx = Math.floor(Math.random() * activePositions.length)
+        const stepIndex = activePositions.splice(randomIdx, 1)[0]
         notesMatrix.clearLoopNote(loop.id, stepIndex)
+        emptyPositions.push(stepIndex)
         mutated = true
       }
     }
@@ -130,15 +150,22 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       }
     })
 
+    // Shuffle inactive indices for better distribution
+    for (let i = inactiveIndices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+        ;[inactiveIndices[i], inactiveIndices[j]] = [inactiveIndices[j], inactiveIndices[i]]
+    }
+
+    // Remove excess notes randomly from active positions
     while (activeIndices.length > desiredActive) {
       const removalIndex = Math.floor(Math.random() * activeIndices.length)
       const stepIndex = activeIndices.splice(removalIndex, 1)[0]
       notesMatrix.clearLoopNote(loop.id, stepIndex)
     }
 
+    // Add notes to distributed inactive positions
     while (activeIndices.length < desiredActive && inactiveIndices.length > 0) {
-      const additionIndex = Math.floor(Math.random() * inactiveIndices.length)
-      const stepIndex = inactiveIndices.splice(additionIndex, 1)[0]
+      const stepIndex = inactiveIndices.shift()
       const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
       notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
       activeIndices.push(stepIndex)
