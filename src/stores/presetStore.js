@@ -107,23 +107,35 @@ export const usePresetStore = defineStore('preset', () => {
     }
 
     // Capturar configuración de loops - save "as is"
-    const loops = audioStore.loops.map(loop => ({
-      id: loop.id,
-      isActive: loop.isActive,
-      scale: [...loop.scale],
-      baseNote: loop.baseNote,
-      synthType: loop.synthModel || loop.synthType || 'PolySynth',
-      oscillatorType: loop.synthType || loop.oscillatorType || 'sine',
-      length: loop.length,
-      delayAmount: loop.delayAmount,
-      reverbAmount: loop.reverbAmount,
-      volume: loop.volume,
-      pan: loop.pan,
-      envelope: { ...loop.envelope },
-      harmonicity: loop.harmonicity,
-      modulationIndex: loop.modulationIndex,
-      synthConfig: loop.synthConfig
-    }))
+    const loops = audioStore.loops.map(loop => {
+      // Capturar la densidad actual de notas desde la matriz (style property)
+      let density = 0.4 // default
+      if (audioStore.notesMatrix && typeof audioStore.notesMatrix.getLoopNoteDensity === 'function') {
+        const matrixDensity = audioStore.notesMatrix.getLoopNoteDensity(loop.id)
+        if (typeof matrixDensity === 'number' && !isNaN(matrixDensity)) {
+          density = matrixDensity
+        }
+      }
+
+      return {
+        id: loop.id,
+        isActive: loop.isActive,
+        scale: [...loop.scale],
+        baseNote: loop.baseNote,
+        synthType: loop.synthModel || loop.synthType || 'PolySynth',
+        oscillatorType: loop.synthType || loop.oscillatorType || 'sine',
+        length: loop.length,
+        delayAmount: loop.delayAmount,
+        reverbAmount: loop.reverbAmount,
+        volume: loop.volume,
+        pan: loop.pan,
+        envelope: { ...loop.envelope },
+        harmonicity: loop.harmonicity,
+        modulationIndex: loop.modulationIndex,
+        synthConfig: loop.synthConfig,
+        density: density  // Save density as a style property (notes will be regenerated on load)
+      }
+    })
 
     return {
       globalConfig,
@@ -265,21 +277,19 @@ export const usePresetStore = defineStore('preset', () => {
       }
     }
 
-    // Generate notes for all active loops
-    if (audioStore.loops && audioStore.generateRandomNotes && Array.isArray(audioStore.loops)) {
+    // Generate notes for all active loops with saved density values
+    if (audioStore.loopManager && Array.isArray(audioStore.loops) && Array.isArray(presetLoops)) {
       audioStore.loops.forEach((loop, index) => {
         if (!loop || !loop.isActive) return
 
-        const sourcePresetLoop = Array.isArray(presetLoops) ? presetLoops[index] : null
-        const desiredDensity = sourcePresetLoop?.density || 0.4
+        const presetLoop = presetLoops[index]
+        const savedDensity = presetLoop?.density ?? 0.4
 
-        audioStore.generateRandomNotes(index, {
-          scale: loop.scale,
-          baseNote: loop.baseNote,
-          length: loop.length,
-          density: Math.max(0.05, Math.min(0.95, desiredDensity)),
-          octaveRange: 2
-        })
+        // Get scale for regeneration
+        const scale = loop.scale || audioStore.currentScale
+
+        // Regenerate with saved density (bypassing adaptive density)
+        audioStore.loopManager.regenerateLoop(index, scale, savedDensity, null)
       })
     }
 

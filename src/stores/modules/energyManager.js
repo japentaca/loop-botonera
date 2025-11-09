@@ -56,11 +56,19 @@ export const useEnergyManager = (notesMatrix = null) => {
     const activeLoops = loops.filter(loop => loop.isActive)
     if (activeLoops.length === 0) return 0
 
+    const REFERENCE_LENGTH = 16 // Longitud de referencia para normalizar
     let totalEnergy = 0
+
     activeLoops.forEach(loop => {
       const noteDensity = getLoopDensity(loop)
       const volumeContribution = loop.volume ?? 0.5
-      const loopEnergy = noteDensity * volumeContribution
+      const loopLength = loop.length || REFERENCE_LENGTH
+
+      // Normalizar la energía basada en la longitud del loop
+      // Un loop más largo con la misma densidad proporcional contribuye menos energía por ciclo de beat
+      const lengthFactor = REFERENCE_LENGTH / loopLength
+      const loopEnergy = noteDensity * volumeContribution * lengthFactor
+
       totalEnergy += loopEnergy
     })
 
