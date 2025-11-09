@@ -50,10 +50,31 @@ export const useAudioStore = defineStore('audio', () => {
   const energyManager = useEnergyManager(notesMatrix)
   const evolutionSystem = useEvolutionSystem(notesMatrix)
 
+  // Performance optimization: maintain cache of active loop IDs
+  // Updated whenever a loop's active state changes
+  let cachedActiveLoopIndices = new Set()
+
+  const updateActiveLoopsCache = () => {
+    cachedActiveLoopIndices.clear()
+    loopManager.loops.value.forEach((loop, idx) => {
+      if (loop.isActive) {
+        cachedActiveLoopIndices.add(idx)
+      }
+    })
+  }
+
+  const addActiveLoopToCache = (loopId) => {
+    cachedActiveLoopIndices.add(loopId)
+  }
+
+  const removeActiveLoopFromCache = (loopId) => {
+    cachedActiveLoopIndices.delete(loopId)
+  }
+
   // Debounced energy balance check to avoid excessive calculations during rapid param changes
   const debouncedEnergyCheck = debounce((loops) => {
     energyManager.checkAndBalanceEnergy(loops)
-  }, 150) // 150ms debounce for energy checks
+  }, 200) // 200ms debounce - slightly longer reduces CPU spikes during slider dragging
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major')
@@ -89,13 +110,17 @@ export const useAudioStore = defineStore('audio', () => {
   // Funciones principales que coordinan entre módulos
 
   // Función para reproducir loops activos en cada pulso
+  // Optimized to use cached active loop indices instead of filtering
   const playActiveLoops = (time, pulse) => {
-    const activeLoops = loopManager.getActiveLoops()
+    const loops = loopManager.loops.value
 
-    activeLoops.forEach(loop => {
-      const step = (pulse - 1) % loop.length
-      // Trigger based on centralized notes matrix only; pattern array is deprecated
-      loopManager.playLoopNote(loop, audioEngine, step, time)
+    // Use cached indices instead of filtering (called 16x/second)
+    cachedActiveLoopIndices.forEach(loopId => {
+      const loop = loops[loopId]
+      if (loop && loop.isActive) { // Safety check
+        const step = (pulse - 1) % loop.length
+        loopManager.playLoopNote(loop, audioEngine, step, time)
+      }
     })
   }
 
@@ -118,6 +143,9 @@ export const useAudioStore = defineStore('audio', () => {
     // Inicializar loops con configuración por defecto - pass scale NAME not intervals
     loopManager.initializeLoops(currentScale.value, audioEngine)
 
+    // Initialize active loops cache
+    updateActiveLoopsCache()
+
     audioStoreInitializing = false
     return true
   }
@@ -137,6 +165,14 @@ export const useAudioStore = defineStore('audio', () => {
   const toggleLoop = (id) => {
     loopManager.toggleLoop(id)
 
+    // Update active loops cache
+    const loop = loopManager.loops.value[id]
+    if (loop.isActive) {
+      addActiveLoopToCache(id)
+    } else {
+      removeActiveLoopFromCache(id)
+    }
+
     // Aplicar gestión de energía después de cambios
     if (energyManager.energyManagementEnabled.value) {
       energyManager.adjustAllLoopVolumes(loopManager.loops.value)
@@ -155,6 +191,13 @@ export const useAudioStore = defineStore('audio', () => {
     // Usar la misma ruta que toggle para mantener sincronización con la matriz
     loopManager.toggleLoop(id)
 
+    // Update active loops cache
+    if (desired) {
+      addActiveLoopToCache(id)
+    } else {
+      removeActiveLoopFromCache(id)
+    }
+
     // Ajustar energía tras el cambio
     if (energyManager.energyManagementEnabled.value) {
       energyManager.adjustAllLoopVolumes(loopManager.loops.value)
@@ -166,12 +209,14 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Actualizar parámetros de loop
   const updateLoopParam = (id, param, value) => {
+    const loop = loopManager.loops.value[id]
+    const oldValue = loop[param]
+
     loopManager.updateLoopParam(id, param, value)
 
-    // Verificar balance energético solo cuando se cambia el volumen
-    // Los efectos (delay/reverb) no deben activar la gestión automática de energía
-    // Using debounced version to avoid excessive calculations
-    if (param === 'volume') {
+    // Only trigger energy check if volume changed meaningfully (>5%)
+    // This reduces unnecessary debounce calls when sliders are dragged
+    if (param === 'volume' && oldValue !== undefined && Math.abs(oldValue - value) > 0.05) {
       debouncedEnergyCheck(loopManager.loops.value)
     }
 

@@ -80,8 +80,15 @@ export function useNotesMatrix() {
   const updateDensityCache = (loopId) => {
     const metrics = computeLoopDensityMetrics(loopId)
     if (loopMetadata[loopId]) {
+      // Avoid updating if density hasn't changed (for reactivity optimization)
+      const densityChanged = Math.abs((loopMetadata[loopId].density || 0) - metrics.density) > 0.01
+
       loopMetadata[loopId].density = metrics.density
       loopMetadata[loopId].lastModified = Date.now()
+
+      if (densityChanged) {
+        debugLog('density updated', { loopId, density: metrics.density })
+      }
     }
     return metrics
   }
@@ -647,7 +654,18 @@ export function useNotesMatrix() {
     clearLoopNote,
     getNote,
 
-    getLoopNoteDensity: (loopId) => computeLoopDensityMetrics(loopId).density,
+    getLoopNoteDensity: (loopId) => {
+      if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return 0
+
+      // Return cached density if available (only recompute if stale or not set)
+      const cached = loopMetadata[loopId].density
+      if (typeof cached === 'number') {
+        return cached
+      }
+
+      // Fallback to computation if not cached
+      return computeLoopDensityMetrics(loopId).density
+    },
     getLoopDensityMetrics: computeLoopDensityMetrics,
 
     // Generación

@@ -1,5 +1,20 @@
 import { ref } from 'vue'
 
+// Performance optimization: cache energy calculations to avoid redundant computations
+let energyCache = new Map() // loopId -> last calculated energy
+let lastEnergyCheckTime = 0
+const ENERGY_CACHE_TTL = 80 // milliseconds - cache lasts 80ms
+
+const clearEnergyCache = () => {
+  energyCache.clear()
+  lastEnergyCheckTime = 0
+}
+
+const invalidateLoopEnergyCache = (loopId) => {
+  energyCache.delete(loopId)
+  lastEnergyCheckTime = 0 // Force full recalculation next check
+}
+
 /**
  * Gestor de energía sonora que controla el balance automático
  * de volúmenes y densidades para evitar saturación
@@ -18,33 +33,31 @@ export const useEnergyManager = (notesMatrix = null) => {
   }
 
   const getLoopDensity = (loop) => {
-    const loopId = loop.id
-
-    const matrixDensity = notesMatrix.getLoopNoteDensity(loopId)
-    return matrixDensity
-
-    const metadataDensity = notesMatrix.loopMetadata[loopId].density
-    return metadataDensity
-
-    // Get notes from the centralized matrix
-    const candidateNotes = notesMatrix.getLoopNotes(loop.id)
-
-    const active = candidateNotes.filter(note => note !== null && note !== undefined && note !== false).length
-    return candidateNotes.length ? active / candidateNotes.length : 0
-
-    return loop.density
-
-    return 0
-
-    return 0.5
+    return notesMatrix.getLoopNoteDensity(loop.id)
   }
 
   // Calcular la energía sonora total de los loops activos
+  // Optimized with caching to avoid redundant calculations
   const calculateSonicEnergy = (loops) => {
-    const activeLoops = loops.filter(loop => loop.isActive)
-    if (activeLoops.length === 0) return 0
+    const now = Date.now()
 
-    const REFERENCE_LENGTH = 16 // Longitud de referencia para normalizar
+    // Return cached value if still valid (within TTL)
+    // This avoids recalculating when debounce fires multiple times
+    if (now - lastEnergyCheckTime < ENERGY_CACHE_TTL && energyCache.size > 0) {
+      const cachedTotal = Array.from(energyCache.values()).reduce((a, b) => a + b, 0)
+      debugLog('energy from cache', { total: Number(cachedTotal.toFixed(3)), age: now - lastEnergyCheckTime })
+      return cachedTotal
+    }
+
+    lastEnergyCheckTime = now
+    const activeLoops = loops.filter(loop => loop.isActive)
+
+    if (activeLoops.length === 0) {
+      clearEnergyCache()
+      return 0
+    }
+
+    const REFERENCE_LENGTH = 16
     let totalEnergy = 0
 
     activeLoops.forEach(loop => {
@@ -52,11 +65,11 @@ export const useEnergyManager = (notesMatrix = null) => {
       const volumeContribution = loop.volume ?? 0.5
       const loopLength = loop.length || REFERENCE_LENGTH
 
-      // Normalizar la energía basada en la longitud del loop
-      // Un loop más largo con la misma densidad proporcional contribuye menos energía por ciclo de beat
       const lengthFactor = REFERENCE_LENGTH / loopLength
       const loopEnergy = noteDensity * volumeContribution * lengthFactor
 
+      // Store in cache for potential reuse within TTL window
+      energyCache.set(loop.id, loopEnergy)
       totalEnergy += loopEnergy
     })
 
@@ -263,6 +276,10 @@ export const useEnergyManager = (notesMatrix = null) => {
     // Utilidades
     getEnergyMetrics,
     getOptimalDensityForNewLoop,
-    suggestEnergyOptimizations
+    suggestEnergyOptimizations,
+
+    // Cache management
+    invalidateLoopEnergyCache,
+    clearEnergyCache
   }
 }
