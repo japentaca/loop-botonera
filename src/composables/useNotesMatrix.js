@@ -345,6 +345,17 @@ export function useNotesMatrix() {
     console.log(`[quantizeAllActiveLoops] Completed updating ${matrixState.activeLoops.size} loops to scale "${newScale}"`)
   }
 
+  // Setter for global scale
+  const setGlobalScale = (scaleName) => {
+    if (typeof scaleName !== 'string') {
+      console.error('[setGlobalScale] Scale name must be a string, got:', typeof scaleName)
+      return false
+    }
+    matrixState.currentScale = scaleName
+    console.log(`[setGlobalScale] Updated global scale to "${scaleName}"`)
+    return true
+  }
+
   // Operaciones de matriz eficientes para evolución
 
   // Transponer un loop
@@ -575,6 +586,56 @@ export function useNotesMatrix() {
     }
   }
 
+  // Debug logging method
+  const logNotesMatrix = () => {
+    console.log('='.repeat(80))
+    console.log('NOTES MATRIX DEBUG LOG')
+    console.log('='.repeat(80))
+    console.log('Global Settings:')
+    console.log(`  Current Scale: "${matrixState.currentScale}"`)
+    console.log(`  Scale Intervals: [${getScale(matrixState.currentScale)}]`)
+    console.log(`  Global Base Note: ${matrixState.globalBaseNote}`)
+    console.log(`  Active Loops: [${Array.from(matrixState.activeLoops).join(', ')}]`)
+    console.log(`  Step Count: ${matrixState.stepCount}`)
+    console.log('-'.repeat(80))
+
+    matrixState.activeLoops.forEach(loopId => {
+      const meta = loopMetadata[loopId]
+      if (!meta) {
+        console.log(`Loop ${loopId}: NO METADATA`)
+        return
+      }
+
+      const notes = getLoopNotes(loopId)
+      const metrics = computeLoopDensityMetrics(loopId)
+      const scaleName = meta.scale || matrixState.currentScale
+      const scaleIntervals = getScale(scaleName)
+
+      console.log(`\nLoop ${loopId} (${meta.isActive ? 'ACTIVE' : 'inactive'}):`)
+      console.log(`  Scale Name: "${scaleName}"`)
+      console.log(`  Scale Intervals: [${scaleIntervals}]`)
+      console.log(`  Base Note: ${meta.baseNote} (MIDI)`)
+      console.log(`  Length: ${meta.length} steps`)
+      console.log(`  Density: ${(metrics.density * 100).toFixed(1)}% (${metrics.noteCount}/${metrics.length} notes)`)
+      console.log(`  Octave Range: ${meta.octaveRange}`)
+      console.log(`  Notes: [${notes.map((n, i) => {
+        if (n === null) return `${i}:--`
+        // Check if note is in scale
+        const noteInScale = scaleIntervals.some(interval => {
+          const expectedNote = meta.baseNote + interval
+          // Check within octave range
+          for (let oct = 0; oct < meta.octaveRange; oct++) {
+            if (n === expectedNote + (oct * 12)) return true
+          }
+          return false
+        })
+        return `${i}:${n}${noteInScale ? '' : '⚠️'}`
+      }).join(', ')}]`)
+    })
+
+    console.log('='.repeat(80))
+  }
+
   return {
     // Estado
     notesMatrix: readonly(notesMatrix),
@@ -602,6 +663,7 @@ export function useNotesMatrix() {
     // Cuantización
     quantizeLoop,
     quantizeAllActiveLoops,
+    setGlobalScale,
 
     // Operaciones evolutivas
     transposeLoop,
@@ -615,6 +677,7 @@ export function useNotesMatrix() {
     getMatrixStats,
     clearMatrix,
     exportMatrix,
-    importMatrix
+    importMatrix,
+    logNotesMatrix
   }
 }

@@ -48,7 +48,6 @@ export const usePresetStore = defineStore('preset', () => {
       const loadedPresets = getAllPresets()
       presets.value = loadedPresets
     } catch (error) {
-      console.error('Error loading presets:', error)
       throw error
     } finally {
       isLoading.value = false
@@ -70,11 +69,8 @@ export const usePresetStore = defineStore('preset', () => {
       currentPresetId.value = defaultPreset.id
       hasUnsavedChanges.value = false
 
-      console.log('📦 [PresetLoaded] Default preset created and loaded:', defaultPreset.name, 'ID:', defaultPreset.id)
-
       return defaultPreset
     } catch (error) {
-      console.error('Error al crear preset por defecto:', error)
       throw error
     }
   }
@@ -149,7 +145,7 @@ export const usePresetStore = defineStore('preset', () => {
     // Update global config directly without type validation
     if (globalConfig.tempo !== undefined) audioStore.updateTempo(globalConfig.tempo)
     if (globalConfig.masterVol !== undefined) audioStore.updateMasterVolume(globalConfig.masterVol * 100)
-    if (globalConfig.currentScale !== undefined) audioStore.currentScale = globalConfig.currentScale
+    if (globalConfig.currentScale !== undefined) audioStore.updateScale(globalConfig.currentScale)
 
     // Evolution config
     if (globalConfig.autoEvolve !== undefined) audioStore.autoEvolve = globalConfig.autoEvolve
@@ -336,8 +332,6 @@ export const usePresetStore = defineStore('preset', () => {
       currentPresetId.value = presetId
       hasUnsavedChanges.value = false
       lastSaveTime.value = new Date()
-
-      console.log('📦 [PresetLoaded] Preset loaded successfully:', preset.name, 'ID:', presetId)
 
       return preset
     } catch (error) {

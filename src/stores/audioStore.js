@@ -123,10 +123,8 @@ export const useAudioStore = defineStore('audio', () => {
       // Configurar callback del transporte para reproducir loops
       audioEngine.setupTransportCallback(playActiveLoops)
 
-      // Inicializar loops con configuración por defecto
-      const scale = useScales().getScale(currentScale.value)
-
-      loopManager.initializeLoops(scale, audioEngine)
+      // Inicializar loops con configuración por defecto - pass scale NAME not intervals
+      loopManager.initializeLoops(currentScale.value, audioEngine)
 
       audioStoreInitializing = false
       return true
@@ -259,9 +257,9 @@ export const useAudioStore = defineStore('audio', () => {
     console.log(`[updateScale] Changing global scale from "${currentScale.value}" to "${newScale}", intervals: [${scale}]`)
     currentScale.value = newScale
 
-    // Update the global scale in the notes matrix
-    if (notesMatrix && notesMatrix.matrixState) {
-      notesMatrix.matrixState.currentScale = newScale
+    // Update the global scale in the notes matrix using setter
+    if (notesMatrix && notesMatrix.setGlobalScale) {
+      notesMatrix.setGlobalScale(newScale)
     }
 
     if (!audioEngine.audioInitialized.value) {
@@ -740,6 +738,7 @@ export const useAudioStore = defineStore('audio', () => {
     getMatrixStats: notesMatrix.getMatrixStats,
     clearMatrix: notesMatrix.clearMatrix,
     exportMatrix: notesMatrix.exportMatrix,
-    importMatrix: notesMatrix.importMatrix
+    importMatrix: notesMatrix.importMatrix,
+    logNotesMatrix: notesMatrix.logNotesMatrix
   }
 })

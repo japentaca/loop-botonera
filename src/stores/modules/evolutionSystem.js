@@ -69,7 +69,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     while (note < 24) note += 12
     while (note > 96) note -= 12
 
-    console.log(`[createRandomNoteForLoop] Loop ${loop?.id}, intervals: [${intervals}], baseNote: ${baseNote}, interval: ${interval}, octave: ${octave}, note: ${note}`)
     return note
   }
 
@@ -88,8 +87,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const changeCount = Math.max(1, Math.floor(loopNotes.length * intensity * 0.5))
     let mutated = false
 
-    console.log(`[mutateLoopRhythm] Loop ${loop.id}, changeCount: ${changeCount}, scale intervals: [${globalScaleIntervals}]`)
-
     for (let i = 0; i < changeCount; i++) {
       const stepIndex = Math.floor(Math.random() * loopNotes.length)
       const currentNote = loopNotes[stepIndex]
@@ -97,12 +94,10 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       if (currentNote === null) {
         if (Math.random() < mutationProbabilities.value.addNote) {
           const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
-          console.log(`  [mutateLoopRhythm] Adding note at step ${stepIndex}: ${newNote}`)
           notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
           mutated = true
         }
       } else if (Math.random() < mutationProbabilities.value.removeNote) {
-        console.log(`  [mutateLoopRhythm] Removing note at step ${stepIndex}: ${currentNote}`)
         notesMatrix.clearLoopNote(loop.id, stepIndex)
         mutated = true
       }
@@ -135,12 +130,9 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       }
     })
 
-    console.log(`[adjustLoopDensity] Loop ${loop.id}, targetDensity: ${targetDensity}, desired: ${desiredActive}, current: ${activeIndices.length}, scale intervals: [${globalScaleIntervals}]`)
-
     while (activeIndices.length > desiredActive) {
       const removalIndex = Math.floor(Math.random() * activeIndices.length)
       const stepIndex = activeIndices.splice(removalIndex, 1)[0]
-      console.log(`  [adjustLoopDensity] Removing note at step ${stepIndex}`)
       notesMatrix.clearLoopNote(loop.id, stepIndex)
     }
 
@@ -148,7 +140,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       const additionIndex = Math.floor(Math.random() * inactiveIndices.length)
       const stepIndex = inactiveIndices.splice(additionIndex, 1)[0]
       const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
-      console.log(`  [adjustLoopDensity] Adding note at step ${stepIndex}: ${newNote}`)
       notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
       activeIndices.push(stepIndex)
     }
@@ -170,8 +161,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   const evolveNotes = (currentNotes, scaleIntervals, intensity = evolutionIntensity.value) => {
     const newNotes = [...currentNotes]
     const changeCount = Math.floor(newNotes.length * intensity * 0.4)
-
-    console.log(`[evolveNotes] Evolving ${changeCount} notes, intensity: ${intensity}, scale intervals: [${scaleIntervals}]`)
 
     for (let i = 0; i < changeCount; i++) {
       const randomIndex = Math.floor(Math.random() * newNotes.length)
@@ -212,9 +201,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
         while (newNote < 24) newNote += 12
         while (newNote > 96) newNote -= 12
 
-        if (i < 3) { // Log first 3 for brevity
-          console.log(`  [evolveNotes] Step ${randomIndex}: ${currentNote} (octave ${octave}, interval ${noteInFirstOctave}) -> degree ${closestIntervalIndex} -> ${newDegree} (interval ${newInterval}) -> ${newNote}`)
-        }
         newNotes[randomIndex] = newNote
       }
     }
@@ -411,8 +397,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     const scaleIntervals = getScale(scaleName)
     const { quantizeToScale } = useNoteUtils()
 
-    console.log(`[evolveMatrixLoop] Loop ${loopId}, changeCount: ${changeCount}, scaleName: ${scaleName}, scaleIntervals:`, scaleIntervals, 'baseNote:', baseNote)
-
     for (let i = 0; i < changeCount; i++) {
       const randomStep = Math.floor(Math.random() * loopNotes.length)
 
@@ -425,7 +409,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
           const transposedNote = Math.max(21, Math.min(108, currentNote + transposition))
           // Quantize to scale
           const quantizedNote = quantizeToScale(transposedNote, scaleIntervals, baseNote)
-          console.log(`  [evolveMatrixLoop] Step ${randomStep}: ${currentNote} + ${transposition} -> ${transposedNote} -> quantized: ${quantizedNote}`)
           notesMatrix.setLoopNote(loopId, randomStep, quantizedNote)
           hasChanges = true
         } else if (Math.random() < mutationProbabilities.value.addNote) {
@@ -436,12 +419,10 @@ export const useEvolutionSystem = (notesMatrix = null) => {
           // Clamp to valid MIDI range
           while (newNote < 24) newNote += 12
           while (newNote > 96) newNote -= 12
-          console.log(`  [evolveMatrixLoop] Adding note at step ${randomStep}: scale[${scaleIndex}]=${scaleIntervals[scaleIndex]}, octave=${octave} -> ${newNote}`)
           notesMatrix.setLoopNote(loopId, randomStep, newNote)
           hasChanges = true
         }
       } else if (Math.random() < mutationProbabilities.value.removeNote && loopNotes[randomStep] !== null) {
-        console.log(`  [evolveMatrixLoop] Removing note at step ${randomStep}: ${loopNotes[randomStep]}`)
         notesMatrix.clearLoopNote(loopId, randomStep)
         hasChanges = true
       }

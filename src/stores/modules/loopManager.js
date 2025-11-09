@@ -11,6 +11,9 @@ export const useLoopManager = (notesMatrix = null) => {
   const loops = ref([])
   const NUM_LOOPS = 8
 
+  // Global root note for harmonic consistency - all loops use the same root
+  let globalRootNote = 60 // Default to C (middle C)
+
   // Configuración
   const synthTypes = ['sine', 'triangle', 'square', 'sawtooth']
 
@@ -159,27 +162,27 @@ export const useLoopManager = (notesMatrix = null) => {
 
   // Generar nota base que esté en la escala actual  // Generar nota base que esté en la escala actual
   const generateScaleBaseNote = (scale) => {
-    // Elegir octavas base posibles (C2, C3, C4)
-    const baseOctaves = [36, 48, 60] // C2, C3, C4
-    const selectedOctave = baseOctaves[Math.floor(Math.random() * baseOctaves.length)]
+    // All loops share the same global root note for harmonic consistency
+    // Optionally add octave variation
+    const octaveVariation = Math.floor(Math.random() * 3) - 1 // -1, 0, or +1 octave
+    const baseNote = globalRootNote + (octaveVariation * 12)
 
-    // Elegir un grado de la escala aleatoriamente para la nota base
-    const scaleIndex = Math.floor(Math.random() * scale.length)
-    const baseNote = selectedOctave + scale[scaleIndex]
-
-
+    console.log(`[generateScaleBaseNote] Using global root ${globalRootNote} + ${octaveVariation} octaves = ${baseNote}`)
     return baseNote
   }
 
   // Crear estructura básica de loop (sin objetos de audio)
-  const createBasicLoop = (id, scale, adaptiveVolume = 0.5, adaptiveDensity = null) => {
-    // scale parameter is intervals array for backward compatibility, but we store NAME in metadata
+  const createBasicLoop = (id, scaleName, adaptiveVolume = 0.5, adaptiveDensity = null) => {
+    // scaleName parameter is the scale NAME (e.g., 'major', 'minorPentatonic')
+    // Get intervals for note generation
+    const scale = useScales().getScale(scaleName)
+
     // Generar nota base que esté garantizada en la escala actual
     const baseNote = generateScaleBaseNote(scale)
     const synthType = synthTypes[Math.floor(Math.random() * synthTypes.length)]
     const length = 16
 
-    console.log(`[createBasicLoop] Loop ${id}, scale intervals: [${scale}], baseNote: ${baseNote}, density: ${adaptiveDensity || 0.4}`)
+    console.log(`[createBasicLoop] Loop ${id}, scaleName: "${scaleName}", scale intervals: [${scale}], baseNote: ${baseNote}, density: ${adaptiveDensity || 0.4}`)
 
     const envelope = {
       attack: 0.01,
@@ -192,7 +195,7 @@ export const useLoopManager = (notesMatrix = null) => {
     if (notesMatrix) {
       notesMatrix.initializeLoop(id, {
         length,
-        scale: 'major', // Store scale NAME, not intervals - will be updated by global scale changes
+        scale: scaleName, // Store scale NAME
         baseNote,
         density: adaptiveDensity || 0.4,
         octaveRange: 2
@@ -200,7 +203,7 @@ export const useLoopManager = (notesMatrix = null) => {
 
       // Generar notas en la matriz centralizada using scale NAME
       notesMatrix.generateLoopNotes(id, {
-        scale: 'major', // This will be resolved to intervals by the function
+        scale: scaleName, // This will be resolved to intervals by the function
         baseNote,
         length,
         density: adaptiveDensity || 0.4,
@@ -233,8 +236,8 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   // Crear loop completo con objetos de audio
-  const createLoop = (id, scale, audioEngine, adaptiveVolume = 0.5, adaptiveDensity = null) => {
-    const basicLoop = createBasicLoop(id, scale, adaptiveVolume, adaptiveDensity)
+  const createLoop = (id, scaleName, audioEngine, adaptiveVolume = 0.5, adaptiveDensity = null) => {
+    const basicLoop = createBasicLoop(id, scaleName, adaptiveVolume, adaptiveDensity)
 
     // Crear cadena de audio usando el motor de audio
     const synthConfig = {
@@ -265,16 +268,14 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   // Inicializar todos los loops
-  const initializeLoops = (currentScale, audioEngine = null, getAdaptiveVolume = null, getAdaptiveDensity = null) => {
-
+  const initializeLoops = (scaleName, audioEngine = null, getAdaptiveVolume = null, getAdaptiveDensity = null) => {
+    // scaleName is the scale NAME (e.g., 'major', 'minorPentatonic'), not intervals
 
     // Inicializar la matriz de notas centralizada
     if (notesMatrix) {
       notesMatrix.initializeMatrix()
       //console.log('🔄 LOOP MANAGER: Central notes matrix initialized');
     }
-
-    const scale = useScales().getScale(currentScale)
 
     loops.value = []
 
@@ -285,9 +286,9 @@ export const useLoopManager = (notesMatrix = null) => {
       //console.log(`🔄 LOOP MANAGER: Creating loop ${i}, adaptiveVolume: ${adaptiveVolume}, adaptiveDensity: ${adaptiveDensity}`);
 
       if (audioEngine && audioEngine.audioInitialized) {
-        loops.value.push(createLoop(i, scale, audioEngine, adaptiveVolume, adaptiveDensity))
+        loops.value.push(createLoop(i, scaleName, audioEngine, adaptiveVolume, adaptiveDensity))
       } else {
-        loops.value.push(createBasicLoop(i, scale, adaptiveVolume, adaptiveDensity))
+        loops.value.push(createBasicLoop(i, scaleName, adaptiveVolume, adaptiveDensity))
       }
 
       // console.log(`🔄 LOOP MANAGER: Loop ${i} created successfully`);

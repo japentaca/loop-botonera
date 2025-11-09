@@ -31,6 +31,10 @@
           severity="secondary" title="Distribuir canales activos en el panorama estéreo"
           :disabled="!audioStore.audioInitialized" />
 
+        <Button @click="logNotesMatrix" class="debug-button" icon="pi pi-list" size="small"
+          severity="help" title="Log notes matrix to console"
+          :disabled="!audioStore.audioInitialized" />
+
         <div class="preset-control-group">
           <Button @click="openPresetDialog" class="preset-button-compact" icon="pi pi-save" label="Presets" size="small"
             title="Gestionar presets" :disabled="!audioStore.audioInitialized" />
@@ -261,6 +265,15 @@
   // Función para abrir el diálogo de presets
   const openPresetDialog = () => {
     presetStore.openDialog()
+  }
+
+  // Función para loggear la matriz de notas
+  const logNotesMatrix = () => {
+    if (audioStore.logNotesMatrix) {
+      audioStore.logNotesMatrix()
+    } else {
+      console.warn('logNotesMatrix not available on audioStore')
+    }
   }
 
   const delayDivisionFriendlyLabel = computed(() => divisionLabelMap[audioStore.delayDivision] || audioStore.delayDivision)

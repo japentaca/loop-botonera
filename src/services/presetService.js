@@ -75,14 +75,6 @@ export const createPreset = (presetData) => {
 
   presets.push(preset)
   saveAllPresets(presets)
-  // Debug: read back from storage and log the exact saved preset JSON
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    const saved = stored.find(p => p.id === preset.id)
-    console.log('📦 [PresetSaved:create] JSON after store:', JSON.stringify(saved, null, 2))
-  } catch (e) {
-    console.warn('⚠️ [PresetSaved:create] Could not read back saved preset:', e?.message)
-  }
   return preset
 }
 
@@ -105,14 +97,6 @@ export const updatePreset = (id, updates) => {
 
   presets[index] = updatedPreset
   saveAllPresets(presets)
-  // Debug: read back from storage and log the exact saved preset JSON
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-    const saved = stored.find(p => p.id === id)
-    console.log('📦 [PresetSaved:update] JSON after store:', JSON.stringify(saved, null, 2))
-  } catch (e) {
-    console.warn('⚠️ [PresetSaved:update] Could not read back saved preset:', e?.message)
-  }
   return updatedPreset
 }
 
