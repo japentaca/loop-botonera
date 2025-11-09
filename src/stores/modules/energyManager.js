@@ -32,11 +32,8 @@ export const useEnergyManager = (notesMatrix = null) => {
       }
     }
 
-    const candidateNotes = Array.isArray(loop?.notesMatrix)
-      ? loop.notesMatrix
-      : Array.isArray(loop?.notes)
-        ? loop.notes
-        : null
+    // Get notes from the centralized matrix
+    const candidateNotes = notesMatrix ? notesMatrix.getLoopNotes(loop.id) : null
 
     if (candidateNotes && candidateNotes.length) {
       const active = candidateNotes.filter(note => note !== null && note !== undefined && note !== false).length

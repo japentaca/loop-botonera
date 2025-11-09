@@ -71,8 +71,7 @@
           size="small" title="Configurar estilos de evolución" :disabled="!audioStore.audioInitialized" />
 
         <div class="evolve-progress-compact" v-if="audioStore.autoEvolve">
-          <ProgressBar :value="evolveProgress" class="progress-bar-compact" :showValue="false" />
-          <span class="next-evolve">{{ nextEvolveInMeasures }}c</span>
+          <span class="next-evolve">{{ nextEvolveInBeats }}</span>
         </div>
       </div>
     </div>
@@ -157,27 +156,18 @@
   const tempMasterVolume = ref(audioStore.masterVolume || 70)
   let volumeTimer = null
 
-  // Estado para evolución automática
-  const evolveProgress = computed(() => {
+  const nextEvolveInBeats = computed(() => {
     if (!audioStore.autoEvolve) return 0
-    const total = audioStore.evolveInterval * 16
-    const current = audioStore.currentPulse % total
-    return (current / total) * 100
-  })
-
-  const nextEvolveInMeasures = computed(() => {
-    if (!audioStore.autoEvolve) return 0
-    const currentMeasure = Math.floor(audioStore.currentPulse / 16)
-    const targetMeasure = Math.floor(audioStore.nextEvolveMeasure / 16)
-    const remainingMeasures = targetMeasure - currentMeasure
+    const remainingPulses = audioStore.nextEvolveMeasure - audioStore.currentPulse
+    const remainingBeats = Math.ceil(remainingPulses / 4) // 4 pulses per beat in 4/4 time
 
     // Si el valor calculado es 0 o negativo, significa que estamos en el momento de evolución
-    // o justo después. En este caso, mostrar el intervalo completo.
-    if (remainingMeasures <= 0) {
-      return audioStore.evolveInterval
+    // o justo después. En este caso, mostrar el intervalo completo en beats.
+    if (remainingBeats <= 0) {
+      return audioStore.evolveInterval * 4
     }
 
-    return remainingMeasures
+    return remainingBeats
   })
 
   const onTempoInput = (value) => {

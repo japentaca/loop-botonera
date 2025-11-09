@@ -480,7 +480,17 @@ export function useNotesMatrix() {
       notesMatrix.value = data.notes
       Object.keys(loopMetadata).forEach(key => delete loopMetadata[key])
       Object.assign(loopMetadata, data.metadata)
-      matrixState.activeLoops = new Set(data.state?.activeLoops || [])
+
+      // Handle activeLoops - fix for old presets where Set was serialized as {}
+      const activeLoopsData = data.state?.activeLoops
+      if (Array.isArray(activeLoopsData)) {
+        matrixState.activeLoops = new Set(activeLoopsData)
+      } else {
+        // Old preset with broken Set serialization - reconstruct from metadata
+        matrixState.activeLoops = new Set()
+        console.warn('Reconstructing activeLoops from metadata due to corrupted preset data')
+      }
+
       matrixState.currentScale = data.state?.currentScale || 'major'
       matrixState.globalBaseNote = data.state?.globalBaseNote || 60
       matrixState.stepCount = data.state?.stepCount || 16

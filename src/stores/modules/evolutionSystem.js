@@ -59,7 +59,6 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   }
 
   const ensureLoopHasNotes = (loopId) => {
-    if (!notesMatrix) return
     const density = notesMatrix.getLoopNoteDensity(loopId)
     if (density > 0) return
 
@@ -68,10 +67,8 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   }
 
   const mutateLoopRhythm = (loop, intensity = evolutionIntensity.value) => {
-    if (!notesMatrix || !loop || !evolutionTypes.value.pattern) return false
-
     const loopNotes = notesMatrix.getLoopNotes(loop.id)
-    if (!loopNotes || loopNotes.length === 0) return false
+    if (loopNotes.length === 0) return false
 
     const changeCount = Math.max(1, Math.floor(loopNotes.length * intensity * 0.5))
     let mutated = false
@@ -103,10 +100,8 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   }
 
   const adjustLoopDensity = (loop, targetDensity) => {
-    if (!notesMatrix || !loop) return false
-
     const loopNotes = notesMatrix.getLoopNotes(loop.id)
-    if (!loopNotes || loopNotes.length === 0) return false
+    if (loopNotes.length === 0) return false
 
     const desiredActive = Math.max(1, Math.round(loopNotes.length * targetDensity))
     const activeIndices = []
@@ -147,29 +142,41 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   }
 
   // Generar variación de notas/melodía
-  const evolveNotes = (currentNotes, scale, intensity = evolutionIntensity.value) => {
-    if (!evolutionTypes.value.notes || !scale || scale.length === 0) return currentNotes
-
+  const evolveNotes = (currentNotes, scaleIntervals, intensity = evolutionIntensity.value) => {
     const newNotes = [...currentNotes]
     const changeCount = Math.floor(newNotes.length * intensity * 0.4)
 
     for (let i = 0; i < changeCount; i++) {
       const randomIndex = Math.floor(Math.random() * newNotes.length)
+      const currentNote = newNotes[randomIndex]
+
+      if (currentNote === null) continue // Skip silent notes
 
       if (Math.random() < mutationProbabilities.value.changeNote) {
-        // Cambiar a una nota cercana en la escala
-        const currentNote = newNotes[randomIndex]
-        const currentScaleIndex = scale.indexOf(currentNote)
+        // Convert current MIDI note to scale degree
+        const baseNote = Math.floor(currentNote / 12) * 12 // Get octave base
+        const interval = currentNote - baseNote
 
-        if (currentScaleIndex !== -1) {
+        // Find current scale degree
+        const currentDegree = scaleIntervals.indexOf(interval)
+
+        if (currentDegree !== -1) {
+          // Move to adjacent scale degree
           const direction = Math.random() < 0.5 ? -1 : 1
-          const steps = Math.floor(Math.random() * 3) + 1 // 1-3 pasos
-          const newScaleIndex = Math.max(0, Math.min(scale.length - 1, currentScaleIndex + (direction * steps)))
-          newNotes[randomIndex] = scale[newScaleIndex]
+          const steps = Math.floor(Math.random() * 2) + 1 // 1-2 steps
+          const newDegree = Math.max(0, Math.min(scaleIntervals.length - 1, currentDegree + (direction * steps)))
+          const newInterval = scaleIntervals[newDegree]
+          newNotes[randomIndex] = baseNote + newInterval
         } else {
-          // Si la nota no está en la escala, usar una nota aleatoria de la escala
-          newNotes[randomIndex] = scale[Math.floor(Math.random() * scale.length)]
+          // If note not in scale, replace with random scale note in same octave
+          const randomDegree = Math.floor(Math.random() * scaleIntervals.length)
+          const newInterval = scaleIntervals[randomDegree]
+          newNotes[randomIndex] = baseNote + newInterval
         }
+
+        // Ensure note stays in valid MIDI range
+        while (newNotes[randomIndex] < 24) newNotes[randomIndex] += 12
+        while (newNotes[randomIndex] > 96) newNotes[randomIndex] -= 12
       }
     }
 
@@ -189,7 +196,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
       const currentScaleIndex = availableScales.findIndex(s => s.name === loop.scale?.name)
       if (currentScaleIndex !== -1) {
         const newScaleIndex = (currentScaleIndex + 1) % availableScales.length
-        evolvedLoop.scale = availableScales[newScaleIndex]
+        evolvedLoop.scale = availableScales[newScaleIndex].notes
 
         // Reajustar notas a la nueva escala usando la matriz centralizada
         const newScaleNotes = availableScales[newScaleIndex].notes
@@ -198,11 +205,7 @@ export const useEvolutionSystem = (notesMatrix = null) => {
           return newScaleNotes[noteIndex]
         })
 
-        if (notesMatrix) {
-          notesMatrix.setLoopNotes(loop.id, newNotes)
-        } else {
-          evolvedLoop.notes = newNotes
-        }
+        notesMatrix.setLoopNotes(loop.id, newNotes)
       }
     }
 
@@ -229,25 +232,15 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
     // Evolución de notas usando la matriz centralizada
     if (evolutionTypes.value.notes) {
-      // Obtener notas desde la matriz centralizada si está disponible
-      let currentNotes = []
-      if (notesMatrix) {
-        currentNotes = notesMatrix.getLoopNotes(loop.id)
-      } else if (evolvedLoop.notes) {
-        currentNotes = evolvedLoop.notes
-      }
+      // Obtener notas desde la matriz centralizada
+      const currentNotes = notesMatrix.getLoopNotes(loop.id)
 
       // Evolucionar notas
-      if (evolvedLoop.scale?.notes) {
-        const evolvedNotes = evolveNotes(currentNotes, evolvedLoop.scale.notes)
+      if (evolvedLoop.scale) {
+        const evolvedNotes = evolveNotes(currentNotes, evolvedLoop.scale)
 
         // Guardar en la matriz centralizada
-        if (notesMatrix) {
-          notesMatrix.setLoopNotes(loop.id, evolvedNotes)
-        } else {
-          // Fallback si no hay notesMatrix disponible
-          evolvedLoop.notes = evolvedNotes
-        }
+        notesMatrix.setLoopNotes(loop.id, evolvedNotes)
       }
     }
 

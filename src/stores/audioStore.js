@@ -22,15 +22,19 @@ const getPresetStore = async () => {
 }
 
 // Función centralizada para notificar cambios al presetStore
-const notifyPresetChanges = async () => {
-  try {
-    const presetStore = await getPresetStore()
-    if (presetStore && presetStore.handleChange) {
-      presetStore.handleChange()
+const notifyPresetChanges = () => {
+  // Ejecutar de forma asíncrona pero sin bloquear
+  Promise.resolve().then(async () => {
+    try {
+      const presetStore = await getPresetStore()
+      if (presetStore && typeof presetStore.handleChange === 'function') {
+        presetStore.handleChange()
+      }
+    } catch (error) {
+      // Silenciosamente ignorar errores si el presetStore no está disponible
+      // Esto puede ocurrir durante la inicialización
     }
-  } catch (error) {
-    console.warn('No se pudo notificar cambios al presetStore:', error.message)
-  }
+  })
 }
 
 export const useAudioStore = defineStore('audio', () => {
@@ -146,9 +150,6 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Control de loops
   const toggleLoop = (id) => {
-    const loop = loopManager.loops.value[id]
-    if (!loop) return
-
     loopManager.toggleLoop(id)
 
     // Aplicar gestión de energía después de cambios
@@ -163,8 +164,6 @@ export const useAudioStore = defineStore('audio', () => {
   // Establecer explícitamente el estado activo de un loop (idempotente)
   const setLoopActive = (id, active) => {
     const loop = loopManager.loops.value[id]
-    if (!loop) return
-
     const desired = Boolean(active)
     if (loop.isActive === desired) return
 
@@ -396,79 +395,93 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   // Evolución musical principal
-  const evolveMusic = () => {
+  const evolveMusic = async () => {
     if (!audioEngine.audioInitialized.value) return
 
-    // Aplicar momentum si está activado
-    applyMomentum()
+    // Iniciar modo batch para evitar múltiples autosaves durante evolución
+    const presetStore = await getPresetStore()
+    if (presetStore && presetStore.startBatchMode) {
+      presetStore.startBatchMode()
+    }
 
-    let newScale = currentScale.value
-    let oldScale = currentScale.value
+    try {
+      // Aplicar momentum si está activado
+      applyMomentum()
 
-    // Seleccionar nueva escala según el modo solo si no está bloqueada
-    if (!scaleLocked.value) {
-      switch (evolveMode.value) {
-        case 'momentum':
-          newScale = getRandomScale(currentScale.value)
-          break
-        case 'callResponse':
-          newScale = getRelatedScale(currentScale.value)
-          break
-        case 'tensionRelease':
-          const tensionScale = applyTensionRelease()
-          newScale = tensionScale || getRandomScale(currentScale.value)
-          break
-        default: // classic
-          // Si Call & Response está activado, usar una escala relacionada para mantener coherencia
-          newScale = callResponseEnabled.value
-            ? getRelatedScale(currentScale.value)
-            : getRandomScale(currentScale.value)
-      }
+      let newScale = currentScale.value
+      let oldScale = currentScale.value
 
-      // Actualizar historial de escalas solo si cambió
-      if (newScale !== oldScale) {
-        recentScales.value.push(newScale)
-        if (recentScales.value.length > 3) {
-          recentScales.value.shift()
+      // Seleccionar nueva escala según el modo solo si no está bloqueada
+      if (!scaleLocked.value) {
+        switch (evolveMode.value) {
+          case 'momentum':
+            newScale = getRandomScale(currentScale.value)
+            break
+          case 'callResponse':
+            newScale = getRelatedScale(currentScale.value)
+            break
+          case 'tensionRelease':
+            const tensionScale = applyTensionRelease()
+            newScale = tensionScale || getRandomScale(currentScale.value)
+            break
+          default: // classic
+            // Si Call & Response está activado, usar una escala relacionada para mantener coherencia
+            newScale = callResponseEnabled.value
+              ? getRelatedScale(currentScale.value)
+              : getRandomScale(currentScale.value)
         }
-        updateScale(newScale)
+
+        // Actualizar historial de escalas solo si cambió
+        if (newScale !== oldScale) {
+          recentScales.value.push(newScale)
+          if (recentScales.value.length > 3) {
+            recentScales.value.shift()
+          }
+          updateScale(newScale)
+        }
+      }
+
+      // Usar el sistema de evolución para evolucionar loops
+      const availableScales = Object.keys(scales.value).map(name => ({
+        name,
+        notes: useScales().getScale(name)
+      }))
+
+      // Excluir reverb y delay de la evolución cuando se están aplicando cambios de estilo
+      const isStyleChange = momentumEnabled.value || callResponseEnabled.value || tensionReleaseMode.value
+      const evolutionOptions = isStyleChange ? { excludeReverb: true, excludeDelay: true } : {}
+
+      const evolvedLoops = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, availableScales, evolutionOptions)
+
+      // Aplicar call & response si está activado
+      if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
+        const loopsToReharmonize = selectRandomLoops(Math.ceil(evolutionSystem.evolutionIntensity.value * 5))
+        applyCallResponse(loopsToReharmonize)
+      }
+
+      // Actualizar loops con las evoluciones
+      evolvedLoops.forEach((evolvedLoop, index) => {
+        if (evolvedLoop !== loopManager.loops.value[index]) {
+          Object.assign(loopManager.loops.value[index], evolvedLoop)
+        }
+      })
+
+      // Aplicar gestión de energía después de la evolución
+      energyManager.checkAndBalanceEnergy(loopManager.loops.value)
+
+      // Resetear contador
+      measuresSinceEvolve.value = 0
+      nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value * 16)
+
+      const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
+      const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
+    } finally {
+      // Finalizar modo batch y guardar una sola vez si no está en autoEvolve
+      if (presetStore && presetStore.endBatchMode) {
+        // Solo autosave si no está en modo autoEvolve continuo
+        presetStore.endBatchMode(!autoEvolve.value)
       }
     }
-
-    // Usar el sistema de evolución para evolucionar loops
-    const availableScales = Object.keys(scales.value).map(name => ({
-      name,
-      notes: useScales().getScale(name)
-    }))
-
-    // Excluir reverb y delay de la evolución cuando se están aplicando cambios de estilo
-    const isStyleChange = momentumEnabled.value || callResponseEnabled.value || tensionReleaseMode.value
-    const evolutionOptions = isStyleChange ? { excludeReverb: true, excludeDelay: true } : {}
-
-    const evolvedLoops = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, availableScales, evolutionOptions)
-
-    // Aplicar call & response si está activado
-    if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
-      const loopsToReharmonize = selectRandomLoops(Math.ceil(evolutionSystem.evolutionIntensity.value * 5))
-      applyCallResponse(loopsToReharmonize)
-    }
-
-    // Actualizar loops con las evoluciones
-    evolvedLoops.forEach((evolvedLoop, index) => {
-      if (evolvedLoop !== loopManager.loops.value[index]) {
-        Object.assign(loopManager.loops.value[index], evolvedLoop)
-      }
-    })
-
-    // Aplicar gestión de energía después de la evolución
-    energyManager.checkAndBalanceEnergy(loopManager.loops.value)
-
-    // Resetear contador
-    measuresSinceEvolve.value = 0
-    nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value * 16)
-
-    const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
-    const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
   }
 
   const checkEvolve = () => {
@@ -508,16 +521,20 @@ export const useAudioStore = defineStore('audio', () => {
     }, 100)
   }
 
-  const stopAutoEvolve = () => {
+  const stopAutoEvolve = async () => {
     autoEvolve.value = false
     evolutionSystem.updateEvolutionSettings({ enabled: false })
     if (evolveIntervalId) {
       clearInterval(evolveIntervalId)
       evolveIntervalId = null
     }
+
+    // Guardar preset cuando se detiene la evolución automática
+    notifyPresetChanges()
   }
 
   const updateEvolveInterval = (interval) => {
+    console.log('🔄 updateEvolveInterval called:', interval)
     const measuresInterval = Math.max(2, Math.min(32, Number(interval))) // límites en compases
     evolutionSystem.updateEvolutionSettings({ interval: measuresInterval })
     if (autoEvolve.value) {
@@ -528,12 +545,14 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateEvolveIntensity = (intensity) => {
+    console.log('🔄 updateEvolveIntensity called:', intensity)
     const normalizedIntensity = Math.max(0.1, Math.min(1.0, Number(intensity) / 10))
     evolutionSystem.updateEvolutionSettings({ intensity: normalizedIntensity })
     notifyPresetChanges()
   }
 
   const updateMomentumMaxLevel = (level) => {
+    console.log('🔄 updateMomentumMaxLevel called:', level)
     momentumMaxLevel.value = Math.max(1, Math.min(10, Number(level)))
     notifyPresetChanges()
   }
@@ -584,11 +603,13 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateMaxSonicEnergyWrapper = (value) => {
+    console.log('🔄 updateMaxSonicEnergy called:', value)
     energyManager.updateMaxSonicEnergy(value)
     notifyPresetChanges()
   }
 
   const updateEnergyReductionFactorWrapper = (value) => {
+    console.log('🔄 updateEnergyReductionFactor called:', value)
     energyManager.updateEnergyReductionFactor(value)
     notifyPresetChanges()
   }

@@ -22,13 +22,7 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   const getLoopNoteDensity = (loopId) => {
-    if (!notesMatrix || typeof loopId !== 'number') return 0
-    try {
-      return notesMatrix.getLoopNoteDensity(loopId) || 0
-    } catch (error) {
-      console.warn('No se pudo calcular densidad del loop', loopId, error)
-      return 0
-    }
+    return notesMatrix.getLoopNoteDensity(loopId)
   }
 
   const generateNotes = (scale, baseNote, length) => {
@@ -81,13 +75,8 @@ export const useLoopManager = (notesMatrix = null) => {
   // Aplica transformaciones simples (transposición, retrogradación, inversión) y cuantiza a la escala
   const generateResponseFromCall = (callLoop, responderLoop, scale, baseNote, options = {}) => {
     try {
-      // Obtener notas desde la matriz centralizada si está disponible
-      let sourceNotes = []
-      if (notesMatrix && callLoop) {
-        sourceNotes = notesMatrix.getLoopNotes(callLoop.id)
-      } else {
-        sourceNotes = Array.isArray(callLoop?.notes) ? callLoop.notes : []
-      }
+      // Obtener notas desde la matriz centralizada
+      const sourceNotes = notesMatrix ? notesMatrix.getLoopNotes(callLoop.id) : []
 
       const targetLength = responderLoop?.length ?? sourceNotes.length
       const { quantizeToScale } = useNoteUtils()
@@ -541,12 +530,6 @@ export const useLoopManager = (notesMatrix = null) => {
 
   // Reproducir nota de un loop específico
   const playLoopNote = (loop, audioEngine, step, time) => {
-    // Obtener nota desde la matriz centralizada
-    if (!notesMatrix) {
-      console.warn('NotesMatrix not available for playback')
-      return
-    }
-
     const midiNote = notesMatrix.getNote(loop.id, step)
     if (midiNote === null || midiNote === undefined) return
     const synthModel = loop.synthModel || 'PolySynth'
