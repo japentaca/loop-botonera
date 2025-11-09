@@ -27,7 +27,7 @@ export function useNotesMatrix() {
   const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
   const debugLog = (label, payload = {}) => {
     if (isDebugEnabled()) {
-      console.log(`[NotesMatrix] ${label}`, payload)
+      // console.log(`[NotesMatrix] ${label}`, payload)
     }
   }
 

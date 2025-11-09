@@ -52,43 +52,28 @@ export const useAudioEngine = () => {
 
   // Inicializar el motor de audio
   const initAudio = async () => {
-    console.log('🔊 AUDIO ENGINE: Starting audio engine initialization - audioInitialized:', audioInitialized.value);
-    console.log('🔊 AUDIO ENGINE: Browser info:', navigator.userAgent);
-    console.log('🔊 AUDIO ENGINE: Tone.context.state:', Tone.context.state);
 
     if (audioInitialized.value) {
-      console.log('🔊 AUDIO ENGINE: Audio already initialized, skipping');
       return
     }
 
     try {
-      console.log('🔊 AUDIO ENGINE: Starting Tone.js...');
-      console.log('🔊 AUDIO ENGINE: Pre-start - Tone.context.state:', Tone.context.state);
       await Tone.start()
-      console.log('🔊 AUDIO ENGINE: Tone.js started successfully');
-      console.log('🔊 AUDIO ENGINE: Post-start - Tone.context.state:', Tone.context.state);
 
       // Crear cadena de efectos globales
-      console.log('🔊 AUDIO ENGINE: Creating master gain node');
       masterGain = markRaw(new Tone.Gain(masterVol.value).toDestination())
-      console.log('🔊 AUDIO ENGINE: Master gain node created');
 
       if (!BYPASS_EFFECTS_FOR_TEST) {
-        console.log('🔊 AUDIO ENGINE: Creating delay effect');
         delay = markRaw(new Tone.PingPongDelay(delayDivision.value, 0.4).connect(masterGain))
-        console.log('🔊 AUDIO ENGINE: Creating reverb effect');
         reverb = markRaw(new Tone.Reverb({ decay: 2.5, wet: 0.5 }).connect(masterGain))
         await reverb.generate()
-        console.log('🔊 AUDIO ENGINE: Effects created successfully');
       }
 
       // Configurar transporte
-      console.log('🔊 AUDIO ENGINE: Configuring transport, BPM:', tempo.value);
       Tone.Transport.bpm.value = tempo.value
       updateDelayTime()
 
       audioInitialized.value = true
-      console.log('🔊 AUDIO ENGINE: Audio engine initialization complete');
     } catch (error) {
       console.error('🔴 AUDIO ENGINE: Error al inicializar motor de audio:', error)
       throw error
@@ -107,14 +92,10 @@ export const useAudioEngine = () => {
 
   // Control de reproducción
   const startTransport = async () => {
-    console.log('🎛️ AUDIO_ENGINE: startTransport called - isPlaying:', isPlaying.value, 'audioInitialized:', audioInitialized.value);
     if (!isPlaying.value) {
-      console.log('🎛️ AUDIO_ENGINE: About to call initAudio() from startTransport');
       await initAudio()
-      console.log('🎛️ AUDIO_ENGINE: initAudio() completed in startTransport');
       Tone.Transport.start()
       isPlaying.value = true
-      console.log('🎛️ AUDIO_ENGINE: Transport started, isPlaying set to true');
     }
   }
 
@@ -126,13 +107,11 @@ export const useAudioEngine = () => {
   }
 
   const togglePlay = async () => {
-    console.log('🎛️ AUDIO_ENGINE: togglePlay called - Current isPlaying:', isPlaying.value);
     if (isPlaying.value) {
       stopTransport()
     } else {
       await startTransport()
     }
-    console.log('🎛️ AUDIO_ENGINE: togglePlay completed - New isPlaying:', isPlaying.value);
   }
 
   // Actualización de parámetros globales

@@ -46,9 +46,9 @@
           <div class="control-group">
             <label class="control-label">Momentum Máximo</label>
             <div class="slider-container">
-              <Slider :min="1" :max="10" :step="1" :modelValue="momentumMaxLevel"
+              <Slider :min="1" :max="10" :step="1" :modelValue="audioStore.momentumMaxLevel"
                 @update:modelValue="onMomentumMaxLevelChange" class="range-slider" />
-              <span class="value-display">{{ momentumMaxLevel }}</span>
+              <span class="value-display">{{ audioStore.momentumMaxLevel }}</span>
             </div>
             <small class="control-description">Nivel máximo que puede alcanzar el momentum</small>
           </div>
@@ -141,11 +141,20 @@
 
   const audioStore = useAudioStore()
 
-  // Estado local para momentum max level (no está expuesto en el store)
-  const momentumMaxLevel = ref(5)
-
   // Configuración del multiselector de evolución
-  const selectedEvolutionTypes = ref([])
+  const selectedEvolutionTypes = computed({
+    get: () => {
+      const types = []
+      if (audioStore.momentumEnabled) types.push('momentum')
+      if (audioStore.callResponseEnabled) types.push('callResponse')
+      if (audioStore.tensionReleaseMode) types.push('tensionRelease')
+      if (types.length === 0) types.push('classic')
+      return types
+    },
+    set: (value) => {
+      onEvolutionTypesChange(value)
+    }
+  })
 
   const evolutionOptions = [
     {
@@ -180,11 +189,7 @@
   }
 
   const onMomentumMaxLevelChange = (value) => {
-    momentumMaxLevel.value = Number(value)
-    // Actualizar en el store si existe la función
-    if (audioStore.updateMomentumMaxLevel) {
-      audioStore.updateMomentumMaxLevel(Number(value))
-    }
+    audioStore.updateMomentumMaxLevel(Number(value))
   }
 
   const onMaxSonicEnergyChange = (value) => {
@@ -232,11 +237,10 @@
     // Restaurar valores por defecto
     audioStore.updateEvolveInterval(8)
     audioStore.updateEvolveIntensity(2)
-    momentumMaxLevel.value = 5
+    audioStore.updateMomentumMaxLevel(5)
     audioStore.updateEnergyManagement(true)
     audioStore.updateMaxSonicEnergy(2.5)
     audioStore.updateEnergyReductionFactor(0.6)
-    selectedEvolutionTypes.value = []
     onEvolutionTypesChange([])
   }
 
@@ -249,25 +253,6 @@
   const closeDialog = () => {
     emit('close')
   }
-
-  // Sincronizar estado inicial del multiselector basado en el store
-  watch(() => [
-    audioStore.momentumEnabled,
-    audioStore.callResponseEnabled,
-    audioStore.tensionReleaseMode
-  ], () => {
-    const types = []
-    if (audioStore.momentumEnabled) types.push('momentum')
-    if (audioStore.callResponseEnabled) types.push('callResponse')
-    if (audioStore.tensionReleaseMode) types.push('tensionRelease')
-
-    // Solo agregar 'classic' si no hay ningún tipo especial activado
-    if (types.length === 0) {
-      types.push('classic')
-    }
-
-    selectedEvolutionTypes.value = types
-  }, { immediate: true })
 </script>
 
 <style scoped>

@@ -34,36 +34,26 @@
   import { usePresetStore } from './stores/presetStore'
 
   const componentId = Math.random().toString(36).substr(2, 9)
-  console.log('🔵 APP: App.vue script setup starting - Instance ID:', componentId);
 
   const audioStore = useAudioStore()
   const presetStore = usePresetStore()
   const isInitializing = ref(false)
 
-  console.log('🔵 APP: Stores initialized - audioStore:', !!audioStore, 'presetStore:', !!presetStore);
-
   // Initialize audio only when user clicks the start button
   const initializeAudio = async () => {
     if (isInitializing.value) {
-      console.log('🔴 APP: Already initializing, skipping');
       return
     }
 
     isInitializing.value = true
-    console.log('🔵 APP: Starting user-initiated audio initialization');
 
     try {
       // Initialize audio store first
-      console.log('🔵 APP: Initializing audio store...');
       await audioStore.initAudio()
-      console.log('🔵 APP: Audio store initialized successfully');
 
       // Initialize preset system after audio is ready
-      console.log('🔵 APP: Initializing preset store...');
       await presetStore.initialize()
-      console.log('🔵 APP: Preset store initialized successfully');
 
-      console.log('🔵 APP: All initialization complete');
     } catch (error) {
       console.error('🔴 APP: Error during initialization:', error)
     } finally {
@@ -71,9 +61,7 @@
     }
   }
 
-  onMounted(() => {
-    console.log('🔵 APP: Component mounted - waiting for user interaction to initialize audio');
-  })
+
 </script>
 
 <style>

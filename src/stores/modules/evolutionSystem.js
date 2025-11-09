@@ -93,10 +93,10 @@ export const useEvolutionSystem = (notesMatrix = null) => {
 
     ensureLoopHasNotes(loop.id)
     if (mutated && typeof window !== 'undefined' && window.__LOOP_DEBUG) {
-      console.log('[EvolutionSystem] Rhythm mutated', {
-        loopId: loop.id,
-        density: notesMatrix.getLoopNoteDensity(loop.id)
-      })
+      // console.log('[EvolutionSystem] Rhythm mutated', {
+      //   loopId: loop.id,
+      //   density: notesMatrix.getLoopNoteDensity(loop.id)
+      // })
     }
 
     return mutated
@@ -136,11 +136,11 @@ export const useEvolutionSystem = (notesMatrix = null) => {
     ensureLoopHasNotes(loop.id)
 
     if (typeof window !== 'undefined' && window.__LOOP_DEBUG) {
-      console.log('[EvolutionSystem] Density adjusted', {
-        loopId: loop.id,
-        targetDensity,
-        actualDensity: notesMatrix.getLoopNoteDensity(loop.id)
-      })
+      // console.log('[EvolutionSystem] Density adjusted', {
+      //   loopId: loop.id,
+      //   targetDensity,
+      //   actualDensity: notesMatrix.getLoopNoteDensity(loop.id)
+      // })
     }
 
     return true

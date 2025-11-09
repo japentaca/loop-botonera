@@ -71,6 +71,7 @@ export const useAudioStore = defineStore('audio', () => {
   const lastCallerId = ref(null)
   const evolveStartTime = ref(0)
   const momentumLevel = ref(0)
+  const momentumMaxLevel = ref(5)
   let evolveIntervalId = null
 
   // Configuración de modos creativos
@@ -104,36 +105,25 @@ export const useAudioStore = defineStore('audio', () => {
   // Inicialización de audio
   let audioStoreInitializing = false
   const initAudio = async () => {
-    console.log('🎵 AUDIO STORE: Starting audio initialization');
 
     // Prevent multiple concurrent initializations
     if (audioStoreInitializing) {
-      console.log('🔴 AUDIO STORE: Already initializing, skipping this call');
       return
     }
 
     audioStoreInitializing = true
-    console.log('🎵 AUDIO STORE: Current scale:', currentScale.value);
 
     try {
-      console.log('🎵 AUDIO STORE: Initializing audio engine...');
       await audioEngine.initAudio()
-      console.log('🎵 AUDIO STORE: Audio engine initialized successfully');
 
       // Configurar callback del transporte para reproducir loops
-      console.log('🎵 AUDIO STORE: Setting up transport callback');
       audioEngine.setupTransportCallback(playActiveLoops)
-      console.log('🎵 AUDIO STORE: Transport callback configured');
 
       // Inicializar loops con configuración por defecto
-      console.log('🎵 AUDIO STORE: Getting scale and initializing loops');
       const scale = useScales().getScale(currentScale.value)
-      console.log('🎵 AUDIO STORE: Scale retrieved:', currentScale.value);
 
       loopManager.initializeLoops(scale, audioEngine)
-      console.log('🎵 AUDIO STORE: Loops initialized successfully');
 
-      console.log('🎵 AUDIO STORE: Audio initialization complete');
       audioStoreInitializing = false
       return true
     } catch (error) {
@@ -145,9 +135,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Control de reproducción
   const togglePlay = () => {
-    console.log('🎵 AUDIO_STORE: togglePlay called - Current isPlaying:', audioEngine.isPlaying.value);
     audioEngine.togglePlay()
-    console.log('🎵 AUDIO_STORE: togglePlay executed - New isPlaying:', audioEngine.isPlaying.value);
 
     if (audioEngine.isPlaying.value && autoEvolve.value) {
       startAutoEvolve()
@@ -230,7 +218,6 @@ export const useAudioStore = defineStore('audio', () => {
     if (!audioEngine.audioInitialized.value) return
 
     const scale = useScales().getScale(currentScale.value)
-    console.log('🎵 REGENERATING ALL LOOPS with scale:', currentScale.value, 'intervals:', scale)
 
     for (let i = 0; i < loopManager.NUM_LOOPS; i++) {
       const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
@@ -240,7 +227,6 @@ export const useAudioStore = defineStore('audio', () => {
 
     // Ajustar volúmenes después de regenerar todos
     energyManager.adjustAllLoopVolumes(loopManager.loops.value)
-    console.log('🎵 FINISHED REGENERATING ALL LOOPS with scale:', currentScale.value)
   }
 
   // Distribución panorámica
@@ -538,15 +524,18 @@ export const useAudioStore = defineStore('audio', () => {
       // Recalcular próxima evolución: simplemente sumar el nuevo intervalo en compases
       nextEvolveMeasure.value = audioEngine.currentPulse.value + (measuresInterval * 16)
     }
+    notifyPresetChanges()
   }
 
   const updateEvolveIntensity = (intensity) => {
     const normalizedIntensity = Math.max(0.1, Math.min(1.0, Number(intensity) / 10))
     evolutionSystem.updateEvolutionSettings({ intensity: normalizedIntensity })
+    notifyPresetChanges()
   }
 
   const updateMomentumMaxLevel = (level) => {
-    // Mantener compatibilidad con la interfaz existente
+    momentumMaxLevel.value = Math.max(1, Math.min(10, Number(level)))
+    notifyPresetChanges()
   }
 
   // Control de modos creativos
@@ -563,6 +552,7 @@ export const useAudioStore = defineStore('audio', () => {
       evolveStartTime.value = Date.now()
       momentumLevel.value = 0
     }
+    notifyPresetChanges()
   }
 
   const setCallResponseEnabled = (enabled) => {
@@ -571,6 +561,7 @@ export const useAudioStore = defineStore('audio', () => {
       lastResponderId.value = null
       lastCallerId.value = null
     }
+    notifyPresetChanges()
   }
 
   const setTensionReleaseMode = (enabled) => {
@@ -578,10 +569,28 @@ export const useAudioStore = defineStore('audio', () => {
     if (enabled) {
       isTensionPhase.value = false
     }
+    notifyPresetChanges()
   }
 
   const toggleScaleLock = () => {
     scaleLocked.value = !scaleLocked.value
+    notifyPresetChanges()
+  }
+
+  // Wrappers for energy management functions to notify preset changes
+  const updateEnergyManagementWrapper = (enabled) => {
+    energyManager.updateEnergyManagement(enabled)
+    notifyPresetChanges()
+  }
+
+  const updateMaxSonicEnergyWrapper = (value) => {
+    energyManager.updateMaxSonicEnergy(value)
+    notifyPresetChanges()
+  }
+
+  const updateEnergyReductionFactorWrapper = (value) => {
+    energyManager.updateEnergyReductionFactor(value)
+    notifyPresetChanges()
   }
 
   return {
@@ -612,6 +621,10 @@ export const useAudioStore = defineStore('audio', () => {
     measuresSinceEvolve,
     nextEvolveMeasure,
     scaleLocked,
+    momentumMaxLevel,
+    momentumEnabled,
+    callResponseEnabled,
+    tensionReleaseMode,
 
     // Estado de gestión de energía
     energyManagementEnabled: energyManager.energyManagementEnabled,
@@ -661,9 +674,9 @@ export const useAudioStore = defineStore('audio', () => {
     adjustAllLoopVolumes: () => energyManager.adjustAllLoopVolumes(loopManager.loops.value),
 
     // Configuración de energía sonora
-    updateEnergyManagement: energyManager.updateEnergyManagement,
-    updateMaxSonicEnergy: energyManager.updateMaxSonicEnergy,
-    updateEnergyReductionFactor: energyManager.updateEnergyReductionFactor,
+    updateEnergyManagement: updateEnergyManagementWrapper,
+    updateMaxSonicEnergy: updateMaxSonicEnergyWrapper,
+    updateEnergyReductionFactor: updateEnergyReductionFactorWrapper,
 
     // Funciones de matriz de notas centralizada
     notesMatrix: notesMatrix.notesMatrix,

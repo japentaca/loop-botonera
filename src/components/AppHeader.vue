@@ -94,30 +94,13 @@
   import PresetManagerDialog from './PresetManagerDialog.vue'
 
   const componentId = Math.random().toString(36).substr(2, 9)
-  console.log('🟡 HEADER: AppHeader.vue script setup starting - Instance ID:', componentId);
 
   const audioStore = useAudioStore()
   const presetStore = usePresetStore()
   const { scales, scaleNames, scaleNamesSpanish } = useScales()
 
-  onBeforeMount(() => {
-    console.log('🟡 HEADER: onBeforeMount fired - Instance ID:', componentId);
-  })
-
-  onMounted(() => {
-    console.log('🟡 HEADER: onMounted fired - Instance ID:', componentId);
-  })
-
   // onBeforeUpdate and onUpdated removed to prevent spam during playback
-  // These fire constantly because evolveProgress and other computed props update with currentPulse
-
-  onBeforeUnmount(() => {
-    console.log('🟡 HEADER: onBeforeUnmount fired - Instance ID:', componentId);
-  })
-
-  onUnmounted(() => {
-    console.log('🟡 HEADER: onUnmounted fired - Instance ID:', componentId);
-  })  // Obtener las claves de las escalas para el selector
+  // These fire constantly because evolveProgress and other computed props update with currentPulse  // Obtener las claves de las escalas para el selector
   const scaleKeys = Object.keys(scales)
 
   // Opciones para el dropdown de escalas
@@ -227,9 +210,7 @@
 
   // Métodos
   const togglePlay = async () => {
-    console.log('🟡 HEADER: togglePlay called - Instance ID:', componentId, 'Current isPlaying:', audioStore.isPlaying);
     await audioStore.togglePlay()
-    console.log('🟡 HEADER: togglePlay completed - New isPlaying:', audioStore.isPlaying);
   }
 
   const toggleAutoEvolve = () => {

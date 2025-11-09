@@ -68,6 +68,8 @@ export const usePresetStore = defineStore('preset', () => {
       currentPresetId.value = defaultPreset.id
       hasUnsavedChanges.value = false
 
+      console.log('📦 [PresetLoaded] Default preset created and loaded:', defaultPreset.name, 'ID:', defaultPreset.id)
+
       return defaultPreset
     } catch (error) {
       console.error('Error al crear preset por defecto:', error)
@@ -159,7 +161,7 @@ export const usePresetStore = defineStore('preset', () => {
         if (globalConfig.evolveInterval !== undefined) audioStore.updateEvolveInterval(globalConfig.evolveInterval)
         if (globalConfig.evolveIntensity !== undefined) audioStore.updateEvolveIntensity(globalConfig.evolveIntensity)
       }
-      if (globalConfig.momentumMaxLevel !== undefined) audioStore.momentumMaxLevel = globalConfig.momentumMaxLevel
+      if (globalConfig.momentumMaxLevel !== undefined) audioStore.updateMomentumMaxLevel(globalConfig.momentumMaxLevel)
       if (globalConfig.scaleLocked !== undefined) audioStore.scaleLocked = globalConfig.scaleLocked
 
       // Evolution types
@@ -350,6 +352,8 @@ export const usePresetStore = defineStore('preset', () => {
       currentPresetId.value = presetId
       hasUnsavedChanges.value = false
       lastSaveTime.value = new Date()
+
+      console.log('📦 [PresetLoaded] Preset loaded successfully:', preset.name, 'ID:', presetId)
 
       return preset
     } catch (error) {
@@ -559,11 +563,9 @@ export const usePresetStore = defineStore('preset', () => {
   // Inicialización
   let presetStoreInitializing = false
   const initialize = async () => {
-    console.log('📋 PRESET STORE: Initialize called');
 
     // Prevent multiple concurrent initializations
     if (presetStoreInitializing) {
-      console.log('🔴 PRESET STORE: Already initializing, skipping this call');
       return true
     }
 
@@ -581,6 +583,8 @@ export const usePresetStore = defineStore('preset', () => {
       // Establecer el preset actual al más reciente
       if (presets.value.length > 0 && !currentPresetId.value) {
         currentPresetId.value = sortedPresets.value[0].id
+        // Load the preset to apply its state
+        await loadPreset(currentPresetId.value)
       }
 
       setupAutoSave()

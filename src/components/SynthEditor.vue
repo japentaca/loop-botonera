@@ -116,7 +116,6 @@
   import Slider from 'primevue/slider'
 
   const componentId = Math.random().toString(36).substr(2, 9)
-  console.log('🔴 SYNTH_EDITOR: SynthEditor.vue script setup starting - Instance ID:', componentId);
 
   const synthStore = useSynthStore()
   const audioStore = useAudioStore()
@@ -134,23 +133,7 @@
     }
   }
 
-  onBeforeMount(() => {
-    console.log('🔴 SYNTH_EDITOR: onBeforeMount fired - Instance ID:', componentId);
-  })
-
-  onMounted(() => {
-    console.log('🔴 SYNTH_EDITOR: onMounted fired - Instance ID:', componentId);
-  })
-
   // onBeforeUpdate and onUpdated removed - SynthEditor doesn't need update spam logs
-
-  onBeforeUnmount(() => {
-    console.log('🔴 SYNTH_EDITOR: onBeforeUnmount fired - Instance ID:', componentId);
-  })
-
-  onUnmounted(() => {
-    console.log('🔴 SYNTH_EDITOR: onUnmounted fired - Instance ID:', componentId);
-  })
 
   // Opciones para el dropdown de tipos de sintetizador
   const synthTypeOptions = [

@@ -75,7 +75,6 @@
   import { useSynthStore } from '../stores/synthStore'
 
   const componentId = Math.random().toString(36).substr(2, 9)
-  console.log('🟣 LOOP_CARD: LoopCard.vue script setup starting - Instance ID:', componentId);
 
   const audioStore = useAudioStore()
   const synthStore = useSynthStore()
@@ -87,24 +86,8 @@
     }
   })
 
-  onBeforeMount(() => {
-    console.log('🟣 LOOP_CARD: onBeforeMount fired - Instance ID:', componentId, 'Loop ID:', props.loop?.id);
-  })
-
-  onMounted(() => {
-    console.log('🟣 LOOP_CARD: onMounted fired - Instance ID:', componentId, 'Loop ID:', props.loop?.id);
-  })
-
   // onBeforeUpdate and onUpdated removed to prevent spam during playback
-  // These fire constantly because currentPulse updates every 16th note
-
-  onBeforeUnmount(() => {
-    console.log('🟣 LOOP_CARD: onBeforeUnmount fired - Instance ID:', componentId, 'Loop ID:', props.loop?.id);
-  })
-
-  onUnmounted(() => {
-    console.log('🟣 LOOP_CARD: onUnmounted fired - Instance ID:', componentId, 'Loop ID:', props.loop?.id);
-  })  // Tamaños permitidos para el loop
+  // These fire constantly because currentPulse updates every 16th note  // Tamaños permitidos para el loop
   const allowedSizes = [4, 8, 12, 16, 32, 48, 64, 128, 256, 512]
 
   // Índice del tamaño actual basado en la lista permitida

@@ -17,7 +17,7 @@ export const useLoopManager = (notesMatrix = null) => {
   const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
   const debugLog = (label, payload = {}) => {
     if (isDebugEnabled()) {
-      console.log(`[LoopManager] ${label}`, payload)
+      // console.log(`[LoopManager] ${label}`, payload)
     }
   }
 
