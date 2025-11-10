@@ -17,6 +17,39 @@ Implementation of a modular melodic generation system with counterpoint awarenes
 
 ---
 
+## Non-Breaking Guarantee
+- Additive only: Legacy generation remains the default path and unchanged.
+- No behavior changes occur until explicitly requested by the user.
+- Public APIs keep their signatures; presets and existing features behave identically by default.
+
+## Release Gates & User Control
+- Gate 1 (after Phase 1): Modules implemented but not integrated into default runtime. Pause for user review.
+- Gate 2 (after Task 1.5): Integration exists but defaults to legacy path. Pause for user review.
+- Gate 3 (after Phase 2): Patterns implemented; opt-in usage only. Pause for user review.
+- At each gate, the agent stops until the user confirms via console inspection and instructs to continue.
+
+## Observability & Console Logging
+- All new code logs with the `[MelGen]` prefix for easy filtering.
+- Log decision points, parameters, outputs, and timings:
+  - `useMelodicGenerator`: pattern selection, length, density, elapsed time.
+  - `patternGenerators`: generator type, input parameters, output length, note range adherence.
+  - `counterpointService`: collisions detected and resolutions applied.
+  - `useNotesMatrix` integration: path chosen (`legacy` vs `melodic`) and reason.
+- Example lines:
+  - `[MelGen] selectPatternType loop=3 probs={euclidean:0.3,arpeggio:0.5,random:0.2} -> arpeggio`
+  - `[MelGen] generateArpeggio steps=16 density=0.4 range=36..84 time=2.7ms`
+  - `[MelGen] applyCounterpoint loop=3 step=9 conflict=C4 -> moved=D4`
+  - `[MelGen] path=legacy (melodic not requested)`
+- Helper:
+```javascript
+const melLog = (...args) => console.log('[MelGen]', ...args);
+```
+
+## Minimal Runtime Coupling
+- Keep `generateLoopNotes()` signature unchanged; legacy generation stays the default.
+- Introduce opt-in via an explicit parameter at call sites, e.g., `generateLoopNotes(loopId, { strategy: 'melodic' })`.
+- Avoid global feature flags; defer per-loop UI opt-in until Phase 3.
+
 ## Implementation Phases
 
 ### PHASE 1: Core Infrastructure ✅ Status: NOT_STARTED
@@ -139,9 +172,11 @@ loopMetadata[loopId] = {
 **Dependencies**: Task 1.4
 **Testing**: Manual testing - verify existing features work with new system
 **Success Criteria**:
-- Existing presets load correctly
-- New generation can be toggled/disabled
-- No breaking changes to current features
+- With no explicit melodic request, behavior and outputs are identical to current version (default path = legacy).
+- Logs clearly indicate the chosen path (`legacy` vs `melodic`) and why.
+- Existing presets load correctly without enabling new generation.
+- Opt-in is explicit (per call or UI control), with no auto-migration.
+- No breaking changes to current features; API signatures remain unchanged.
 
 ---
 
@@ -456,14 +491,16 @@ Add remaining pattern types one by one:
 ### For AI Agent:
 When user says "continue with implementation of this plan":
 
-1. **Check Current Status**: Read this file and identify the first task with status `NOT_STARTED`
-2. **Verify Dependencies**: Ensure all dependency tasks are `COMPLETED`
-3. **Announce Task**: Tell user which task you're implementing (e.g., "Implementing Task 1.1: Create Pattern Generation Module")
-4. **Implement**: Follow the task's Implementation Details exactly
-5. **Update Status**: Change task status to `IN_PROGRESS` during work
-6. **Test**: Follow testing instructions in task
-7. **Complete**: Update status to `COMPLETED` and commit changes
-8. **Report**: Summarize what was done and what's next
+1. **Check Current Status**: Read this file and identify the first task with status `NOT_STARTED`.
+2. **Verify Dependencies**: Ensure all dependency tasks are `COMPLETED`.
+3. **Announce Task**: Tell user which task you're implementing (e.g., "Implementing Task 1.1: Create Pattern Generation Module").
+4. **Implement**: Follow the task's Implementation Details exactly, keeping legacy behavior unchanged by default.
+5. **Update Status**: Change task status to `IN_PROGRESS` during work.
+6. **Test**: Follow testing instructions in task and emit structured `[MelGen]` console logs for observability.
+7. **Pause at Gates**: At each gate (after Phase 1, after Task 1.5, after Phase 2), stop implementation. Wait for the user's explicit instruction to proceed after their console review.
+8. **Console Verification**: When asked, check the MCP Chrome console and report findings before continuing.
+9. **Complete**: After user approval at the relevant gate, update status to `COMPLETED`.
+10. **Report**: Summarize what was done, what logs showed, and what's next.
 
 ### For User:
 To continue implementation:
