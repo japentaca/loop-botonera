@@ -83,7 +83,17 @@
   // Computed properties
   const metadata = computed(() => props.loopMetadata?.[props.loopId])
 
-  const patternProbabilities = computed(() => metadata.value?.patternProbabilities || { euclidean: 0.3, arpeggio: 0.3, random: 0.4 })
+  // Local reactive state for immediate UI updates
+  const localProbabilities = ref({ euclidean: 0.3, arpeggio: 0.3, random: 0.4 })
+
+  // Sync local state with metadata
+  watch(() => metadata.value?.patternProbabilities, (newProbs) => {
+    if (newProbs) {
+      localProbabilities.value = { ...newProbs }
+    }
+  }, { immediate: true })
+
+  const patternProbabilities = computed(() => localProbabilities.value)
   const noteRangeMin = computed(() => metadata.value?.noteRangeMin ?? 24)
   const noteRangeMax = computed(() => metadata.value?.noteRangeMax ?? 96)
   const generationMode = computed(() => metadata.value?.generationMode ?? 'auto')
@@ -93,8 +103,7 @@
 
   // Methods
   const updateProbability = (patternType, value) => {
-    const currentProbabilities = patternProbabilities.value || { euclidean: 0.3, arpeggio: 0.3, random: 0.4 }
-    const newProbabilities = { ...currentProbabilities }
+    const newProbabilities = { ...localProbabilities.value }
     newProbabilities[patternType] = value
 
     // Normalize to ensure they sum to 1.0
@@ -104,6 +113,9 @@
         newProbabilities[key] = newProbabilities[key] / total
       })
     }
+
+    // Update local state immediately for UI responsiveness
+    localProbabilities.value = newProbabilities
 
     emit('update-metadata', {
       loopId: props.loopId,

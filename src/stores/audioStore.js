@@ -49,10 +49,11 @@ export const useAudioStore = defineStore('audio', () => {
   const audioEngine = useAudioEngine()
   const loopManager = useLoopManager(notesMatrix)
   const energyManager = useEnergyManager(notesMatrix)
-  const evolutionSystem = useEvolutionSystem(notesMatrix)
 
   // Inicializar generador melódico con acceso a la matriz
   const melodicGenerator = useMelodicGenerator(notesMatrix)
+
+  const evolutionSystem = useEvolutionSystem(notesMatrix, melodicGenerator)
 
   // Performance optimization: maintain cache of active loop IDs
   // Updated whenever a loop's active state changes

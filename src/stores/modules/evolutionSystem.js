@@ -29,7 +29,7 @@ const wrapScaleDegree = (degree, scaleLength) => {
   return ((degree % scaleLength) + scaleLength) % scaleLength
 }
 
-export const useEvolutionSystem = (notesMatrix = null) => {
+export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) => {
   // Estado de evolución automática
   const autoEvolutionEnabled = ref(false)
   const evolutionInterval = ref(8) // intervalo en compases (4/4)
@@ -47,9 +47,10 @@ export const useEvolutionSystem = (notesMatrix = null) => {
   // Probabilidades de diferentes tipos de mutación
   const mutationProbabilities = ref({
     addNote: 0.3,       // probabilidad de añadir una nota
-    removeNote: 0.2,    // probabilidad de quitar una nota
-    shiftPattern: 0.25, // probabilidad de desplazar el patrón
-    changeNote: 0.4,    // probabilidad de cambiar una nota existente
+    removeNote: 0.25,   // probabilidad de quitar una nota
+    shiftPattern: 0.2,  // probabilidad de desplazar el patrón
+    changeNote: 0.15,   // probabilidad de cambiar una nota existente
+    changePattern: 0.1, // probabilidad de cambiar el tipo de patrón (regenerar melódicamente)
   })
 
 
@@ -119,6 +120,10 @@ export const useEvolutionSystem = (notesMatrix = null) => {
         const stepIndex = activePositions.splice(randomIdx, 1)[0]
         notesMatrix.clearLoopNote(loop.id, stepIndex)
         emptyPositions.push(stepIndex)
+        mutated = true
+      } else if (action < mutationProbabilities.value.addNote + mutationProbabilities.value.removeNote + mutationProbabilities.value.changePattern && melodicGenerator) {
+        // Change pattern by regenerating with melodic generation
+        melodicGenerator.regenerateLoop(loop.id)
         mutated = true
       }
     }
