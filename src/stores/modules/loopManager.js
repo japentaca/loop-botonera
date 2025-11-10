@@ -346,6 +346,9 @@ export const useLoopManager = (notesMatrix = null) => {
           notesMatrix.resizeLoop(id, newLen, { density })
           debugLog('loop length resized', { id, newLen, density })
         }
+
+        // Trigger reactivity update after length change
+        triggerRef(loops)
         break
       }
       case 'delay':
@@ -691,6 +694,11 @@ export const useLoopManager = (notesMatrix = null) => {
     loop.reverbSend = audioChain.reverbSend
   }
 
+  // Force reactivity update for shallowRef loops
+  const triggerLoopsUpdate = () => {
+    triggerRef(loops)
+  }
+
   return {
     // Estado
     loops,
@@ -724,6 +732,7 @@ export const useLoopManager = (notesMatrix = null) => {
     // Utilidades
     getActiveLoops,
     playLoopNote,
+    triggerLoopsUpdate,
 
     // Acceso a matriz centralizada
     getLoopNotesFromMatrix,

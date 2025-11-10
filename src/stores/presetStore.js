@@ -179,15 +179,9 @@ export const usePresetStore = defineStore('preset', () => {
       if (presetLoop.oscillatorType !== undefined) loop.synthType = presetLoop.oscillatorType
       if (presetLoop.synthModel !== undefined) loop.synthModel = presetLoop.synthModel
 
-      if (presetLoop.length !== undefined) {
-        if (loop.length !== presetLoop.length) {
-          loop.length = presetLoop.length
-          if (audioStore.updateLoopParam) {
-            audioStore.updateLoopParam(index, 'length', presetLoop.length)
-          }
-        } else {
-          loop.length = presetLoop.length
-        }
+      if (presetLoop.length !== undefined && audioStore.updateLoopParam) {
+        // Always use updateLoopParam to ensure proper reactivity and matrix updates
+        audioStore.updateLoopParam(index, 'length', presetLoop.length)
       }
 
       // Delay and reverb amounts are only changed through updateLoopParam (same as sliders)
@@ -273,6 +267,11 @@ export const usePresetStore = defineStore('preset', () => {
         // Use global scale for all loops
         audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, density, null)
       })
+    }
+
+    // Force reactivity update for loops (they use shallowRef)
+    if (audioStore.loopManager && audioStore.loopManager.triggerLoopsUpdate) {
+      audioStore.loopManager.triggerLoopsUpdate()
     }
 
     // Restaurar auto-guardado después de que todos los watchers hayan procesado los cambios
