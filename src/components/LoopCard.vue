@@ -34,7 +34,7 @@
           <span class="mini-label">Delay</span>
           <Slider :modelValue="loop.delayAmount * 100"
             @update:modelValue="audioStore.updateLoopParam(loop.id, 'delayAmount', $event / 100)" :min="0" :max="100"
-            class="mini-slider" :disabled="!audioStore.audioInitialized" />
+            class="mini-slider" :disabled="!audioStore.audioInitialized" :step="1" />
           <span class="mini-value">{{ Math.round(loop.delayAmount * 100) }}%</span>
         </div>
 
@@ -42,7 +42,7 @@
           <span class="mini-label">Reverb</span>
           <Slider :modelValue="loop.reverbAmount * 100"
             @update:modelValue="audioStore.updateLoopParam(loop.id, 'reverbAmount', $event / 100)" :min="0" :max="100"
-            class="mini-slider" :disabled="!audioStore.audioInitialized" />
+            class="mini-slider" :disabled="!audioStore.audioInitialized" :step="1" />
           <span class="mini-value">{{ Math.round(loop.reverbAmount * 100) }}%</span>
         </div>
 
@@ -50,7 +50,7 @@
           <span class="mini-label">Volumen</span>
           <Slider :modelValue="loop.volume * 100"
             @update:modelValue="audioStore.updateLoopParam(loop.id, 'volume', $event / 100)" :min="0" :max="100"
-            class="mini-slider" :disabled="!audioStore.audioInitialized" />
+            class="mini-slider" :disabled="!audioStore.audioInitialized" :step="1" />
           <span class="mini-value">{{ Math.round(loop.volume * 100) }}%</span>
         </div>
 
@@ -58,7 +58,7 @@
           <span class="mini-label">Pan</span>
           <Slider :modelValue="loop.pan * 100"
             @update:modelValue="audioStore.updateLoopParam(loop.id, 'pan', $event / 100)" :min="-100" :max="100"
-            class="mini-slider" :disabled="!audioStore.audioInitialized" />
+            class="mini-slider" :disabled="!audioStore.audioInitialized" :step="1" />
           <span class="mini-value">{{ formatPan(loop.pan) }}</span>
         </div>
       </div>
@@ -177,6 +177,12 @@
 
 <style scoped>
 
+  /* Performance optimizations for loop cards */
+  .loop-card {
+    /* CSS containment reduces layout and paint cost */
+    contain: layout style paint;
+  }
+
   /* Estilo simple para el botón inactivo */
   .loop-button:not(.active) {
     background: var(--primary-color) !important;
@@ -220,6 +226,9 @@
     background: rgba(0, 0, 0, 0.3);
     border-radius: 4px;
     color: rgba(255, 255, 255, 0.95);
+    /* Fixed dimensions prevent layout shifts */
+    min-height: 28px;
+    min-width: 60px;
   }
 
   .beat-current {

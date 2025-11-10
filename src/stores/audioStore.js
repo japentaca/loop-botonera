@@ -72,9 +72,10 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   // Debounced energy balance check to avoid excessive calculations during rapid param changes
+  // OPTIMIZED: Increased debounce delay to reduce main thread blocking
   const debouncedEnergyCheck = debounce((loops) => {
     energyManager.checkAndBalanceEnergy(loops)
-  }, 500) // OPTIMIZED: increased from 200ms to 500ms to better handle slider drag
+  }, 750) // OPTIMIZED: increased from 500ms to 750ms to reduce 140ms blocking tasks
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major')
@@ -214,9 +215,10 @@ export const useAudioStore = defineStore('audio', () => {
 
     loopManager.updateLoopParam(id, param, value)
 
-    // Only trigger energy check if volume changed meaningfully (>5%)
+    // Only trigger energy check if volume changed meaningfully (>1% instead of 5%)
     // This reduces unnecessary debounce calls when sliders are dragged
-    if (param === 'volume' && oldValue !== undefined && Math.abs(oldValue - value) > 0.05) {
+    // OPTIMIZED: Reduced threshold to 1% for smoother response but still batched
+    if (param === 'volume' && oldValue !== undefined && Math.abs(oldValue - value) > 0.01) {
       debouncedEnergyCheck(loopManager.loops.value)
     }
 
