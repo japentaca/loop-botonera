@@ -67,8 +67,17 @@
     <div class="loop-actions">
       <Button @click="synthStore.openSynthEditor(loop.id)" class="edit-button" icon="pi pi-cog" label="Editar Synth"
         size="small" outlined :disabled="!audioStore.audioInitialized" />
-      <Button @click="audioStore.regenerateLoop(loop.id)" class="edit-button" icon="pi pi-refresh"
+      <Button @click="audioStore.regenerateLoopMelody(loop.id)" class="edit-button" icon="pi pi-refresh"
         label="Regenerar Loop" size="small" outlined :disabled="!audioStore.audioInitialized" />
+      <Button @click="showPatternSettings = !showPatternSettings" class="edit-button"
+        :icon="showPatternSettings ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+        :label="showPatternSettings ? 'Ocultar Patrones' : 'Mostrar Patrones'" size="small" outlined
+        :disabled="!audioStore.audioInitialized" />
+    </div>
+
+    <div v-if="showPatternSettings" class="pattern-settings-section">
+      <PatternSettings v-if="audioStore.loopMetadata" :loopId="loop.id" :loopMetadata="audioStore.loopMetadata"
+        @update-metadata="updateMetadata" />
     </div>
 
     <div class="synth-type-display">
@@ -81,6 +90,7 @@
   import { computed, ref, watch, onMounted, onUnmounted, onBeforeMount, onBeforeUnmount } from 'vue'
   import { useAudioStore } from '../stores/audioStore'
   import { useSynthStore } from '../stores/synthStore'
+  import PatternSettings from './PatternSettings.vue'
 
   const componentId = Math.random().toString(36).substr(2, 9)
 
@@ -126,6 +136,7 @@
   const currentStep = ref(0)
   const paddedBeatsRemaining = ref('0')
   const beatProgress = ref(0)
+  const showPatternSettings = ref(false)
 
   const updateBeatIndicators = () => {
     if (!props.loop.isActive) {
@@ -173,6 +184,11 @@
       animationFrameId = null
     }
   })
+
+  // Update loop metadata for pattern settings
+  const updateMetadata = ({ loopId, updates }) => {
+    audioStore.updateLoopMetadata(loopId, updates)
+  }
 </script>
 
 <style scoped>
@@ -257,5 +273,25 @@
   .beat-indicator {
     width: 100%;
     margin-top: 0.25rem;
+  }
+
+  /* Pattern settings section */
+  .pattern-settings-section {
+    margin-top: 0.5rem;
+    animation: slideDown 0.3s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      max-height: 0;
+      transform: translateY(-10px);
+    }
+
+    to {
+      opacity: 1;
+      max-height: 500px;
+      transform: translateY(0);
+    }
   }
 </style>

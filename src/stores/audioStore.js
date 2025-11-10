@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, markRaw } from 'vue'
 import { useScales, useMusic } from '../composables/useMusic'
 import { useNotesMatrix } from '../composables/useNotesMatrix'
+import { useMelodicGenerator } from '../composables/useMelodicGenerator'
 
 // Importar los nuevos módulos especializados
 import { useAudioEngine } from './modules/audioEngine'
@@ -49,6 +50,9 @@ export const useAudioStore = defineStore('audio', () => {
   const loopManager = useLoopManager(notesMatrix)
   const energyManager = useEnergyManager(notesMatrix)
   const evolutionSystem = useEvolutionSystem(notesMatrix)
+
+  // Inicializar generador melódico con acceso a la matriz
+  const melodicGenerator = useMelodicGenerator(notesMatrix)
 
   // Performance optimization: maintain cache of active loop IDs
   // Updated whenever a loop's active state changes
@@ -261,6 +265,21 @@ export const useAudioStore = defineStore('audio', () => {
 
     // Ajustar volúmenes después de regenerar todos
     energyManager.adjustAllLoopVolumes(loopManager.loops.value)
+  }
+
+  // Regenerar loop individual con generación melódica
+  const regenerateLoopMelody = (loopId) => {
+    if (!audioEngine.audioInitialized.value) return
+    if (loopId >= loopManager.NUM_LOOPS) return
+
+    melodicGenerator.regenerateLoop(loopId)
+  }
+
+  // Regenerar todos los loops con generación melódica
+  const regenerateAllMelodies = () => {
+    if (!audioEngine.audioInitialized.value) return
+
+    melodicGenerator.regenerateAllLoops()
   }
 
   // Distribución panorámica
@@ -713,6 +732,8 @@ export const useAudioStore = defineStore('audio', () => {
     updateLoopSynth,
     regenerateLoop,
     regenerateAllLoops,
+    regenerateLoopMelody,
+    regenerateAllMelodies,
     applySparseDistribution,
     updateTempo,
     updateMasterVolume,

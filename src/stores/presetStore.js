@@ -111,7 +111,13 @@ export const usePresetStore = defineStore('preset', () => {
         envelope: { ...loop.envelope },
         harmonicity: loop.harmonicity,
         modulationIndex: loop.modulationIndex,
-        synthConfig: loop.synthConfig
+        synthConfig: loop.synthConfig,
+        // Melodic generation fields
+        noteRangeMin: loop.noteRangeMin,
+        noteRangeMax: loop.noteRangeMax,
+        patternProbabilities: { ...loop.patternProbabilities },
+        generationMode: loop.generationMode,
+        lastPattern: loop.lastPattern
       }
     })
 
@@ -199,6 +205,13 @@ export const usePresetStore = defineStore('preset', () => {
       if (presetLoop.harmonicity !== undefined) loop.harmonicity = presetLoop.harmonicity
       if (presetLoop.modulationIndex !== undefined) loop.modulationIndex = presetLoop.modulationIndex
       if (presetLoop.synthConfig) loop.synthConfig = presetLoop.synthConfig
+
+      // Melodic generation fields
+      if (presetLoop.noteRangeMin !== undefined) loop.noteRangeMin = presetLoop.noteRangeMin
+      if (presetLoop.noteRangeMax !== undefined) loop.noteRangeMax = presetLoop.noteRangeMax
+      if (presetLoop.patternProbabilities) loop.patternProbabilities = { ...presetLoop.patternProbabilities }
+      if (presetLoop.generationMode !== undefined) loop.generationMode = presetLoop.generationMode
+      if (presetLoop.lastPattern !== undefined) loop.lastPattern = presetLoop.lastPattern
       // Update synth with direct config application
       if (audioStore.updateLoopSynth) {
         const synthConfig = {

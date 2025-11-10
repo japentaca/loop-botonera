@@ -40,7 +40,18 @@ const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => ({
   length: 16,
   octaveRange: 2,
   density: 0,
-  lastModified: Date.now()
+  lastModified: Date.now(),
+  // Melodic generation fields
+  noteRangeMin: 24,        // MIDI note min (default: full range)
+  noteRangeMax: 96,        // MIDI note max (default: full range)
+  patternProbabilities: {  // Per-loop pattern weights
+    euclidean: 0.3,
+    arpeggio: 0.3,
+    random: 0.4,
+    // Will add more in Phase 2
+  },
+  generationMode: 'auto',  // 'auto' | 'locked'
+  lastPattern: null        // Track what was generated for reference
 }))
 
 const matrixState = ref({
@@ -141,9 +152,7 @@ function computeLoopDensityMetrics(loopId) {
 
 export function useNotesMatrix() {
   // Initialize music utilities
-  const { quantizeToScale } = useNoteUtils()
-
-  // Performance optimization: Efficient loop initialization
+  const { quantizeToScale } = useNoteUtils()  // Performance optimization: Efficient loop initialization
   function initializeLoop(loopId, options = {}) {
     if (loopId >= MAX_LOOPS) return
 
@@ -277,6 +286,20 @@ export function useNotesMatrix() {
   // Performance optimization: Efficient loop generation
   function generateLoopNotes(loopId, density = 0.3, options = {}) {
     if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    // Check if melodic generation is requested
+    if (options.strategy === 'melodic') {
+      if (!options.melodicGenerator) {
+        console.log('[MelGen] path=melodic requested but no melodicGenerator provided')
+        return
+      }
+      console.log('[MelGen] path=melodic (explicitly requested)')
+      options.melodicGenerator.regenerateLoop(loopId)
+      return
+    }
+
+    // Default to legacy random generation
+    console.log('[MelGen] path=legacy (melodic not requested)')
 
     batchUpdate(() => {
       const meta = loopMetadata[loopId]

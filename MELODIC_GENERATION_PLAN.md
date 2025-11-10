@@ -56,7 +56,7 @@ const melLog = (...args) => console.log('[MelGen]', ...args);
 **Goal**: Establish the foundation for melodic generation system
 
 #### Task 1.1: Create Pattern Generation Module
-**Status**: NOT_STARTED
+**Status**: COMPLETED
 **File**: `src/utils/patternGenerators.js`
 **Description**: Create new utility module with pattern generator functions
 **Implementation Details**:
@@ -79,7 +79,7 @@ const melLog = (...args) => console.log('[MelGen]', ...args);
 ---
 
 #### Task 1.2: Create Counterpoint Service
-**Status**: NOT_STARTED
+**Status**: COMPLETED
 **File**: `src/services/counterpointService.js`
 **Description**: Implement simple counterpoint logic for note avoidance
 **Implementation Details**:
@@ -98,9 +98,11 @@ const melLog = (...args) => console.log('[MelGen]', ...args);
 ---
 
 #### Task 1.3: Extend Loop Metadata Structure
-**Status**: NOT_STARTED
+**Status**: COMPLETED
 **Files**: 
 - `src/composables/useNotesMatrix.js`
+- `src/stores/presetStore.js` (captureCurrentState, applyPresetToState)
+- `src/stores/modules/loopManager.js` (createBasicLoop)
 **Description**: Add pattern generation settings to loop metadata
 **Implementation Details**:
 ```javascript
@@ -129,7 +131,7 @@ loopMetadata[loopId] = {
 ---
 
 #### Task 1.4: Create Melodic Generation Coordinator
-**Status**: NOT_STARTED
+**Status**: COMPLETED
 **File**: `src/composables/useMelodicGenerator.js`
 **Description**: Main composable that orchestrates pattern generation
 **Implementation Details**:
@@ -152,7 +154,7 @@ loopMetadata[loopId] = {
 ---
 
 #### Task 1.5: Integrate with Existing Generation System
-**Status**: NOT_STARTED
+**Status**: COMPLETED
 **Files**: 
 - `src/composables/useNotesMatrix.js` (modify `generateLoopNotes`)
 - `src/stores/audioStore.js` (add regeneration methods)

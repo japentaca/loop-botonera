@@ -1,0 +1,330 @@
+<template>
+  <div v-if="metadata" class="pattern-settings">
+    <div class="settings-header">
+      <h4>Pattern Settings</h4>
+      <div class="lock-toggle">
+        <label class="toggle-label">
+          <input type="checkbox" :checked="isLocked" @change="toggleLock" />
+          <span class="toggle-slider"></span>
+          Lock Pattern
+        </label>
+      </div>
+    </div>
+
+    <div class="pattern-probabilities">
+      <div class="probability-control">
+        <span class="control-label">Euclidean</span>
+        <Slider :modelValue="patternProbabilities.euclidean * 100"
+          @update:modelValue="updateProbability('euclidean', $event / 100)" :min="0" :max="100" :step="1"
+          class="probability-slider" />
+        <span class="probability-value">{{ Math.round(patternProbabilities.euclidean * 100) }}%</span>
+      </div>
+
+      <div class="probability-control">
+        <span class="control-label">Arpeggio</span>
+        <Slider :modelValue="patternProbabilities.arpeggio * 100"
+          @update:modelValue="updateProbability('arpeggio', $event / 100)" :min="0" :max="100" :step="1"
+          class="probability-slider" />
+        <span class="probability-value">{{ Math.round(patternProbabilities.arpeggio * 100) }}%</span>
+      </div>
+
+      <div class="probability-control">
+        <span class="control-label">Random</span>
+        <Slider :modelValue="patternProbabilities.random * 100"
+          @update:modelValue="updateProbability('random', $event / 100)" :min="0" :max="100" :step="1"
+          class="probability-slider" />
+        <span class="probability-value">{{ Math.round(patternProbabilities.random * 100) }}%</span>
+      </div>
+    </div>
+
+    <div class="note-range-controls">
+      <div class="range-control">
+        <span class="control-label">Min Note</span>
+        <InputNumber :modelValue="noteRangeMin" @update:modelValue="updateNoteRangeMin" :min="24" :max="96" :step="1"
+          class="range-input" :inputClass="'range-input-field'" />
+        <span class="note-display">{{ midiToNoteName(noteRangeMin) }}</span>
+      </div>
+
+      <div class="range-control">
+        <span class="control-label">Max Note</span>
+        <InputNumber :modelValue="noteRangeMax" @update:modelValue="updateNoteRangeMax" :min="24" :max="96" :step="1"
+          class="range-input" :inputClass="'range-input-field'" />
+        <span class="note-display">{{ midiToNoteName(noteRangeMax) }}</span>
+      </div>
+    </div>
+
+    <div class="current-pattern-display" v-if="lastPattern">
+      <span class="pattern-label">Last Pattern:</span>
+      <span class="pattern-type" :class="`pattern-${lastPattern}`">{{ lastPattern }}</span>
+    </div>
+  </div>
+</template>
+
+<script setup>
+  import { ref, computed, watch } from 'vue'
+  import Slider from 'primevue/slider'
+  import InputNumber from 'primevue/inputnumber'
+
+  // Props
+  const props = defineProps({
+    loopId: {
+      type: Number,
+      required: true
+    },
+    loopMetadata: {
+      type: Array,
+      required: true
+    }
+  })
+
+  // Emits
+  const emit = defineEmits(['update-metadata'])
+
+  // Computed properties
+  const metadata = computed(() => props.loopMetadata?.[props.loopId])
+
+  const patternProbabilities = computed(() => metadata.value?.patternProbabilities || { euclidean: 0.3, arpeggio: 0.3, random: 0.4 })
+  const noteRangeMin = computed(() => metadata.value?.noteRangeMin ?? 24)
+  const noteRangeMax = computed(() => metadata.value?.noteRangeMax ?? 96)
+  const generationMode = computed(() => metadata.value?.generationMode ?? 'auto')
+  const lastPattern = computed(() => metadata.value?.lastPattern ?? null)
+
+  const isLocked = computed(() => generationMode.value === 'locked')
+
+  // Methods
+  const updateProbability = (patternType, value) => {
+    const currentProbabilities = patternProbabilities.value || { euclidean: 0.3, arpeggio: 0.3, random: 0.4 }
+    const newProbabilities = { ...currentProbabilities }
+    newProbabilities[patternType] = value
+
+    // Normalize to ensure they sum to 1.0
+    const total = Object.values(newProbabilities).reduce((sum, p) => sum + p, 0)
+    if (total > 0) {
+      Object.keys(newProbabilities).forEach(key => {
+        newProbabilities[key] = newProbabilities[key] / total
+      })
+    }
+
+    emit('update-metadata', {
+      loopId: props.loopId,
+      updates: { patternProbabilities: newProbabilities }
+    })
+  }
+
+  const updateNoteRangeMin = (value) => {
+    if (value <= noteRangeMax.value) {
+      emit('update-metadata', {
+        loopId: props.loopId,
+        updates: { noteRangeMin: value }
+      })
+    }
+  }
+
+  const updateNoteRangeMax = (value) => {
+    if (value >= noteRangeMin.value) {
+      emit('update-metadata', {
+        loopId: props.loopId,
+        updates: { noteRangeMax: value }
+      })
+    }
+  }
+
+  const toggleLock = () => {
+    const newMode = isLocked.value ? 'auto' : 'locked'
+    emit('update-metadata', {
+      loopId: props.loopId,
+      updates: { generationMode: newMode }
+    })
+  }
+
+  const midiToNoteName = (midiNote) => {
+    if (midiNote == null) return '--'
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    const octave = Math.floor(midiNote / 12) - 1
+    const noteIndex = midiNote % 12
+    return `${noteNames[noteIndex]}${octave}`
+  }
+</script>
+
+<style scoped>
+  .pattern-settings {
+    padding: 1rem;
+    background: var(--surface-section);
+    border-radius: 8px;
+    border: 1px solid var(--surface-border);
+  }
+
+  .settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .settings-header h4 {
+    margin: 0;
+    color: var(--text-color);
+    font-size: 1.1rem;
+  }
+
+  .lock-toggle {
+    display: flex;
+    align-items: center;
+  }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .toggle-label input[type="checkbox"] {
+    display: none;
+  }
+
+  .toggle-slider {
+    position: relative;
+    width: 40px;
+    height: 20px;
+    background: var(--surface-300);
+    border-radius: 10px;
+    transition: background 0.3s;
+  }
+
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+  }
+
+  .toggle-label input:checked+.toggle-slider {
+    background: var(--primary-color);
+  }
+
+  .toggle-label input:checked+.toggle-slider::before {
+    transform: translateX(20px);
+  }
+
+  .pattern-probabilities {
+    margin-bottom: 1rem;
+  }
+
+  .probability-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .control-label {
+    min-width: 70px;
+    font-size: 0.9rem;
+    color: var(--text-color-secondary);
+  }
+
+  .probability-slider {
+    flex: 1;
+  }
+
+  .probability-value {
+    min-width: 35px;
+    text-align: right;
+    font-size: 0.9rem;
+    color: var(--text-color);
+  }
+
+  .note-range-controls {
+    margin-bottom: 1rem;
+  }
+
+  .range-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .range-input {
+    width: 80px;
+  }
+
+  .range-input-field {
+    width: 100%;
+    text-align: center;
+  }
+
+  .note-display {
+    min-width: 35px;
+    font-size: 0.9rem;
+    color: var(--text-color-secondary);
+  }
+
+  .current-pattern-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--surface-100);
+    border-radius: 4px;
+  }
+
+  .pattern-label {
+    font-size: 0.9rem;
+    color: var(--text-color-secondary);
+  }
+
+  .pattern-type {
+    font-weight: bold;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+  }
+
+  .pattern-euclidean {
+    background: var(--blue-100);
+    color: var(--blue-800);
+  }
+
+  .pattern-arpeggio {
+    background: var(--green-100);
+    color: var(--green-800);
+  }
+
+  .pattern-random {
+    background: var(--orange-100);
+    color: var(--orange-800);
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .pattern-settings {
+      padding: 0.75rem;
+    }
+
+    .probability-control,
+    .range-control {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.25rem;
+    }
+
+    .control-label {
+      text-align: center;
+    }
+
+    .probability-value,
+    .note-display {
+      text-align: center;
+    }
+  }
+</style>

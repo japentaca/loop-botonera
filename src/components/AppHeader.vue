@@ -237,7 +237,7 @@
   }
 
   const regenerateAllLoops = () => {
-    audioStore.regenerateAllLoops()
+    audioStore.regenerateAllMelodies()
   }
 
   // Mapeo de etiquetas amigables para divisiones de delay

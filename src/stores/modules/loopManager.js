@@ -214,7 +214,18 @@ export const useLoopManager = (notesMatrix = null) => {
         decay: 0.3,
         sustain: 0.5,
         release: 0.8
-      }
+      },
+      // Melodic generation fields
+      noteRangeMin: 24,        // MIDI note min (default: full range)
+      noteRangeMax: 96,        // MIDI note max (default: full range)
+      patternProbabilities: {  // Per-loop pattern weights
+        euclidean: 0.3,
+        arpeggio: 0.3,
+        random: 0.4,
+        // Will add more in Phase 2
+      },
+      generationMode: 'auto',  // 'auto' | 'locked'
+      lastPattern: null        // Track what was generated for reference
     }
   }
 
