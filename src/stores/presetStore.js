@@ -190,8 +190,9 @@ export const usePresetStore = defineStore('preset', () => {
         }
       }
 
-      if (presetLoop.delayAmount !== undefined) loop.delayAmount = presetLoop.delayAmount
-      if (presetLoop.reverbAmount !== undefined) loop.reverbAmount = presetLoop.reverbAmount
+      // Delay and reverb amounts are only changed through updateLoopParam (same as sliders)
+      // if (presetLoop.delayAmount !== undefined) loop.delayAmount = presetLoop.delayAmount
+      // if (presetLoop.reverbAmount !== undefined) loop.reverbAmount = presetLoop.reverbAmount
       if (presetLoop.volume !== undefined) loop.volume = presetLoop.volume
       if (presetLoop.pan !== undefined) loop.pan = presetLoop.pan
 
