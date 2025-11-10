@@ -262,12 +262,12 @@ export const useLoopManager = (notesMatrix = null) => {
       const adaptiveVolume = getAdaptiveVolume ? getAdaptiveVolume(i) : 0.5
       const adaptiveDensity = getAdaptiveDensity ? getAdaptiveDensity() : null
 
-      //console.log(`🔄 LOOP MANAGER: Creating loop ${i}, adaptiveVolume: ${adaptiveVolume}, adaptiveDensity: ${adaptiveDensity}`);
-
-      if (audioEngine && audioEngine.audioInitialized) {
-        loops.value.push(createLoop(i, scaleName, audioEngine, adaptiveVolume, adaptiveDensity))
+      if (audioEngine && audioEngine.audioInitialized.value) {
+        const newLoop = createLoop(i, scaleName, audioEngine, adaptiveVolume, adaptiveDensity)
+        loops.value.push(newLoop)
       } else {
-        loops.value.push(createBasicLoop(i, scaleName, adaptiveVolume, adaptiveDensity))
+        const newLoop = createBasicLoop(i, scaleName, adaptiveVolume, adaptiveDensity)
+        loops.value.push(newLoop)
       }
 
       // console.log(`🔄 LOOP MANAGER: Loop ${i} created successfully`);
@@ -505,12 +505,9 @@ export const useLoopManager = (notesMatrix = null) => {
       // Regenerar notas en la matriz centralizada using scale NAME
       const targetDensity = adaptiveDensity ?? getLoopNoteDensity(id) ?? 0.4
 
-      notesMatrix.generateLoopNotes(id, {
-        scale: currentScaleName, // Pass scale NAME, not intervals
-        baseNote: loop.baseNote,
-        length: loop.length,
-        density: targetDensity,
-        octaveRange: 2
+      // Call with correct signature: (loopId, density, options)
+      notesMatrix.generateLoopNotes(id, targetDensity, {
+        // Options are ignored, metadata is used instead
       })
       debugLog('regenerate loop', {
         id,
@@ -537,6 +534,12 @@ export const useLoopManager = (notesMatrix = null) => {
 
     const midiNote = notesMatrix.getNote(loop.id, step)
     if (midiNote === null || midiNote === undefined) return
+
+    if (!loop.synth) {
+      console.error(`❌ Loop ${loop.id} has no synth! Cannot play note ${midiNote}`);
+      return
+    }
+
     const synthModel = loop.synthModel || 'PolySynth'
 
     // Seleccionar duración según el modelo de síntesis
@@ -551,10 +554,12 @@ export const useLoopManager = (notesMatrix = null) => {
       reverbSend: loop.reverbSend
     }
 
-    audioEngine.playNote(audioChain, midiNote, duration, loop.volume, time)
-  }
-
-  // Aplicar distribución dispersa en el espectro estéreo
+    try {
+      audioEngine.playNote(audioChain, midiNote, duration, loop.volume, time)
+    } catch (error) {
+      console.error(`❌ Error playing note for loop ${loop.id}:`, error);
+    }
+  }  // Aplicar distribución dispersa en el espectro estéreo
   const applySparseDistribution = () => {
     // Obtener loops activos
     const activeLoops = loops.value.filter(loop => loop.isActive)

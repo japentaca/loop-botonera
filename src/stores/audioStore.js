@@ -749,6 +749,9 @@ export const useAudioStore = defineStore('audio', () => {
     // Expose loopManager for preset operations
     loopManager,
 
+    // Cache management
+    updateActiveLoopsCache,
+
     // Configuración de energía sonora
     updateEnergyManagement: updateEnergyManagementWrapper,
     updateMaxSonicEnergy: updateMaxSonicEnergyWrapper,

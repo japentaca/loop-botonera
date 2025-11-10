@@ -68,7 +68,6 @@ Implementation of a modular melodic generation system with counterpoint awarenes
 **Status**: NOT_STARTED
 **Files**: 
 - `src/composables/useNotesMatrix.js`
-- `src/composables/useNotesMatrix_optimized.js`
 **Description**: Add pattern generation settings to loop metadata
 **Implementation Details**:
 ```javascript
@@ -484,8 +483,7 @@ src/
 │   └── counterpointService.js        [NEW] Counterpoint logic
 ├── composables/
 │   ├── useMelodicGenerator.js        [NEW] Main generation coordinator
-│   ├── useNotesMatrix.js             [MODIFY] Add pattern support
-│   └── useNotesMatrix_optimized.js   [MODIFY] Add pattern support
+│   └── useNotesMatrix.js             [MODIFY] Add pattern support
 ├── components/
 │   ├── PatternSettings.vue           [NEW] Pattern UI controls
 │   ├── LoopCard.vue                  [MODIFY] Integrate pattern settings

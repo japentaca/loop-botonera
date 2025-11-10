@@ -232,6 +232,11 @@ export const useAudioEngine = () => {
   const playNote = (audioChain, midiNote, duration = '16n', velocity = 1, time = undefined) => {
     const { synth } = audioChain
 
+    if (!synth) {
+      console.error('❌ audioEngine.playNote: No synth in audioChain!')
+      return
+    }
+
     // Calcular frecuencia
     const freq = Tone.Frequency(midiNote, 'midi').toFrequency()
     const safeVelocity = velocity

@@ -274,6 +274,11 @@ export const usePresetStore = defineStore('preset', () => {
       audioStore.loopManager.triggerLoopsUpdate()
     }
 
+    // CRITICAL: Update active loops cache after preset load
+    if (audioStore.updateActiveLoopsCache) {
+      audioStore.updateActiveLoopsCache()
+    }
+
     // Restaurar auto-guardado después de que todos los watchers hayan procesado los cambios
     isLoadingPreset.value = false
     // Esperar a que se completen los watchers antes de reactivar autosave
