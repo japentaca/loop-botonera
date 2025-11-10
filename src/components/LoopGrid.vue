@@ -1,6 +1,7 @@
 <template>
   <div class="loop-grid">
-    <LoopCard v-for="loop in audioStore.loops" :key="loop.id" :loop="loop" :current-beat="audioStore.currentPulse" />
+    <LoopCard v-for="loop in audioStore.loops" :key="`${loop.id}-${loop.length}`" :loop="loop"
+      :current-beat="audioStore.currentPulse" />
   </div>
 </template>
 
