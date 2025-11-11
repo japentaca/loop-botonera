@@ -222,7 +222,19 @@ export const usePresetStore = defineStore('preset', () => {
         if (presetLoop.generationMode !== undefined) metadataUpdates.generationMode = presetLoop.generationMode
         if (presetLoop.lastPattern !== undefined) metadataUpdates.lastPattern = presetLoop.lastPattern
 
+        console.log('[PresetStore] Applying preset metadata to loop:', {
+          loopIndex: index,
+          presetLoopId: presetLoop.id,
+          metadataUpdates,
+          oldMetadata: audioStore.loopMetadata[index]
+        })
+
         audioStore.updateLoopMetadata(index, metadataUpdates)
+
+        console.log('[PresetStore] Metadata applied, new metadata:', {
+          loopIndex: index,
+          newMetadata: audioStore.loopMetadata[index]
+        })
       }
       // Update synth with direct config application
       if (audioStore.updateLoopSynth) {

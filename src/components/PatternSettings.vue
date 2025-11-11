@@ -99,7 +99,15 @@
   const generationMode = computed(() => metadata.value?.generationMode ?? 'auto')
   const lastPattern = computed(() => metadata.value?.lastPattern ?? null)
 
-  const isLocked = computed(() => generationMode.value === 'locked')
+  const isLocked = computed(() => {
+    const locked = generationMode.value === 'locked'
+    console.log('[PatternSettings] Checking isLocked:', {
+      loopId: props.loopId,
+      generationMode: generationMode.value,
+      locked
+    })
+    return locked
+  })
 
   // Methods
   const updateProbability = (patternType, value) => {
@@ -143,6 +151,11 @@
 
   const toggleLock = () => {
     const newMode = isLocked.value ? 'auto' : 'locked'
+    console.log('[PatternSettings] Toggle lock:', {
+      loopId: props.loopId,
+      currentMode: generationMode.value,
+      newMode
+    })
     emit('update-metadata', {
       loopId: props.loopId,
       updates: { generationMode: newMode }

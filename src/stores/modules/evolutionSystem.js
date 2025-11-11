@@ -122,9 +122,12 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
         emptyPositions.push(stepIndex)
         mutated = true
       } else if (action < mutationProbabilities.value.addNote + mutationProbabilities.value.removeNote + mutationProbabilities.value.changePattern && melodicGenerator) {
-        // Change pattern by regenerating with melodic generation
-        melodicGenerator.regenerateLoop(loop.id)
-        mutated = true
+        // Change pattern by regenerating with melodic generation (only if not locked)
+        const meta = notesMatrix.loopMetadata[loop.id]
+        if (meta && meta.generationMode !== 'locked') {
+          melodicGenerator.regenerateLoop(loop.id)
+          mutated = true
+        }
       }
     }
 

@@ -1,4 +1,4 @@
-import { ref, readonly, triggerRef, computed } from 'vue'
+import { ref, readonly, triggerRef, computed, reactive } from 'vue'
 import { useScales, useNoteUtils } from './useMusic'
 
 // Get scale utility at module level
@@ -32,8 +32,8 @@ for (let i = 0; i < MAX_LOOPS; i++) {
   notesMatrix[i] = new Array(MAX_STEPS).fill(null)
 }
 
-// Performance optimization: Use objects instead of reactive refs for better performance
-const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => ({
+// Performance optimization: Use reactive objects for better reactivity
+const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => reactive({
   isActive: false,
   scale: null,
   baseNote: 60, // C4
@@ -158,7 +158,7 @@ export function useNotesMatrix() {
 
     batchUpdate(() => {
       // Set default values
-      loopMetadata[loopId] = {
+      loopMetadata[loopId] = reactive({
         isActive: options.isActive !== undefined ? options.isActive : true,
         scale: options.scale || matrixState.value.currentScale,
         baseNote: options.baseNote || matrixState.value.globalBaseNote,
@@ -176,7 +176,7 @@ export function useNotesMatrix() {
         },
         generationMode: 'auto',  // 'auto' | 'locked'
         lastPattern: null        // Track what was generated for reference
-      }
+      })
 
       // Clear the loop
       for (let i = 0; i < MAX_STEPS; i++) {
@@ -210,7 +210,16 @@ export function useNotesMatrix() {
 
   // Performance optimization: Efficient metadata update
   function updateLoopMetadata(loopId, metadata) {
-    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) {
+      console.log('[NotesMatrix] updateLoopMetadata: Invalid loopId or metadata', { loopId, metadata })
+      return
+    }
+
+    console.log('[NotesMatrix] updateLoopMetadata called:', {
+      loopId,
+      metadata,
+      currentMetadata: loopMetadata[loopId]
+    })
 
     batchUpdate(() => {
       // Validate density if provided
@@ -219,6 +228,11 @@ export function useNotesMatrix() {
       }
       Object.assign(loopMetadata[loopId], metadata)
       loopMetadata[loopId].lastModified = Date.now()
+
+      console.log('[NotesMatrix] Metadata updated:', {
+        loopId,
+        updatedMetadata: loopMetadata[loopId]
+      })
     })
   }
 
@@ -604,15 +618,25 @@ export function useNotesMatrix() {
         }
 
         // Reset metadata
-        loopMetadata[i] = {
+        loopMetadata[i] = reactive({
           isActive: false,
           scale: matrixState.value.currentScale,
           baseNote: matrixState.value.globalBaseNote,
           length: matrixState.value.stepCount,
           octaveRange: 2,
           density: 0,
-          lastModified: Date.now()
-        }
+          lastModified: Date.now(),
+          // Melodic generation fields
+          noteRangeMin: 24,
+          noteRangeMax: 96,
+          patternProbabilities: {
+            euclidean: 0.3,
+            arpeggio: 0.3,
+            random: 0.4
+          },
+          generationMode: 'auto',
+          lastPattern: null
+        })
       }
 
       // Clear active loops

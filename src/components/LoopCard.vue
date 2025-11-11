@@ -78,6 +78,9 @@
     <div v-if="showPatternSettings" class="pattern-settings-section">
       <PatternSettings v-if="audioStore.loopMetadata" :loopId="loop.id" :loopMetadata="audioStore.loopMetadata"
         @update-metadata="updateMetadata" />
+      <div v-else class="no-metadata-warning">
+        <p>⚠️ Loop metadata not available</p>
+      </div>
     </div>
 
     <div class="synth-type-display">
@@ -187,6 +190,8 @@
 
   // Update loop metadata for pattern settings
   const updateMetadata = ({ loopId, updates }) => {
+    console.log('[LoopCard] updateMetadata called:', { loopId, updates })
+    console.log('[LoopCard] Current audioStore.loopMetadata:', audioStore.loopMetadata)
     audioStore.updateLoopMetadata(loopId, updates)
   }
 </script>
@@ -293,5 +298,15 @@
       max-height: 500px;
       transform: translateY(0);
     }
+  }
+
+  .no-metadata-warning {
+    color: #ff6b6b;
+    padding: 0.5rem;
+    text-align: center;
+    background: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    border-radius: 4px;
+    margin-top: 0.5rem;
   }
 </style>
