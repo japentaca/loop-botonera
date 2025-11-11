@@ -8,18 +8,23 @@ import { useNoteUtils, useScales } from '../../composables/useMusic'
  * Ahora integrado con la matriz centralizada de notas
  */
 
-// Helper functions for efficient note operations
-const clampToMidiRange = (note) => {
-  const MIN_MIDI = 24
-  const MAX_MIDI = 96
+// Helper: clamp a note into a given [min,max] by adjusting octaves
+const clampToNoteRange = (note, min, max) => {
   const OCTAVE = 12
 
-  if (note < MIN_MIDI) {
-    const octavesBelow = Math.ceil((MIN_MIDI - note) / OCTAVE)
+  // Guard against invalid ranges
+  if (min > max) {
+    const tmp = min
+    min = max
+    max = tmp
+  }
+
+  if (note < min) {
+    const octavesBelow = Math.ceil((min - note) / OCTAVE)
     return note + (octavesBelow * OCTAVE)
   }
-  if (note > MAX_MIDI) {
-    const octavesAbove = Math.ceil((note - MAX_MIDI) / OCTAVE)
+  if (note > max) {
+    const octavesAbove = Math.ceil((note - max) / OCTAVE)
     return note - (octavesAbove * OCTAVE)
   }
   return note
@@ -65,10 +70,13 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     const intervals = pickScaleIntervals(loop, globalScaleIntervals)
     const baseNote = notesMatrix.loopMetadata[loop.id].baseNote
     const octaveRange = notesMatrix.loopMetadata[loop.id].octaveRange
+    const rangeMin = notesMatrix.loopMetadata[loop.id].noteRangeMin ?? 24
+    const rangeMax = notesMatrix.loopMetadata[loop.id].noteRangeMax ?? 96
 
     const interval = intervals[Math.floor(Math.random() * intervals.length)]
     const octave = Math.floor(Math.random() * octaveRange)
-    const note = clampToMidiRange(baseNote + interval + (octave * 12))
+    const rawNote = baseNote + interval + (octave * 12)
+    const note = clampToNoteRange(rawNote, rangeMin, rangeMax)
 
     return note
   }
