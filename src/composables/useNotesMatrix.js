@@ -40,6 +40,8 @@ const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => reactive({
   length: 16,
   octaveRange: 2,
   density: 0,
+  // Timing: optional explicit start offset (pulse index). If null, generator chooses.
+  startOffset: null,
   lastModified: Date.now(),
   // Melodic generation fields
   noteRangeMin: 24,        // MIDI note min (default: full range)
@@ -165,6 +167,7 @@ export function useNotesMatrix() {
         length: options.length || matrixState.value.stepCount,
         octaveRange: options.octaveRange || 2,
         density: 0,
+        startOffset: typeof options.startOffset === 'number' ? Math.max(0, Math.min((options.length || matrixState.value.stepCount) - 1, Math.floor(options.startOffset))) : null,
         lastModified: Date.now(),
         // Melodic generation fields
         noteRangeMin: options.noteRangeMin || 24,        // MIDI note min (default: full range)

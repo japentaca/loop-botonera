@@ -1,6 +1,6 @@
 import { useScales } from './useMusic'
 import { generateEuclideanPattern, generateArpeggioPattern, generateRandomPattern } from '../utils/patternGenerators'
-import { analyzeActiveLoops, avoidConflicts } from '../services/counterpointService'
+import { analyzeActiveLoops, avoidConflicts, isCounterpointEnabled } from '../services/counterpointService'
 import { useAudioStore } from '../stores/audioStore'
 
 /**
@@ -64,9 +64,9 @@ export function useMelodicGenerator(notesMatrix) {
         break
     }
 
-    // Apply counterpoint if there are active loops
+    // Apply counterpoint only if enabled and there are active loops
     const activeLoops = getActiveLoops()
-    if (activeLoops.length > 1) {
+    if (activeLoops.length > 1 && isCounterpointEnabled()) {
       notes = applyCounterpoint(loopId, notes, activeLoops)
     }
 
@@ -194,6 +194,11 @@ export function useMelodicGenerator(notesMatrix) {
    */
   const applyCounterpoint = (loopId, notes, activeLoops) => {
     const adjustedNotes = [...notes]
+
+    // Early exit when counterpoint is disabled
+    if (!isCounterpointEnabled()) {
+      return adjustedNotes
+    }
 
     // Get other active loops (excluding this one)
     const otherLoops = activeLoops.filter(loop => loop.id !== loopId)

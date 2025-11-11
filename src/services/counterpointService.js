@@ -3,6 +3,11 @@
  * Implements simple counterpoint logic for melodic note avoidance across loops
  */
 
+// Global kill-switch to temporarily disable counterpoint behavior
+let COUNTERPOINT_ENABLED = false
+export function setCounterpointEnabled(enabled) { COUNTERPOINT_ENABLED = !!enabled }
+export function isCounterpointEnabled() { return COUNTERPOINT_ENABLED }
+
 /**
  * Analyze active loops at a specific step to find occupied notes
  * @param {Array<Array<number|null>>} loopsArray - Array of loop note arrays
@@ -10,6 +15,10 @@
  * @returns {Set<number>} Set of occupied MIDI note numbers
  */
 export function analyzeActiveLoops(loopsArray, currentStep) {
+  // Early exit when counterpoint is disabled
+  if (!COUNTERPOINT_ENABLED) {
+    return new Set()
+  }
 
   const occupiedNotes = new Set();
 
@@ -39,6 +48,10 @@ export function analyzeActiveLoops(loopsArray, currentStep) {
  * @returns {number} Adjusted note (or original if no conflict)
  */
 export function avoidConflicts(proposedNote, occupiedNotes, scale, options = {}) {
+  // Bypass adjustments when counterpoint is disabled
+  if (!COUNTERPOINT_ENABLED) {
+    return proposedNote
+  }
 
   // No conflict if note is not occupied
   if (!occupiedNotes.has(proposedNote)) {
@@ -74,6 +87,10 @@ export function avoidConflicts(proposedNote, occupiedNotes, scale, options = {})
  * @returns {boolean} True if no conflicts, false if conflicts exist
  */
 export function validateCounterpoint(loopId, noteArray, otherLoops) {
+  // Assume valid when counterpoint is disabled
+  if (!COUNTERPOINT_ENABLED) {
+    return true
+  }
 
   let hasConflicts = false;
   const conflicts = [];
