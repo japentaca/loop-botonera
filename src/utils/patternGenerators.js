@@ -69,6 +69,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   // Arpeggio subtypes: support 'UP_RANDOM_BACK' and 'DOWN_RANDOM_BACK'
   // If no subtype is provided, select randomly between the two
   // Older forms (UP, DOWN, UP_DOWN, DOWN_UP) are deprecated and removed.
+  // Cadence now BOUNCES at min/max note limits (no wrapping across range).
   const arpeggioType = options.arpeggioType ?? (Math.random() < 0.5 ? 'UP_RANDOM_BACK' : 'DOWN_RANDOM_BACK');
 
   // Generate possible notes within range
@@ -138,36 +139,49 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     }
   } else {
     const randomStartIndex = Math.floor(Math.random() * sortedNotes.length);
-    const maxBack = Math.max(1, Math.min(options.backJumpMax ?? 2, sortedNotes.length));
+    const maxTailLength = Math.max(1, Math.min(options.tailLength ?? 3, sortedNotes.length - 1));
     let leadIdx = randomStartIndex;
+    // Primary cadence direction: UP = +1, DOWN = -1
+    let dir = arpeggioType === 'UP_RANDOM_BACK' ? 1 : -1;
 
     while (arpeggioSequence.length < sequenceLength) {
-      // Choose random backward jump length [1..maxBack]
-      const backLen = Math.floor(Math.random() * maxBack) + 1;
+      // Choose random tail length [0..maxTailLength]
+      const tailLength = Math.floor(Math.random() * (maxTailLength + 1));
 
       // Emit the lead note first
       arpeggioSequence.push(sortedNotes[leadIdx]);
       if (arpeggioSequence.length >= sequenceLength) break;
 
-      if (arpeggioType === 'UP_RANDOM_BACK') {
-        // Backward relative to UP is descending
-        for (let step = 1; step < backLen && arpeggioSequence.length < sequenceLength; step++) {
-          const backIdx = leadIdx - step;
-          if (backIdx < 0) break; // Clamp at bottom; avoid wrapping for clean runs
-          arpeggioSequence.push(sortedNotes[backIdx]);
+      // Create the "tale" - notes that follow the lead in opposite direction
+      if (tailLength > 0) {
+        if (dir === 1) {
+          // Lead going UP: tail follows DOWN
+          for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
+            const tailIdx = leadIdx - step;
+            if (tailIdx < 0) break; // guard bottom boundary
+            arpeggioSequence.push(sortedNotes[tailIdx]);
+          }
+        } else {
+          // Lead going DOWN: tail follows UP
+          for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
+            const tailIdx = leadIdx + step;
+            if (tailIdx >= sortedNotes.length) break; // guard top boundary
+            arpeggioSequence.push(sortedNotes[tailIdx]);
+          }
         }
-        // Advance the lead index upwards; wrap across range
-        leadIdx = (leadIdx + 1) % sortedNotes.length;
-      } else {
-        // DOWN_RANDOM_BACK: backward relative to DOWN is ascending
-        for (let step = 1; step < backLen && arpeggioSequence.length < sequenceLength; step++) {
-          const backIdx = leadIdx + step;
-          if (backIdx >= sortedNotes.length) break; // Clamp at top; avoid wrapping for clean runs
-          arpeggioSequence.push(sortedNotes[backIdx]);
-        }
-        // Advance the lead index downwards; wrap across range
-        leadIdx = (leadIdx - 1 + sortedNotes.length) % sortedNotes.length;
       }
+
+      // Advance lead index with BOUNCE at extremes (no wrapping)
+      let nextLead = leadIdx + dir;
+      if (nextLead < 0 || nextLead >= sortedNotes.length) {
+        // Reverse cadence when hitting min/max note limits
+        dir = -dir;
+        nextLead = leadIdx + dir;
+        // Clamp just in case of single-element boundaries
+        if (nextLead < 0) nextLead = 0;
+        if (nextLead >= sortedNotes.length) nextLead = sortedNotes.length - 1;
+      }
+      leadIdx = nextLead;
     }
   }
 
@@ -178,7 +192,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   }
 
   const elapsed = performance.now() - startTime;
-  melLog(`generateArpeggioPattern steps=${length} type=${arpeggioType} interval=${stepInterval} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
+  melLog(`generateArpeggioPattern steps=${length} type=${arpeggioType} interval=${stepInterval} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} bounce=on tail=on time=${elapsed.toFixed(1)}ms`);
 
   return pattern;
 }

@@ -39,17 +39,9 @@
 
     <div class="note-range-controls">
       <div class="range-control">
-        <span class="control-label">Min Note</span>
-        <InputNumber :modelValue="noteRangeMin" @update:modelValue="updateNoteRangeMin" :min="24" :max="96" :step="1"
-          class="range-input" :inputClass="'range-input-field'" />
-        <span class="note-display">{{ midiToNoteName(noteRangeMin) }}</span>
-      </div>
-
-      <div class="range-control">
-        <span class="control-label">Max Note</span>
-        <InputNumber :modelValue="noteRangeMax" @update:modelValue="updateNoteRangeMax" :min="24" :max="96" :step="1"
-          class="range-input" :inputClass="'range-input-field'" />
-        <span class="note-display">{{ midiToNoteName(noteRangeMax) }}</span>
+        <span class="control-label">Note Range</span>
+        <Slider v-model="noteRange" range :min="24" :max="96" :step="1" class="probability-slider" />
+        <span class="note-display">{{ midiToNoteName(noteRange[0]) }}–{{ midiToNoteName(noteRange[1]) }}</span>
       </div>
     </div>
 
@@ -63,7 +55,6 @@
 <script setup>
   import { ref, computed, watch } from 'vue'
   import Slider from 'primevue/slider'
-  import InputNumber from 'primevue/inputnumber'
 
   // Props
   const props = defineProps({
@@ -94,8 +85,15 @@
   }, { immediate: true })
 
   const patternProbabilities = computed(() => localProbabilities.value)
-  const noteRangeMin = computed(() => metadata.value?.noteRangeMin ?? 24)
-  const noteRangeMax = computed(() => metadata.value?.noteRangeMax ?? 96)
+  const noteRange = computed({
+    get: () => [metadata.value?.noteRangeMin ?? 24, metadata.value?.noteRangeMax ?? 96],
+    set: ([min, max]) => {
+      emit('update-metadata', {
+        loopId: props.loopId,
+        updates: { noteRangeMin: min, noteRangeMax: max }
+      })
+    }
+  })
   const generationMode = computed(() => metadata.value?.generationMode ?? 'auto')
   const lastPattern = computed(() => metadata.value?.lastPattern ?? null)
 
@@ -121,23 +119,7 @@
     })
   }
 
-  const updateNoteRangeMin = (value) => {
-    if (value <= noteRangeMax.value) {
-      emit('update-metadata', {
-        loopId: props.loopId,
-        updates: { noteRangeMin: value }
-      })
-    }
-  }
-
-  const updateNoteRangeMax = (value) => {
-    if (value >= noteRangeMin.value) {
-      emit('update-metadata', {
-        loopId: props.loopId,
-        updates: { noteRangeMax: value }
-      })
-    }
-  }
+  // Removed min/max input handlers; range slider updates both values via noteRange
 
   const toggleLock = () => {
     const newMode = isLocked.value ? 'auto' : 'locked'
