@@ -20,6 +20,9 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
 
   const startTime = performance.now();
 
+  // Ensure density is a valid number
+  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
+
   // Calculate number of pulses based on density
   const pulses = Math.max(1, Math.floor(length * density));
 
@@ -60,6 +63,9 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   const melLog = (...args) => console.log('[MelGen]', ...args);
 
   const startTime = performance.now();
+
+  // Ensure density is a valid number
+  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
 
   // Arpeggio types
   const arpeggioTypes = ['UP', 'DOWN', 'UP_DOWN', 'DOWN_UP', 'RANDOM'];
@@ -147,6 +153,9 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
   const melLog = (...args) => console.log('[MelGen]', ...args);
 
   const startTime = performance.now();
+
+  // Ensure density is a valid number
+  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
 
   // Generate possible notes within range
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);

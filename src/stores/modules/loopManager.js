@@ -1,4 +1,5 @@
 import { ref, shallowRef, triggerRef } from 'vue'
+import * as Tone from 'tone'
 import { useScales, useNoteUtils } from '../../composables/useMusic'
 
 // Helper function for efficient MIDI note clamping
@@ -243,6 +244,7 @@ export const useLoopManager = (notesMatrix = null) => {
       delayAmount: basicLoop.delayAmount,
       reverbAmount: basicLoop.reverbAmount,
       pan: basicLoop.pan,
+      volume: basicLoop.volume,
       synthType: basicLoop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
     }
 
@@ -303,6 +305,7 @@ export const useLoopManager = (notesMatrix = null) => {
           delayAmount: loop.delayAmount,
           reverbAmount: loop.reverbAmount,
           pan: loop.pan,
+          volume: loop.volume,
           synthType: loop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
         }
 
@@ -379,6 +382,10 @@ export const useLoopManager = (notesMatrix = null) => {
       case 'volume': {
         const v = Math.abs(value) <= 1 ? Number(value) : Number(value) / 100
         loop.volume = Math.max(0, Math.min(1, v))
+        // Update synth volume immediately for real-time volume control
+        if (loop.synth) {
+          loop.synth.volume.value = Tone.gainToDb(loop.volume)
+        }
         break
       }
       case 'pan': {
@@ -566,7 +573,7 @@ export const useLoopManager = (notesMatrix = null) => {
     }
 
     try {
-      audioEngine.playNote(audioChain, midiNote, duration, loop.volume, time)
+      audioEngine.playNote(audioChain, midiNote, duration, 1, time)
     } catch (error) {
       console.error(`❌ Error playing note for loop ${loop.id}:`, error);
     }
@@ -697,6 +704,7 @@ export const useLoopManager = (notesMatrix = null) => {
       delayAmount: loop.delayAmount,
       reverbAmount: loop.reverbAmount,
       pan: loop.pan,
+      volume: loop.volume,
       synthType: loop.synthModel
     }
 

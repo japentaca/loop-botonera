@@ -96,8 +96,17 @@ export function useMelodicGenerator(notesMatrix) {
     const notes = generateLoopMelody(loopId)
 
     // Update the notes matrix
-    for (let i = 0; i < notes.length && i < notesMatrix.MAX_STEPS; i++) {
-      notesMatrix.notesMatrix[loopId][i] = notes[i]
+    // Use the composable setter so reactivity triggers correctly
+    if (notesMatrix.setLoopNotes) {
+      notesMatrix.setLoopNotes(loopId, notes)
+    } else {
+      for (let i = 0; i < notes.length && i < notesMatrix.MAX_STEPS; i++) {
+        notesMatrix.notesMatrix[loopId][i] = notes[i]
+      }
+      // If the composable doesn't expose setLoopNotes, attempt to trigger reactivity
+      if (typeof notesMatrix.triggerReactivityDebounced === 'function') {
+        notesMatrix.triggerReactivityDebounced()
+      }
     }
 
     melLog(`regenerateLoop loop=${loopId} completed`)

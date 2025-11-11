@@ -213,6 +213,10 @@ export function useNotesMatrix() {
     if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
 
     batchUpdate(() => {
+      // Validate density if provided
+      if (metadata.density !== undefined) {
+        metadata.density = typeof metadata.density === 'number' && !isNaN(metadata.density) ? Math.max(0, Math.min(1, metadata.density)) : 0.3
+      }
       Object.assign(loopMetadata[loopId], metadata)
       loopMetadata[loopId].lastModified = Date.now()
     })
@@ -782,6 +786,9 @@ export function useNotesMatrix() {
   }
 
   return {
+    // Size constants (exported for consumers that rely on them)
+    MAX_LOOPS,
+    MAX_STEPS,
     // Estado
     notesMatrix: readonly(notesMatrix),
     loopMetadata: readonly(loopMetadata),
@@ -828,6 +835,15 @@ export function useNotesMatrix() {
     mutateLoop,
     copyLoop,
 
+    // Backwards-compatible aliases (keep here so returned object contains them)
+    // Legacy consumers may call these names; they map to the newer implementations above.
+    activateLoop: (id) => setLoopActive(id, true),
+    deactivateLoop: (id) => setLoopActive(id, false),
+    generateRandomNotes: generateLoopNotes,
+    quantizeLoopToScale: quantizeLoop,
+    quantizeAllToScale: quantizeAllActiveLoops,
+    inverseLoop: invertLoop,
+
     // OPTIMIZATION: Batch operations for performance during evolution
     beginBatch: () => {
       _batchMode = true
@@ -852,4 +868,35 @@ export function useNotesMatrix() {
     importMatrix,
     logNotesMatrix
   }
+}
+
+// Backwards-compatible aliases for older modules that expect different method names
+// These keep the composable API stable while allowing legacy callers to continue working
+export const notesMatrixAliases = {
+  activateLoop: (id) => {
+    const s = useNotesMatrix()
+    if (s && s.setLoopActive) s.setLoopActive(id, true)
+  },
+  deactivateLoop: (id) => {
+    const s = useNotesMatrix()
+    if (s && s.setLoopActive) s.setLoopActive(id, false)
+  },
+  generateRandomNotes: (loopId, density, options) => {
+    const s = useNotesMatrix()
+    if (s && s.generateLoopNotes) return s.generateLoopNotes(loopId, density, options)
+  },
+  quantizeLoopToScale: (loopId, scale, baseNote) => {
+    const s = useNotesMatrix()
+    if (s && s.quantizeLoop) return s.quantizeLoop(loopId, scale)
+  },
+  quantizeAllToScale: (scale) => {
+    const s = useNotesMatrix()
+    if (s && s.quantizeAllActiveLoops) return s.quantizeAllActiveLoops(scale)
+  },
+  inverseLoop: (loopId, centerNote) => {
+    const s = useNotesMatrix()
+    if (s && s.invertLoop) return s.invertLoop(loopId)
+  },
+  // Provide direct access to the composable for modules that import the alias bundle
+  getNotesMatrix: () => useNotesMatrix()
 }

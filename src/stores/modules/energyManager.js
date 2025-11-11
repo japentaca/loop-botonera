@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import * as Tone from 'tone'
 
 // Performance optimization: cache energy calculations to avoid redundant computations
 let energyCache = new Map() // loopId -> last calculated energy
@@ -155,6 +156,10 @@ export const useEnergyManager = (notesMatrix = null) => {
         // Solo ajustar si la diferencia es significativa para evitar cambios constantes
         if (Math.abs(loop.volume - newVolume) > 0.1) {
           loop.volume = newVolume
+          // Update synth volume immediately for real-time compensation
+          if (loop.synth) {
+            loop.synth.volume.value = Tone.gainToDb(newVolume)
+          }
         }
       }
     })

@@ -787,29 +787,13 @@ export const useAudioStore = defineStore('audio', () => {
     updateMaxSonicEnergy: updateMaxSonicEnergyWrapper,
     updateEnergyReductionFactor: updateEnergyReductionFactorWrapper,
 
-    // Funciones de matriz de notas centralizada
-    notesMatrix: notesMatrix.notesMatrix,
+    // Central notes matrix (composable) — expose the composable object itself
+    notesMatrix,
+    // Keep convenient accessors for metadata/state where useful
     loopMetadata: notesMatrix.loopMetadata,
     matrixState: notesMatrix.matrixState,
     initializeMatrix: notesMatrix.initializeMatrix,
-    activateLoop: notesMatrix.activateLoop,
-    deactivateLoop: notesMatrix.deactivateLoop,
+    // Keep updateLoopMetadata as it's implemented on audioStore and used elsewhere
     updateLoopMetadata,
-    getLoopNotes: notesMatrix.getLoopNotes,
-    setLoopNote: notesMatrix.setLoopNote,
-    clearLoopNote: notesMatrix.clearLoopNote,
-    generateRandomNotes: notesMatrix.generateLoopNotes,
-    quantizeLoopToScale: notesMatrix.quantizeLoopToScale,
-    quantizeAllToScale: notesMatrix.quantizeAllToScale,
-    transposeLoop: notesMatrix.transposeLoop,
-    rotateLoop: notesMatrix.rotateLoop,
-    inverseLoop: notesMatrix.inverseLoop,
-    mutateLoop: notesMatrix.mutateLoop,
-    copyLoop: notesMatrix.copyLoop,
-    getMatrixStats: notesMatrix.getMatrixStats,
-    clearMatrix: notesMatrix.clearMatrix,
-    exportMatrix: notesMatrix.exportMatrix,
-    importMatrix: notesMatrix.importMatrix,
-    logNotesMatrix: notesMatrix.logNotesMatrix
   }
 })

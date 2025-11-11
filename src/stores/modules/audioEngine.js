@@ -172,6 +172,7 @@ export const useAudioEngine = () => {
       delayAmount = 0.2,
       reverbAmount = 0.3,
       pan = 0,
+      volume = 0.5,
       synthType = 'PolySynth'
     } = effectsConfig
 
@@ -197,6 +198,9 @@ export const useAudioEngine = () => {
         synth = markRaw(new Tone.PolySynth(Tone.Synth, synthConfig))
         break
     }
+
+    // Set initial synth volume
+    synth.volume.value = Tone.gainToDb(volume)
 
     // Crear efectos individuales
     const panner = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Panner(pan))

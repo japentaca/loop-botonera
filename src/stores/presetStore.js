@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAudioStore } from './audioStore'
+import { useNotesMatrix } from '../composables/useNotesMatrix'
 import { useSynthStore } from './synthStore'
 import {
   createPreset as createPresetService,
@@ -52,7 +53,9 @@ export const usePresetStore = defineStore('preset', () => {
   // Crear preset por defecto
   const createDefaultPreset = async () => {
     const audioStore = useAudioStore()
-    const currentState = captureCurrentState(audioStore)
+    // Read metadata/density directly from the notes matrix composable instead of via audioStore
+    const notesMatrix = useNotesMatrix()
+    const currentState = captureCurrentState(audioStore, notesMatrix)
 
     const defaultPreset = await createPresetService({
       name: 'Preset por Defecto',
@@ -67,7 +70,7 @@ export const usePresetStore = defineStore('preset', () => {
   }
 
   // Capturar estado actual de la aplicación
-  const captureCurrentState = (audioStore) => {
+  const captureCurrentState = (audioStore, notesMatrix = null) => {
     // Capturar configuración global
     const globalConfig = {
       tempo: audioStore.tempo,
@@ -113,11 +116,12 @@ export const usePresetStore = defineStore('preset', () => {
         modulationIndex: loop.modulationIndex,
         synthConfig: loop.synthConfig,
         // Melodic generation fields - read from loopMetadata
-        noteRangeMin: audioStore.loopMetadata[loop.id]?.noteRangeMin ?? 24,
-        noteRangeMax: audioStore.loopMetadata[loop.id]?.noteRangeMax ?? 96,
-        patternProbabilities: { ...(audioStore.loopMetadata[loop.id]?.patternProbabilities || { euclidean: 0.3, arpeggio: 0.3, random: 0.4 }) },
-        generationMode: audioStore.loopMetadata[loop.id]?.generationMode ?? 'auto',
-        lastPattern: audioStore.loopMetadata[loop.id]?.lastPattern ?? null
+        // Prefer metadata from the central notesMatrix composable if available
+        noteRangeMin: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.noteRangeMin : audioStore.loopMetadata[loop.id]?.noteRangeMin) ?? 24,
+        noteRangeMax: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.noteRangeMax : audioStore.loopMetadata[loop.id]?.noteRangeMax) ?? 96,
+        patternProbabilities: { ...((notesMatrix ? notesMatrix.loopMetadata[loop.id]?.patternProbabilities : audioStore.loopMetadata[loop.id]?.patternProbabilities) || { euclidean: 0.3, arpeggio: 0.3, random: 0.4 }) },
+        generationMode: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.generationMode : audioStore.loopMetadata[loop.id]?.generationMode) ?? 'auto',
+        lastPattern: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.lastPattern : audioStore.loopMetadata[loop.id]?.lastPattern) ?? null
       }
     })
 
@@ -278,8 +282,10 @@ export const usePresetStore = defineStore('preset', () => {
 
         // Calculate density from existing notes in matrix if available, otherwise use default
         let density = 0.4
-        if (audioStore.notesMatrix && audioStore.notesMatrix.getLoopNoteDensity) {
-          const calculatedDensity = audioStore.notesMatrix.getLoopNoteDensity(index)
+        // Prefer direct access to notesMatrix composable for density calculation
+        const notesMatrix = useNotesMatrix()
+        if (notesMatrix && notesMatrix.getLoopNoteDensity) {
+          const calculatedDensity = notesMatrix.getLoopNoteDensity(index)
           if (calculatedDensity > 0) {
             density = calculatedDensity
           }
