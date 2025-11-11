@@ -288,10 +288,14 @@ export const useAudioStore = defineStore('audio', () => {
     melodicGenerator.regenerateLoop(loopId)
   }
 
-  // Regenerar todos los loops con generación melódica
+  // Regenerar todas las melodías
   const regenerateAllMelodies = () => {
-    if (!audioEngine.audioInitialized.value) return
-
+    if (!audioEngine.audioInitialized.value) {
+      console.warn('[regenerateAllMelodies] Audio not initialized')
+      return
+    }
+    
+    console.log('[regenerateAllMelodies] Starting regeneration of all active loops')
     melodicGenerator.regenerateAllLoops()
   }
 

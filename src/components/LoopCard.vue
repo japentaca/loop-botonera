@@ -190,8 +190,8 @@
 
   // Update loop metadata for pattern settings
   const updateMetadata = ({ loopId, updates }) => {
-    console.log('[LoopCard] updateMetadata called:', { loopId, updates })
-    console.log('[LoopCard] Current audioStore.loopMetadata:', audioStore.loopMetadata)
+    //console.log('[LoopCard] updateMetadata called:', { loopId, updates })
+    //console.log('[LoopCard] Current audioStore.loopMetadata:', audioStore.loopMetadata)
     audioStore.updateLoopMetadata(loopId, updates)
   }
 </script>

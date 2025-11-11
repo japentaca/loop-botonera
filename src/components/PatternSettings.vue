@@ -1,12 +1,12 @@
 <template>
-  <div v-if="metadata" class="pattern-settings">
+  <div v-if="metadata" class="pattern-settings" :class="{ 'pattern-locked': isLocked }">
     <div class="settings-header">
       <h4>Pattern Settings</h4>
       <div class="lock-toggle">
         <label class="toggle-label">
           <input type="checkbox" :checked="isLocked" @change="toggleLock" />
           <span class="toggle-slider"></span>
-          Lock Pattern
+          <span>{{ isLocked ? 'Pattern Locked' : 'Pattern Unlocked' }}</span>
         </label>
       </div>
     </div>
@@ -162,19 +162,29 @@
     background: var(--surface-section);
     border-radius: 8px;
     border: 1px solid var(--surface-border);
+    transition: all 0.3s ease;
+  }
+
+  .pattern-settings.pattern-locked {
+    border-color: rgba(255, 107, 53, 0.5);
+    box-shadow: 0 0 20px rgba(255, 107, 53, 0.15);
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.05), transparent);
   }
 
   .settings-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .settings-header h4 {
     margin: 0;
     color: var(--text-color);
-    font-size: 1.1rem;
+    font-size: 1.2rem;
+    font-weight: 700;
   }
 
   .lock-toggle {
@@ -185,10 +195,21 @@
   .toggle-label {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
+    gap: 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
     cursor: pointer;
     user-select: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .toggle-label:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 
   .toggle-label input[type="checkbox"] {
@@ -197,11 +218,12 @@
 
   .toggle-slider {
     position: relative;
-    width: 40px;
-    height: 20px;
+    width: 50px;
+    height: 24px;
     background: var(--surface-300);
-    border-radius: 10px;
-    transition: background 0.3s;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    border: 2px solid rgba(255, 255, 255, 0.2);
   }
 
   .toggle-slider::before {
@@ -213,15 +235,45 @@
     height: 16px;
     background: white;
     border-radius: 50%;
-    transition: transform 0.3s;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
 
   .toggle-label input:checked+.toggle-slider {
-    background: var(--primary-color);
+    background: linear-gradient(135deg, #ff6b35, #ff8c00);
+    border-color: #ff6b35;
+    box-shadow: 0 0 15px rgba(255, 107, 53, 0.4);
   }
 
   .toggle-label input:checked+.toggle-slider::before {
-    transform: translateX(20px);
+    transform: translateX(26px);
+    background: #fff;
+  }
+
+  .toggle-label input:checked~span:last-child {
+    color: #ff8c00;
+    font-weight: 700;
+  }
+
+  /* Add lock icon indicator */
+  .toggle-label span:last-child {
+    position: relative;
+    padding-left: 1.5rem;
+  }
+
+  .toggle-label span:last-child::before {
+    content: '🔓';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  .toggle-label input:checked+span+span:last-child::before {
+    content: '🔒';
+    color: #ff8c00;
   }
 
   .pattern-probabilities {

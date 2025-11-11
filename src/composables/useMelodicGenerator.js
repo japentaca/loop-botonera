@@ -92,12 +92,6 @@ export function useMelodicGenerator(notesMatrix) {
 
     const meta = notesMatrix.loopMetadata[loopId]
 
-    // Skip if loop is locked
-    if (meta.generationMode === 'locked') {
-      melLog(`regenerateLoop loop=${loopId} skipped (locked)`)
-      return
-    }
-
     // Generate new melody
     const notes = generateLoopMelody(loopId)
 
@@ -119,7 +113,7 @@ export function useMelodicGenerator(notesMatrix) {
   }
 
   /**
-   * Regenerate melodies for all unlocked loops
+   * Regenerate melodies for all active loops
    */
   const regenerateAllLoops = () => {
     const startTime = performance.now()
@@ -127,7 +121,7 @@ export function useMelodicGenerator(notesMatrix) {
 
     for (let loopId = 0; loopId < notesMatrix.MAX_LOOPS; loopId++) {
       const meta = notesMatrix.loopMetadata[loopId]
-      if (meta && meta.isActive && meta.generationMode !== 'locked') {
+      if (meta && meta.isActive) {
         regenerateLoop(loopId)
         regeneratedCount++
       }
