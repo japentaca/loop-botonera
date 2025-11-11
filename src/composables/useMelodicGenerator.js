@@ -129,6 +129,25 @@ export function useMelodicGenerator(notesMatrix) {
    */
   const selectPatternType = (loopId) => {
     const meta = notesMatrix.loopMetadata[loopId]
+    if (!meta) {
+      // Fallback if metadata is missing
+      const pattern = ['euclidean', 'arpeggio', 'random'][Math.floor(Math.random() * 3)]
+      melLog(`selectPatternType loop=${loopId} missing metadata -> ${pattern} (fallback)`)
+      return pattern
+    }
+
+    // Ensure patternProbabilities exists
+    if (!meta.patternProbabilities) {
+      notesMatrix.updateLoopMetadata(loopId, {
+        patternProbabilities: { euclidean: 0.3, arpeggio: 0.3, random: 0.4 },
+        generationMode: 'auto',
+        lastPattern: null,
+        noteRangeMin: 24,
+        noteRangeMax: 96
+      })
+      melLog(`selectPatternType loop=${loopId} initialized missing patternProbabilities`)
+    }
+
     const probs = meta.patternProbabilities
 
     // Normalize probabilities

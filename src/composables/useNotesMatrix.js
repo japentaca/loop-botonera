@@ -165,7 +165,17 @@ export function useNotesMatrix() {
         length: options.length || matrixState.value.stepCount,
         octaveRange: options.octaveRange || 2,
         density: 0,
-        lastModified: Date.now()
+        lastModified: Date.now(),
+        // Melodic generation fields
+        noteRangeMin: options.noteRangeMin || 24,        // MIDI note min (default: full range)
+        noteRangeMax: options.noteRangeMax || 96,        // MIDI note max (default: full range)
+        patternProbabilities: {  // Per-loop pattern weights
+          euclidean: 0.3,
+          arpeggio: 0.3,
+          random: 0.4
+        },
+        generationMode: 'auto',  // 'auto' | 'locked'
+        lastPattern: null        // Track what was generated for reference
       }
 
       // Clear the loop
