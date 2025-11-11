@@ -112,12 +112,12 @@ export const usePresetStore = defineStore('preset', () => {
         harmonicity: loop.harmonicity,
         modulationIndex: loop.modulationIndex,
         synthConfig: loop.synthConfig,
-        // Melodic generation fields
-        noteRangeMin: loop.noteRangeMin,
-        noteRangeMax: loop.noteRangeMax,
-        patternProbabilities: { ...loop.patternProbabilities },
-        generationMode: loop.generationMode,
-        lastPattern: loop.lastPattern
+        // Melodic generation fields - read from loopMetadata
+        noteRangeMin: audioStore.loopMetadata[loop.id]?.noteRangeMin ?? 24,
+        noteRangeMax: audioStore.loopMetadata[loop.id]?.noteRangeMax ?? 96,
+        patternProbabilities: { ...(audioStore.loopMetadata[loop.id]?.patternProbabilities || { euclidean: 0.3, arpeggio: 0.3, random: 0.4 }) },
+        generationMode: audioStore.loopMetadata[loop.id]?.generationMode ?? 'auto',
+        lastPattern: audioStore.loopMetadata[loop.id]?.lastPattern ?? null
       }
     })
 
@@ -206,12 +206,20 @@ export const usePresetStore = defineStore('preset', () => {
       if (presetLoop.modulationIndex !== undefined) loop.modulationIndex = presetLoop.modulationIndex
       if (presetLoop.synthConfig) loop.synthConfig = presetLoop.synthConfig
 
-      // Melodic generation fields
-      if (presetLoop.noteRangeMin !== undefined) loop.noteRangeMin = presetLoop.noteRangeMin
-      if (presetLoop.noteRangeMax !== undefined) loop.noteRangeMax = presetLoop.noteRangeMax
-      if (presetLoop.patternProbabilities) loop.patternProbabilities = { ...presetLoop.patternProbabilities }
-      if (presetLoop.generationMode !== undefined) loop.generationMode = presetLoop.generationMode
-      if (presetLoop.lastPattern !== undefined) loop.lastPattern = presetLoop.lastPattern
+      // Melodic generation fields - update loopMetadata
+      if (presetLoop.noteRangeMin !== undefined ||
+        presetLoop.noteRangeMax !== undefined ||
+        presetLoop.patternProbabilities ||
+        presetLoop.generationMode !== undefined) {
+        const metadataUpdates = {}
+        if (presetLoop.noteRangeMin !== undefined) metadataUpdates.noteRangeMin = presetLoop.noteRangeMin
+        if (presetLoop.noteRangeMax !== undefined) metadataUpdates.noteRangeMax = presetLoop.noteRangeMax
+        if (presetLoop.patternProbabilities) metadataUpdates.patternProbabilities = { ...presetLoop.patternProbabilities }
+        if (presetLoop.generationMode !== undefined) metadataUpdates.generationMode = presetLoop.generationMode
+        if (presetLoop.lastPattern !== undefined) metadataUpdates.lastPattern = presetLoop.lastPattern
+
+        audioStore.updateLoopMetadata(index, metadataUpdates)
+      }
       // Update synth with direct config application
       if (audioStore.updateLoopSynth) {
         const synthConfig = {

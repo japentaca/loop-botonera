@@ -239,6 +239,14 @@ export const useAudioStore = defineStore('audio', () => {
     notifyPresetChanges()
   }
 
+  // Actualizar metadata del loop (patrones, rangos de notas, etc.)
+  const updateLoopMetadata = (loopId, metadata) => {
+    notesMatrix.updateLoopMetadata(loopId, metadata)
+
+    // Disparar notificación de cambios para activar auto-guardado en el preset
+    notifyPresetChanges()
+  }
+
   // Regenerar loop individual
   const regenerateLoop = (id) => {
     if (!audioEngine.audioInitialized.value) return
@@ -786,7 +794,7 @@ export const useAudioStore = defineStore('audio', () => {
     initializeMatrix: notesMatrix.initializeMatrix,
     activateLoop: notesMatrix.activateLoop,
     deactivateLoop: notesMatrix.deactivateLoop,
-    updateLoopMetadata: notesMatrix.updateLoopMetadata,
+    updateLoopMetadata,
     getLoopNotes: notesMatrix.getLoopNotes,
     setLoopNote: notesMatrix.setLoopNote,
     clearLoopNote: notesMatrix.clearLoopNote,
