@@ -67,7 +67,8 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   // Density is ignored for arpeggio placement; spacing is fixed per generation
 
   // Arpeggio types (removed RANDOM - use dedicated random generator instead)
-  const arpeggioTypes = ['UP', 'DOWN', 'UP_DOWN', 'DOWN_UP'];
+  // Added 'UP_RANDOM_BACK' to allow ascending motion with random backward jumps
+  const arpeggioTypes = ['UP', 'DOWN', 'UP_DOWN', 'DOWN_UP', 'UP_RANDOM_BACK'];
   const arpeggioType = options.arpeggioType || arpeggioTypes[Math.floor(Math.random() * arpeggioTypes.length)];
 
   // Generate possible notes within range
@@ -91,7 +92,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     positions.push(pos);
   }
 
-  // Generate arpeggio sequence (bounce across sortedNotes) sized to placements
+  // Generate arpeggio sequence sized to placements
   const sequenceLength = positions.length;
   const arpeggioSequence = [];
   if (sortedNotes.length === 1) {
@@ -100,23 +101,50 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     }
   } else {
     const randomStartIndex = Math.floor(Math.random() * sortedNotes.length);
-    let idx = randomStartIndex;
-    let dir = (arpeggioType === 'DOWN' || arpeggioType === 'DOWN_UP') ? -1 : 1;
-    while (arpeggioSequence.length < sequenceLength) {
-      arpeggioSequence.push(sortedNotes[idx]);
-      if (dir === 1) {
-        if (idx === sortedNotes.length - 1) {
-          dir = -1;
-          idx = sortedNotes.length - 2;
-        } else {
-          idx += 1;
+
+    // Special mode: ascend with random backward jumps across the global scale
+    if (arpeggioType === 'UP_RANDOM_BACK') {
+      const maxBack = Math.max(1, Math.min(options.backJumpMax ?? 3, sortedNotes.length));
+      let leadIdx = randomStartIndex;
+
+      while (arpeggioSequence.length < sequenceLength) {
+        // Choose random backward jump length [1..maxBack]
+        const backLen = Math.floor(Math.random() * maxBack) + 1;
+
+        // Emit the lead note first
+        arpeggioSequence.push(sortedNotes[leadIdx]);
+        if (arpeggioSequence.length >= sequenceLength) break;
+
+        // Then emit descending notes for the chosen backward length
+        for (let step = 1; step < backLen && arpeggioSequence.length < sequenceLength; step++) {
+          const backIdx = leadIdx - step;
+          if (backIdx < 0) break; // Clamp at bottom; avoid wrapping for clean runs
+          arpeggioSequence.push(sortedNotes[backIdx]);
         }
-      } else {
-        if (idx === 0) {
-          dir = 1;
-          idx = 1;
+
+        // Advance the lead index upwards; wrap to keep ascending across range
+        leadIdx = (leadIdx + 1) % sortedNotes.length;
+      }
+    } else {
+      // Default bounce behavior across sortedNotes with unit steps
+      let idx = randomStartIndex;
+      let dir = (arpeggioType === 'DOWN' || arpeggioType === 'DOWN_UP') ? -1 : 1;
+      while (arpeggioSequence.length < sequenceLength) {
+        arpeggioSequence.push(sortedNotes[idx]);
+        if (dir === 1) {
+          if (idx === sortedNotes.length - 1) {
+            dir = -1;
+            idx = sortedNotes.length - 2;
+          } else {
+            idx += 1;
+          }
         } else {
-          idx -= 1;
+          if (idx === 0) {
+            dir = 1;
+            idx = 1;
+          } else {
+            idx -= 1;
+          }
         }
       }
     }

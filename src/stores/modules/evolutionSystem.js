@@ -252,6 +252,19 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   // Evolucionar un loop específico
   const evolveLoop = (loop, globalScaleIntervals, options = {}) => {
+    // Comprobar propiedad de bloqueo del loop (generationMode === 'locked')
+    const meta = notesMatrix.loopMetadata?.[loop.id]
+
+    // Si el loop NO está bloqueado, regenerar patrón y NO aplicar evolución
+    if (meta && meta.generationMode !== 'locked') {
+      if (melodicGenerator) {
+        melodicGenerator.regenerateLoop(loop.id)
+      }
+      // No aplicar evolución (patrón, notas ni creativo) en loops no bloqueados
+      return loop
+    }
+
+    // Loop bloqueado: aplicar funciones de evolución
     let evolvedLoop = { ...loop }
 
     // Evolución de patrón a través de la matriz centralizada

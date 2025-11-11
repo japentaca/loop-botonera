@@ -623,7 +623,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateEvolveInterval = (interval) => {
-    console.log('🔄 updateEvolveInterval called:', interval)
+    //console.log('🔄 updateEvolveInterval called:', interval)
     const measuresInterval = Math.max(2, Math.min(32, Number(interval))) // límites en compases
     evolutionSystem.updateEvolutionSettings({ interval: measuresInterval })
     if (autoEvolve.value) {
