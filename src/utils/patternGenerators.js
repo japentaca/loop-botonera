@@ -82,8 +82,19 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   // Sort notes for directional arpeggios
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b);
 
-  // Choose fixed spacing: integer grid steps (1=16th, 2=8th, 3=dotted 8th, 4=quarter)
-  const stepInterval = Math.floor(Math.random() * 4) + 1; // 1..4
+  // Choose fixed spacing restricted to 16th/8th/quarter.
+  const allowedIntervals = [1, 2, 4];
+  let stepInterval;
+  if (typeof options.stepInterval === 'string') {
+    const map = { '16n': 1, '8n': 2, '4n': 4 };
+    stepInterval = map[options.stepInterval] ?? null;
+  } else if (typeof options.stepInterval === 'number' && isFinite(options.stepInterval)) {
+    const v = Math.floor(options.stepInterval);
+    stepInterval = allowedIntervals.includes(v) ? v : null;
+  }
+  if (!stepInterval) {
+    stepInterval = allowedIntervals[Math.floor(Math.random() * allowedIntervals.length)];
+  }
   // Determine start offset: use explicit metadata pulse index if provided,
   // otherwise default to a 16th-grid phase within the first measure window.
   const hasExplicitStart = typeof options.startOffset === 'number' && isFinite(options.startOffset);
@@ -91,27 +102,31 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     ? Math.max(0, Math.min(length - 1, Math.floor(options.startOffset)))
     : Math.floor(Math.random() * Math.min(16, length)); // 0..length-1 (first measure window)
 
-  // Compute placement positions: same spacing for all notes
+  // Compute placement positions
+  // If options.fillAll is true, use unit-step bounce to cover all indices.
+  // Otherwise, place notes at fixed interval positions and leave other steps as rests.
   const positions = [];
-  let pos = startOffset;
-  let dir = 1; // unit-step bounce to guarantee full coverage
   const min = 0;
   const max = length - 1;
 
-  // Keep bouncing until we have placements for the full loop length
-  for (let i = 0; i < length; i++) {
-    positions.push(pos);
-
-    let next = pos + dir;
-    if (next > max || next < min) {
-      // Reverse direction and step with the same interval
-      dir = -dir;
-      next = pos + dir;
-      // Safety clamp for degenerate cases
-      if (next > max) next = max;
-      if (next < min) next = min;
+  if (options.fillAll === true) {
+    let pos = startOffset;
+    let dir = 1; // unit-step bounce
+    for (let i = 0; i < length; i++) {
+      positions.push(pos);
+      let next = pos + dir;
+      if (next > max || next < min) {
+        dir = -dir;
+        next = pos + dir;
+        if (next > max) next = max;
+        if (next < min) next = min;
+      }
+      pos = next;
     }
-    pos = next;
+  } else {
+    for (let p = startOffset; p < length; p += stepInterval) {
+      positions.push(p);
+    }
   }
 
   // Generate arpeggio sequence sized to placements
