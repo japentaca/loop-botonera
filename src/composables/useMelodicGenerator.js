@@ -56,7 +56,9 @@ export function useMelodicGenerator(notesMatrix) {
         notes = generateEuclideanPattern(patternOptions)
         break
       case 'arpeggio':
-        notes = generateArpeggioPattern(patternOptions)
+        // Do not forward implicit metadata startOffset, but allow explicit options.startOffset
+        const { startOffset: _omitTopLevel, ...arpeggioOptions } = patternOptions
+        notes = generateArpeggioPattern(arpeggioOptions)
         break
       case 'random':
       default:

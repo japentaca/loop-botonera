@@ -84,29 +84,23 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
 
   // Choose fixed spacing: integer grid steps (1=16th, 2=8th, 3=dotted 8th, 4=quarter)
   const stepInterval = Math.floor(Math.random() * 4) + 1; // 1..4
-  // Fixed 16th-grid phase for the initial placement, independent of stepInterval
-  // Align start to any 16th position in the first measure window when available
-  const gridWindow = Math.min(16, length);
-  const startOffset = Math.floor(Math.random() * gridWindow); // 0..gridWindow-1
+  // Determine start offset: use explicit metadata pulse index if provided,
+  // otherwise default to a 16th-grid phase within the first measure window.
+  const hasExplicitStart = typeof options.startOffset === 'number' && isFinite(options.startOffset);
+  const startOffset = hasExplicitStart
+    ? Math.max(0, Math.min(length - 1, Math.floor(options.startOffset)))
+    : Math.floor(Math.random() * Math.min(16, length)); // 0..length-1 (first measure window)
 
   // Compute placement positions: same spacing for all notes
   const positions = [];
-  const visited = new Set();
-  const stateVisited = new Set();
   let pos = startOffset;
-  let dir = stepInterval; // forward
+  let dir = 1; // unit-step bounce to guarantee full coverage
   const min = 0;
   const max = length - 1;
 
-  while (true) {
-    const stateKey = `${pos}:${dir}`;
-    if (stateVisited.has(stateKey)) break;
-    stateVisited.add(stateKey);
-
-    if (!visited.has(pos)) {
-      positions.push(pos);
-      visited.add(pos);
-    }
+  // Keep bouncing until we have placements for the full loop length
+  for (let i = 0; i < length; i++) {
+    positions.push(pos);
 
     let next = pos + dir;
     if (next > max || next < min) {

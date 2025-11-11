@@ -6,7 +6,7 @@ const { getScale } = useScales()
 
 // Constants
 const MAX_LOOPS = 16
-const MAX_STEPS = 64
+const MAX_STEPS = 512
 const MAX_NOTE = 127
 const MIN_NOTE = 0
 
@@ -219,6 +219,17 @@ export function useNotesMatrix() {
       // Validate density if provided
       if (metadata.density !== undefined) {
         metadata.density = typeof metadata.density === 'number' && !isNaN(metadata.density) ? Math.max(0, Math.min(1, metadata.density)) : 0.3
+      }
+      // Clamp startOffset to valid range if provided
+      if (metadata.startOffset !== undefined) {
+        const targetLength = (metadata.length !== undefined)
+          ? Math.max(1, Math.floor(metadata.length))
+          : loopMetadata[loopId].length
+        if (typeof metadata.startOffset === 'number' && isFinite(metadata.startOffset)) {
+          metadata.startOffset = Math.max(0, Math.min(targetLength - 1, Math.floor(metadata.startOffset)))
+        } else {
+          metadata.startOffset = null
+        }
       }
       Object.assign(loopMetadata[loopId], metadata)
       loopMetadata[loopId].lastModified = Date.now()
