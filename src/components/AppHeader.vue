@@ -13,6 +13,10 @@
         <Button @click="regenerateAllLoops" class="regen-button-compact" icon="pi pi-refresh" label="Regenerar"
           size="small" :disabled="!audioStore.audioInitialized" />
 
+        <Button @click="resetSync" class="sync-button-compact" icon="pi pi-sync" label="Sincronizar"
+          size="small" title="Resetear contador para re-sincronizar los loops"
+          :disabled="!audioStore.audioInitialized" />
+
         <div class="control-group-compact">
           <label class="control-label-compact">Tempo</label>
           <Slider v-model="tempTempo" :min="10" :max="180" @change="onTempoInput(tempTempo)" class="range-compact"
@@ -238,6 +242,10 @@
 
   const regenerateAllLoops = () => {
     audioStore.regenerateAllMelodies()
+  }
+
+  const resetSync = () => {
+    audioStore.resetLoopCounters()
   }
 
   // Mapeo de etiquetas amigables para divisiones de delay

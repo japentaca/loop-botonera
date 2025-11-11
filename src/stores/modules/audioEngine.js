@@ -52,6 +52,14 @@ export const useAudioEngine = () => {
     }
   }
 
+  // Reset internal counters to re-sync loop positions without stopping playback
+  const resetCounters = () => {
+    if (!audioInitialized.value) return
+    _internalPulse = 0
+    currentPulse.value = 0
+    // Keep transport running; just realign step calculation
+  }
+
   // Inicializar el motor de audio
   const initAudio = async () => {
 
@@ -278,6 +286,9 @@ export const useAudioEngine = () => {
     getAudioObjects,
     createAudioChain,
     playNote,
+
+    // Reset counters for sync
+    resetCounters,
 
     // Efectos
     softResetDelayFeedback,

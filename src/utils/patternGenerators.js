@@ -64,8 +64,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
 
   const startTime = performance.now();
 
-  // Ensure density is a valid number
-  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
+  // Density is ignored for arpeggio placement; spacing is fixed per generation
 
   // Arpeggio types (removed RANDOM - use dedicated random generator instead)
   const arpeggioTypes = ['UP', 'DOWN', 'UP_DOWN', 'DOWN_UP'];
@@ -82,37 +81,39 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   // Sort notes for directional arpeggios
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b);
 
-  // Generate arpeggio sequence with bounce behavior from a random start
-  // Start at a random note inside the allowed range, then move in the
-  // selected direction and bounce at the edges (min/max note).
-  const randomStartIndex = Math.floor(Math.random() * sortedNotes.length);
-  let direction = (arpeggioType === 'DOWN' || arpeggioType === 'DOWN_UP') ? -1 : 1; // initial movement
-  const arpeggioSequence = [];
+  // Choose fixed spacing: integer grid steps (1=16th, 2=8th, 3=dotted 8th, 4=quarter)
+  const stepInterval = Math.floor(Math.random() * 4) + 1; // 1..4
+  const startOffset = Math.floor(Math.random() * stepInterval); // 0..stepInterval-1
 
+  // Compute placement positions: same spacing for all notes
+  const positions = [];
+  for (let pos = startOffset; pos < length; pos += stepInterval) {
+    positions.push(pos);
+  }
+
+  // Generate arpeggio sequence (bounce across sortedNotes) sized to placements
+  const sequenceLength = positions.length;
+  const arpeggioSequence = [];
   if (sortedNotes.length === 1) {
-    // Only one note available; just repeat it
-    while (arpeggioSequence.length < length) {
+    while (arpeggioSequence.length < sequenceLength) {
       arpeggioSequence.push(sortedNotes[0]);
     }
   } else {
+    const randomStartIndex = Math.floor(Math.random() * sortedNotes.length);
     let idx = randomStartIndex;
-    while (arpeggioSequence.length < length) {
+    let dir = (arpeggioType === 'DOWN' || arpeggioType === 'DOWN_UP') ? -1 : 1;
+    while (arpeggioSequence.length < sequenceLength) {
       arpeggioSequence.push(sortedNotes[idx]);
-
-      if (direction === 1) {
-        // moving up
+      if (dir === 1) {
         if (idx === sortedNotes.length - 1) {
-          // hit max note: bounce down without repeating the edge
-          direction = -1;
+          dir = -1;
           idx = sortedNotes.length - 2;
         } else {
           idx += 1;
         }
       } else {
-        // moving down
         if (idx === 0) {
-          // hit min note: bounce up without repeating the edge
-          direction = 1;
+          dir = 1;
           idx = 1;
         } else {
           idx -= 1;
@@ -121,48 +122,14 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     }
   }
 
-  // Adapt sequence length to pattern length
-  let fullSequence;
-  if (length <= arpeggioSequence.length) {
-    // Short pattern: use subset
-    fullSequence = arpeggioSequence.slice(0, length);
-  } else {
-    // Long pattern: repeat and extend with bouncing
-    fullSequence = [];
-    let idx = 0;
-    let direction = 1; // 1 for forward, -1 for backward
-    
-    while (fullSequence.length < length) {
-      fullSequence.push(arpeggioSequence[idx]);
-      
-      // Move index with bouncing behavior
-      idx += direction;
-      
-      // Bounce at boundaries
-      if (idx >= arpeggioSequence.length) {
-        idx = arpeggioSequence.length - 2; // Go back one step from end
-        direction = -1;
-      } else if (idx < 0) {
-        idx = 1; // Go forward one step from start
-        direction = 1;
-      }
-    }
-  }
-
-  // Apply density (add rests) - distribute notes evenly across the pattern
+  // Build pattern with placements; rest elsewhere
   const pattern = new Array(length).fill(null);
-  const notesToPlace = Math.max(1, Math.floor(length * density));
-  
-  // Calculate spacing between notes
-  const spacing = length / notesToPlace;
-  
-  for (let i = 0; i < notesToPlace; i++) {
-    const position = Math.min(Math.floor(i * spacing), length - 1);
-    pattern[position] = fullSequence[i % fullSequence.length];
+  for (let i = 0; i < positions.length; i++) {
+    pattern[positions[i]] = arpeggioSequence[i];
   }
 
   const elapsed = performance.now() - startTime;
-  melLog(`generateArpeggioPattern steps=${length} type=${arpeggioType} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
+  melLog(`generateArpeggioPattern steps=${length} type=${arpeggioType} interval=${stepInterval} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
 
   return pattern;
 }

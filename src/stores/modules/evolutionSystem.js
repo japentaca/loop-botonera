@@ -183,7 +183,10 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
   }
 
   // Generar variación de notas/melodía
-  const evolveNotes = (currentNotes, scaleIntervals, intensity = evolutionIntensity.value) => {
+  const evolveNotes = (loopId, currentNotes, scaleIntervals, intensity = evolutionIntensity.value) => {
+    const meta = notesMatrix.loopMetadata?.[loopId] || {}
+    const rangeMin = meta.noteRangeMin ?? 24
+    const rangeMax = meta.noteRangeMax ?? 96
     const newNotes = [...currentNotes]
     const changeCount = Math.floor(newNotes.length * intensity * 0.4)
 
@@ -216,7 +219,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
         const newDegree = wrapScaleDegree(closestIntervalIndex + (direction * steps), scaleIntervals.length)
 
         const newInterval = scaleIntervals[newDegree]
-        const newNote = clampToMidiRange((octave * 12) + newInterval)
+        const newNote = clampToNoteRange((octave * 12) + newInterval, rangeMin, rangeMax)
 
         newNotes[randomIndex] = newNote
       }
@@ -262,7 +265,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
       const currentNotes = notesMatrix.getLoopNotes(loop.id)
 
       // Evolucionar notas using global scale intervals
-      const evolvedNotes = evolveNotes(currentNotes, globalScaleIntervals)
+      const evolvedNotes = evolveNotes(loop.id, currentNotes, globalScaleIntervals)
 
       // Guardar en la matriz centralizada
       notesMatrix.setLoopNotes(loop.id, evolvedNotes)
@@ -418,6 +421,8 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
       throw new Error('Scale must be explicitly set in loop metadata')
     }
     const baseNote = meta?.baseNote || 60
+    const rangeMin = meta?.noteRangeMin ?? 24
+    const rangeMax = meta?.noteRangeMax ?? 96
     const { getScale } = useScales()
     const scaleIntervals = getScale(scaleName)
     const { quantizeToScale } = useNoteUtils()
@@ -434,13 +439,13 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
           const transposedNote = currentNote + transposition
           // Quantize to scale
           const quantizedNote = quantizeToScale(transposedNote, scaleIntervals, baseNote)
-          notesMatrix.setLoopNote(loopId, randomStep, quantizedNote)
+          notesMatrix.setLoopNote(loopId, randomStep, clampToNoteRange(quantizedNote, rangeMin, rangeMax))
           hasChanges = true
         } else if (Math.random() < mutationProbabilities.value.addNote) {
           // Agregar una nueva nota dentro de la escala
           const scaleIndex = Math.floor(Math.random() * scaleIntervals.length)
           const octave = Math.floor(Math.random() * 3) // 0-2 octavas adicionales
-          const newNote = clampToMidiRange(baseNote + scaleIntervals[scaleIndex] + (octave * 12))
+          const newNote = clampToNoteRange(baseNote + scaleIntervals[scaleIndex] + (octave * 12), rangeMin, rangeMax)
           notesMatrix.setLoopNote(loopId, randomStep, newNote)
           hasChanges = true
         }

@@ -171,6 +171,11 @@ export const useAudioStore = defineStore('audio', () => {
     }
   }
 
+  // Resetear contadores de loops para re-sincronizar
+  const resetLoopCounters = () => {
+    audioEngine.resetCounters()
+  }
+
   // Control de loops
   const toggleLoop = (id) => {
     loopManager.toggleLoop(id)
@@ -294,7 +299,7 @@ export const useAudioStore = defineStore('audio', () => {
       console.warn('[regenerateAllMelodies] Audio not initialized')
       return
     }
-    
+
     console.log('[regenerateAllMelodies] Starting regeneration of all active loops')
     melodicGenerator.regenerateAllLoops()
   }
@@ -629,14 +634,14 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateEvolveIntensity = (intensity) => {
-    console.log('🔄 updateEvolveIntensity called:', intensity)
+    //console.log('🔄 updateEvolveIntensity called:', intensity)
     const normalizedIntensity = Number(intensity) / 10
     evolutionSystem.updateEvolutionSettings({ intensity: normalizedIntensity })
     notifyPresetChanges()
   }
 
   const updateMomentumMaxLevel = (level) => {
-    console.log('🔄 updateMomentumMaxLevel called:', level)
+    //console.log('🔄 updateMomentumMaxLevel called:', level)
     momentumMaxLevel.value = Number(level)
     notifyPresetChanges()
   }
@@ -757,6 +762,8 @@ export const useAudioStore = defineStore('audio', () => {
     updateMasterVolume,
     updateScale,
     updateDelayDivision,
+    // Sincronización
+    resetLoopCounters,
 
     // Funciones de evolución automática
     startAutoEvolve,
