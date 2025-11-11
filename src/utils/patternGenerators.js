@@ -66,10 +66,10 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
 
   // Density is ignored for arpeggio placement; spacing is fixed per generation
 
-  // Arpeggio types (removed RANDOM - use dedicated random generator instead)
-  // Added 'UP_RANDOM_BACK' to allow ascending motion with random backward jumps
-  const arpeggioTypes = ['UP', 'DOWN', 'UP_DOWN', 'DOWN_UP', 'UP_RANDOM_BACK'];
-  const arpeggioType = options.arpeggioType || arpeggioTypes[Math.floor(Math.random() * arpeggioTypes.length)];
+  // Arpeggio subtypes: support 'UP_RANDOM_BACK' and 'DOWN_RANDOM_BACK'
+  // If no subtype is provided, select randomly between the two
+  // Older forms (UP, DOWN, UP_DOWN, DOWN_UP) are deprecated and removed.
+  const arpeggioType = options.arpeggioType ?? (Math.random() < 0.5 ? 'UP_RANDOM_BACK' : 'DOWN_RANDOM_BACK');
 
   // Generate possible notes within range
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
@@ -101,51 +101,35 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     }
   } else {
     const randomStartIndex = Math.floor(Math.random() * sortedNotes.length);
+    const maxBack = Math.max(1, Math.min(options.backJumpMax ?? 2, sortedNotes.length));
+    let leadIdx = randomStartIndex;
 
-    // Special mode: ascend with random backward jumps across the global scale
-    if (arpeggioType === 'UP_RANDOM_BACK') {
-      const maxBack = Math.max(1, Math.min(options.backJumpMax ?? 3, sortedNotes.length));
-      let leadIdx = randomStartIndex;
+    while (arpeggioSequence.length < sequenceLength) {
+      // Choose random backward jump length [1..maxBack]
+      const backLen = Math.floor(Math.random() * maxBack) + 1;
 
-      while (arpeggioSequence.length < sequenceLength) {
-        // Choose random backward jump length [1..maxBack]
-        const backLen = Math.floor(Math.random() * maxBack) + 1;
+      // Emit the lead note first
+      arpeggioSequence.push(sortedNotes[leadIdx]);
+      if (arpeggioSequence.length >= sequenceLength) break;
 
-        // Emit the lead note first
-        arpeggioSequence.push(sortedNotes[leadIdx]);
-        if (arpeggioSequence.length >= sequenceLength) break;
-
-        // Then emit descending notes for the chosen backward length
+      if (arpeggioType === 'UP_RANDOM_BACK') {
+        // Backward relative to UP is descending
         for (let step = 1; step < backLen && arpeggioSequence.length < sequenceLength; step++) {
           const backIdx = leadIdx - step;
           if (backIdx < 0) break; // Clamp at bottom; avoid wrapping for clean runs
           arpeggioSequence.push(sortedNotes[backIdx]);
         }
-
-        // Advance the lead index upwards; wrap to keep ascending across range
+        // Advance the lead index upwards; wrap across range
         leadIdx = (leadIdx + 1) % sortedNotes.length;
-      }
-    } else {
-      // Default bounce behavior across sortedNotes with unit steps
-      let idx = randomStartIndex;
-      let dir = (arpeggioType === 'DOWN' || arpeggioType === 'DOWN_UP') ? -1 : 1;
-      while (arpeggioSequence.length < sequenceLength) {
-        arpeggioSequence.push(sortedNotes[idx]);
-        if (dir === 1) {
-          if (idx === sortedNotes.length - 1) {
-            dir = -1;
-            idx = sortedNotes.length - 2;
-          } else {
-            idx += 1;
-          }
-        } else {
-          if (idx === 0) {
-            dir = 1;
-            idx = 1;
-          } else {
-            idx -= 1;
-          }
+      } else {
+        // DOWN_RANDOM_BACK: backward relative to DOWN is ascending
+        for (let step = 1; step < backLen && arpeggioSequence.length < sequenceLength; step++) {
+          const backIdx = leadIdx + step;
+          if (backIdx >= sortedNotes.length) break; // Clamp at top; avoid wrapping for clean runs
+          arpeggioSequence.push(sortedNotes[backIdx]);
         }
+        // Advance the lead index downwards; wrap across range
+        leadIdx = (leadIdx - 1 + sortedNotes.length) % sortedNotes.length;
       }
     }
   }
