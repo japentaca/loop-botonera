@@ -149,7 +149,9 @@
       return
     }
 
-    const step = (audioStore.currentPulse - 1) % props.loop.length
+    // Calculate step considering the last reset pulse
+    const adjustedPulse = audioStore.currentPulse - (props.loop.lastResetPulse || 0)
+    const step = Math.max(0, (adjustedPulse - 1) % props.loop.length)
     currentStep.value = step
 
     const remainingPulses = props.loop.length - step - 1

@@ -264,8 +264,8 @@ export const useAudioStore = defineStore('audio', () => {
     const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
     const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, id)
 
-    // Pass both scale intervals and scale name
-    loopManager.regenerateLoop(id, scale, currentScale.value, adaptiveDensity, adaptiveVolume)
+    // Pass both scale intervals and scale name, plus current pulse for step reset
+    loopManager.regenerateLoop(id, scale, currentScale.value, adaptiveDensity, adaptiveVolume, audioEngine.currentPulse.value)
   }
 
   // Regenerar todos los loops
@@ -273,12 +273,13 @@ export const useAudioStore = defineStore('audio', () => {
     if (!audioEngine.audioInitialized.value) return
 
     const scale = useScales().getScale(currentScale.value)
+    const currentPulse = audioEngine.currentPulse.value
 
     for (let i = 0; i < loopManager.NUM_LOOPS; i++) {
       const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
       const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, i)
-      // Pass both scale intervals and scale name
-      loopManager.regenerateLoop(i, scale, currentScale.value, adaptiveDensity, adaptiveVolume)
+      // Pass both scale intervals and scale name, plus current pulse for step reset
+      loopManager.regenerateLoop(i, scale, currentScale.value, adaptiveDensity, adaptiveVolume, currentPulse)
     }
 
     // Ajustar volúmenes después de regenerar todos
@@ -290,7 +291,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (!audioEngine.audioInitialized.value) return
     if (loopId >= loopManager.NUM_LOOPS) return
 
-    melodicGenerator.regenerateLoop(loopId)
+    melodicGenerator.regenerateLoop(loopId, audioEngine.currentPulse.value)
   }
 
   // Regenerar todas las melodías
@@ -301,7 +302,7 @@ export const useAudioStore = defineStore('audio', () => {
     }
 
     console.log('[regenerateAllMelodies] Starting regeneration of all active loops')
-    melodicGenerator.regenerateAllLoops()
+    melodicGenerator.regenerateAllLoops(audioEngine.currentPulse.value)
   }
 
   // Distribución panorámica

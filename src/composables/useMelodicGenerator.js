@@ -85,8 +85,9 @@ export function useMelodicGenerator(notesMatrix) {
   /**
    * Regenerate melody for a specific loop using existing metadata
    * @param {number} loopId - The loop ID to regenerate
+   * @param {number} currentPulse - Current global pulse for step reset (optional)
    */
-  const regenerateLoop = (loopId) => {
+  const regenerateLoop = (loopId, currentPulse = null) => {
     if (loopId >= notesMatrix.MAX_LOOPS || !notesMatrix.loopMetadata[loopId]) {
       melLog(`regenerateLoop invalid loopId=${loopId}`)
       return
@@ -111,20 +112,29 @@ export function useMelodicGenerator(notesMatrix) {
       }
     }
 
+    // Reset step counter if currentPulse is provided
+    if (currentPulse !== null && notesMatrix.updateLoopMetadata) {
+      notesMatrix.updateLoopMetadata(loopId, {
+        lastResetPulse: currentPulse,
+        currentStep: 0
+      })
+    }
+
     melLog(`regenerateLoop loop=${loopId} completed`)
   }
 
   /**
    * Regenerate melodies for all active loops
+   * @param {number} currentPulse - Current global pulse for step reset (optional)
    */
-  const regenerateAllLoops = () => {
+  const regenerateAllLoops = (currentPulse = null) => {
     const startTime = performance.now()
     let regeneratedCount = 0
 
     for (let loopId = 0; loopId < notesMatrix.MAX_LOOPS; loopId++) {
       const meta = notesMatrix.loopMetadata[loopId]
       if (meta && meta.isActive) {
-        regenerateLoop(loopId)
+        regenerateLoop(loopId, currentPulse)
         regeneratedCount++
       }
     }

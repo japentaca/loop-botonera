@@ -206,6 +206,7 @@ export const useLoopManager = (notesMatrix = null) => {
       // notes: removido - ahora se usa la matriz centralizada
       length,
       currentStep: 0, // Track current beat position
+      lastResetPulse: 0, // Track when the loop was last reset/regenerated
       // Objetos de audio (se asignarán después)
       synth: null,
       panner: null,
@@ -503,12 +504,19 @@ export const useLoopManager = (notesMatrix = null) => {
   }
 
   // Regenerar loop completo (notas y ajustes relacionados)
-  const regenerateLoop = (id, scale, currentScaleName, adaptiveDensity = null, adaptiveVolume = null) => {
+  const regenerateLoop = (id, scale, currentScaleName, adaptiveDensity = null, adaptiveVolume = null, currentPulse = null) => {
     // scale is the actual scale array (intervals)
     // currentScaleName is the scale name (e.g., 'major', 'minor')
+    // currentPulse is the current global pulse for step reset
 
     const loop = loops.value[id]
     if (!loop) return
+
+    // Reset the step counter when regenerating
+    if (currentPulse !== null) {
+      loop.lastResetPulse = currentPulse
+      loop.currentStep = 0
+    }
 
     // Si hay cambio de escala, regenerar la nota base para que esté en la nueva escala
     if (scale) {
@@ -537,7 +545,9 @@ export const useLoopManager = (notesMatrix = null) => {
         id,
         scaleChanged: Boolean(scale),
         newLength: loop.length,
-        density: targetDensity
+        density: targetDensity,
+        resetPulse: currentPulse,
+        lastResetPulse: loop.lastResetPulse
       })
     }
 
