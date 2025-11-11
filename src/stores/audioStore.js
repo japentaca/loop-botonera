@@ -692,13 +692,13 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateMaxSonicEnergyWrapper = (value) => {
-    console.log('🔄 updateMaxSonicEnergy called:', value)
+    //console.log('🔄 updateMaxSonicEnergy called:', value)
     energyManager.updateMaxSonicEnergy(value)
     notifyPresetChanges()
   }
 
   const updateEnergyReductionFactorWrapper = (value) => {
-    console.log('🔄 updateEnergyReductionFactor called:', value)
+    //console.log('🔄 updateEnergyReductionFactor called:', value)
     energyManager.updateEnergyReductionFactor(value)
     notifyPresetChanges()
   }

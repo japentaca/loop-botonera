@@ -84,7 +84,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
 
   // Choose fixed spacing: integer grid steps (1=16th, 2=8th, 3=dotted 8th, 4=quarter)
   const stepInterval = Math.floor(Math.random() * 4) + 1; // 1..4
-  const startOffset = Math.floor(Math.random() * stepInterval); // 0..stepInterval-1
+  const startOffset = Math.floor(Math.random() * length); // 0..length-1
 
   // Compute placement positions: same spacing for all notes
   const positions = [];
