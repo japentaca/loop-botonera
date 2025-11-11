@@ -579,6 +579,18 @@ export const usePresetStore = defineStore('preset', () => {
     isDialogOpen.value = false
   }
 
+  // Retry loading preset after loops are initialized
+  const retryLoadCurrentPreset = async () => {
+    if (currentPresetId.value && !isLoadingPreset.value) {
+      console.log('[PresetStore] Retrying to load current preset after loops initialization')
+      try {
+        await loadPreset(currentPresetId.value)
+      } catch (error) {
+        console.warn('[PresetStore] Failed to retry loading preset:', error)
+      }
+    }
+  }
+
   // Inicialización
   let presetStoreInitializing = false
   const initialize = async () => {
@@ -651,6 +663,7 @@ export const usePresetStore = defineStore('preset', () => {
     createAutoPreset,
     openDialog,
     closeDialog,
+    retryLoadCurrentPreset,
 
     // Utilidades
     captureCurrentState,

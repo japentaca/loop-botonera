@@ -57,6 +57,9 @@
       // Step 3: Initialize music components after preset is loaded
       await audioStore.initMusicComponents()
 
+      // Step 4: Retry loading the current preset now that loops are initialized
+      await presetStore.retryLoadCurrentPreset()
+
     } catch (error) {
       console.error('🔴 APP: Error during initialization:', error)
     } finally {
