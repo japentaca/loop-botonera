@@ -404,7 +404,11 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
     // Get scale information - ensure we resolve scale name to intervals
     const meta = notesMatrix.loopMetadata?.[loopId]
-    const scaleName = typeof meta?.scale === 'string' ? meta.scale : 'major'
+    const scaleName = typeof meta.scale === 'string' ? meta.scale : null
+    if (!scaleName) {
+      console.error('No scale found in loop metadata')
+      throw new Error('Scale must be explicitly set in loop metadata')
+    }
     const baseNote = meta?.baseNote || 60
     const { getScale } = useScales()
     const scaleIntervals = getScale(scaleName)

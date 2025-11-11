@@ -169,9 +169,24 @@ export const usePresetStore = defineStore('preset', () => {
     if (globalConfig.maxSonicEnergy !== undefined) audioStore.maxSonicEnergy = globalConfig.maxSonicEnergy
     if (globalConfig.energyReductionFactor !== undefined) audioStore.energyReductionFactor = globalConfig.energyReductionFactor
 
+    // Ensure loops are initialized before applying configuration
+    if (!audioStore.loops || audioStore.loops.length === 0) {
+      console.warn('Loops not initialized, skipping loop configuration')
+      // Restaurar auto-guardado después de que todos los watchers hayan procesado los cambios
+      isLoadingPreset.value = false
+      // Esperar a que se completen los watchers antes de reactivar autosave
+      await nextTick()
+      autoSaveEnabled.value = wasAutoSaveEnabled
+      return
+    }
+
     // Apply loop configuration directly "as is"
     presetLoops.forEach((presetLoop, index) => {
       const loop = audioStore.loops[index]
+      if (!loop) {
+        console.warn(`Loop ${index} not found, skipping configuration`)
+        return
+      }
 
       // Apply loop properties directly without validation
       // Set active state
@@ -334,20 +349,27 @@ export const usePresetStore = defineStore('preset', () => {
   // Cargar preset
   const loadPreset = async (presetId) => {
     isLoading.value = true
-    const preset = await getPresetById(presetId)
+    
+    try {
+      const preset = await getPresetById(presetId)
 
-    if (!preset) {
-      console.error('Error loading preset - preset not found, aborting')
-      throw new Error('Preset not found')
+      if (!preset) {
+        console.error('Error loading preset - preset not found, aborting')
+        throw new Error('Preset not found')
+      }
+
+      await applyPresetToState(preset)
+      currentPresetId.value = presetId
+      hasUnsavedChanges.value = false
+      lastSaveTime.value = new Date()
+
+      isLoading.value = false
+      return preset
+    } catch (error) {
+      console.error('Error loading preset:', error)
+      isLoading.value = false
+      throw error
     }
-
-    await applyPresetToState(preset)
-    currentPresetId.value = presetId
-    hasUnsavedChanges.value = false
-    lastSaveTime.value = new Date()
-
-    isLoading.value = false
-    return preset
   }
 
   // Guardar preset actual

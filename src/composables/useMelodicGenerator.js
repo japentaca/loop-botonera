@@ -1,6 +1,7 @@
 import { useScales } from './useMusic'
 import { generateEuclideanPattern, generateArpeggioPattern, generateRandomPattern } from '../utils/patternGenerators'
 import { analyzeActiveLoops, avoidConflicts } from '../services/counterpointService'
+import { useAudioStore } from '../stores/audioStore'
 
 /**
  * Melodic Generation Coordinator
@@ -8,6 +9,7 @@ import { analyzeActiveLoops, avoidConflicts } from '../services/counterpointServ
  */
 export function useMelodicGenerator(notesMatrix) {
   const { getScale } = useScales()
+  const audioStore = useAudioStore()
 
   const melLog = (...args) => console.log('[MelGen]', ...args)
 
@@ -27,8 +29,12 @@ export function useMelodicGenerator(notesMatrix) {
 
     const meta = notesMatrix.loopMetadata[loopId]
 
-    // Get current scale
-    const scaleName = notesMatrix.matrixState.currentScale || 'major'
+    // Get current scale from audioStore (single source of truth)
+    const scaleName = audioStore.currentScale
+    if (!scaleName) {
+      console.error('No current scale set in audioStore.currentScale')
+      throw new Error('Current scale is undefined')
+    }
     const scale = getScale(scaleName)
 
     // Select pattern type based on probabilities
@@ -210,7 +216,11 @@ export function useMelodicGenerator(notesMatrix) {
     })
 
     // Get scale for conflict resolution
-    const scaleName = notesMatrix.matrixState.currentScale || 'major'
+    const scaleName = audioStore.currentScale
+    if (!scaleName) {
+      console.error('No current scale set in audioStore.currentScale for counterpoint')
+      throw new Error('Current scale is undefined for counterpoint')
+    }
     const scale = getScale(scaleName)
     const meta = notesMatrix.loopMetadata[loopId]
 

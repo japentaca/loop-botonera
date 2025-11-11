@@ -110,8 +110,13 @@ export function useScales() {
       return _scaleCache.get(name)
     }
 
-    // Fallback to minor if scale not found
-    const scaleIntervals = scales[name] || scales.minor
+    // Error if scale not found instead of fallback
+    if (!scales[name]) {
+      console.error(`Scale not found: "${name}". Available scales: ${Object.keys(scales).join(', ')}`)
+      throw new Error(`Invalid scale name: "${name}"`)
+    }
+
+    const scaleIntervals = scales[name]
 
     // Cache the result (scales are immutable)
     _scaleCache.set(name, scaleIntervals)

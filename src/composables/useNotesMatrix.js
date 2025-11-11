@@ -55,7 +55,6 @@ const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => reactive({
 }))
 
 const matrixState = ref({
-  currentScale: 'major',
   globalBaseNote: 60, // C4
   activeLoops: new Set(),
   stepCount: 16
@@ -153,14 +152,15 @@ function computeLoopDensityMetrics(loopId) {
 export function useNotesMatrix() {
   // Initialize music utilities
   const { quantizeToScale } = useNoteUtils()  // Performance optimization: Efficient loop initialization
+  // Performance optimization: Efficient loop initialization
   function initializeLoop(loopId, options = {}) {
     if (loopId >= MAX_LOOPS) return
 
     batchUpdate(() => {
-      // Set default values
+      // Set default values - scale must be explicitly provided
       loopMetadata[loopId] = reactive({
         isActive: options.isActive !== undefined ? options.isActive : true,
-        scale: options.scale || matrixState.value.currentScale,
+        scale: options.scale || null, // Scale must be explicitly provided
         baseNote: options.baseNote || matrixState.value.globalBaseNote,
         length: options.length || matrixState.value.stepCount,
         octaveRange: options.octaveRange || 2,
@@ -381,6 +381,11 @@ export function useNotesMatrix() {
 
     batchUpdate(() => {
       const meta = loopMetadata[loopId]
+      // Require explicit scale setting
+      if (!scale && !meta.scale) {
+        console.error('No scale provided and meta.scale is not set')
+        throw new Error('Scale must be explicitly provided or set in loop metadata')
+      }
       const scaleName = scale || meta.scale
       const scaleIntervals = getScaleIntervalsCached(scaleName)
       const loopNotes = notesMatrix[loopId]
@@ -440,6 +445,8 @@ export function useNotesMatrix() {
       getScaleIntervalsCached(scale)
     })
   }
+
+
 
   // Performance optimization: Efficient transposition
   function transposeLoop(loopId, semitones) {
@@ -601,10 +608,10 @@ export function useNotesMatrix() {
           notesMatrix[i][j] = null
         }
 
-        // Reset metadata
+        // Reset metadata - scale must be explicitly set elsewhere
         loopMetadata[i] = reactive({
           isActive: false,
-          scale: matrixState.value.currentScale,
+          scale: null, // Scale must be explicitly set
           baseNote: matrixState.value.globalBaseNote,
           length: matrixState.value.stepCount,
           octaveRange: 2,
@@ -655,7 +662,6 @@ export function useNotesMatrix() {
         activeLoops,
         totalNotes,
         averageDensity: activeLoops > 0 ? totalDensity / activeLoops : 0,
-        currentScale: matrixState.value.currentScale,
         globalBaseNote: matrixState.value.globalBaseNote
       }
     })
@@ -685,9 +691,9 @@ export function useNotesMatrix() {
       version: '1.0',
       timestamp: Date.now(),
       state: {
-        currentScale: matrixState.value.currentScale,
         globalBaseNote: matrixState.value.globalBaseNote,
         stepCount: matrixState.value.stepCount
+        // Removed currentScale - scale is now managed by audioStore
       },
       loops: []
     }
@@ -706,12 +712,12 @@ export function useNotesMatrix() {
   }
 
   // Performance optimization: Efficient matrix import
+  // Performance optimization: Efficient matrix import
   function importMatrix(data) {
     if (!data || !data.state || !data.loops) return false
 
     batchUpdate(() => {
-      // Import state
-      matrixState.value.currentScale = data.state.currentScale || 'major'
+      // Import state (no currentScale - scale is managed by audioStore)
       matrixState.value.globalBaseNote = data.state.globalBaseNote || 60
       matrixState.value.stepCount = data.state.stepCount || 16
 
@@ -730,34 +736,12 @@ export function useNotesMatrix() {
     return true
   }
 
-  // Performance optimization: Computed current scale notes
-  const currentScaleNotes = computed(() => {
-    return getMemoized('currentScaleNotes', () => {
-      const scaleIntervals = getScaleIntervalsCached(matrixState.value.currentScale)
-      const baseNote = matrixState.value.globalBaseNote
-
-      const notes = []
-      for (let oct = 0; oct < 4; oct++) {
-        for (const interval of scaleIntervals) {
-          const note = baseNote + interval + (oct * 12)
-          if (note <= MAX_NOTE) {
-            notes.push(note)
-          }
-        }
-      }
-
-      return notes
-    })
-  })
-
   // Performance optimization: Efficient debug logging
   function logNotesMatrix() {
     console.log('='.repeat(80))
     console.log('NOTES MATRIX DEBUG LOG')
     console.log('='.repeat(80))
     console.log('Global Settings:')
-    console.log(`  Current Scale: "${matrixState.value.currentScale}"`)
-    console.log(`  Scale Intervals: [${getScaleIntervalsCached(matrixState.value.currentScale)}]`)
     console.log(`  Global Base Note: ${matrixState.value.globalBaseNote}`)
     console.log(`  Active Loops: [${Array.from(matrixState.value.activeLoops).join(', ')}]`)
     console.log(`  Step Count: ${matrixState.value.stepCount}`)
@@ -772,8 +756,8 @@ export function useNotesMatrix() {
 
       const notes = getLoopNotes(loopId)
       const metrics = computeLoopDensityMetrics(loopId)
-      const scaleName = meta.scale || matrixState.value.currentScale
-      const scaleIntervals = getScaleIntervalsCached(scaleName)
+      const scaleName = meta.scale || 'unknown'
+      const scaleIntervals = meta.scale ? getScaleIntervalsCached(meta.scale) : 'unknown'
 
       console.log(`\nLoop ${loopId} (${meta.isActive ? 'ACTIVE' : 'inactive'}):`)
       console.log(`  Scale Name: "${scaleName}"`)
@@ -785,7 +769,7 @@ export function useNotesMatrix() {
       console.log(`  Notes: [${notes.map((n, i) => {
         if (n === null) return `${i}:--`
         // Check if note is in scale
-        const noteInScale = isNoteInScaleCached(n, meta.baseNote, scaleName, meta.octaveRange)
+        const noteInScale = meta.scale ? isNoteInScaleCached(n, meta.baseNote, meta.scale, meta.octaveRange) : true
         return `${i}:${n}${noteInScale ? '' : '⚠️'}`
       }).join(', ')}]`)
     })
@@ -801,7 +785,6 @@ export function useNotesMatrix() {
     notesMatrix: readonly(notesMatrix),
     loopMetadata: readonly(loopMetadata),
     matrixState: readonly(matrixState),
-    currentScaleNotes,
 
     // Gestión de loops
     initializeLoop,
@@ -834,7 +817,6 @@ export function useNotesMatrix() {
     // Cuantización
     quantizeLoop,
     quantizeAllActiveLoops,
-    setGlobalScale,
 
     // Operaciones evolutivas
     transposeLoop,

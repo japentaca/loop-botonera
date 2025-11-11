@@ -162,6 +162,12 @@ export const useLoopManager = (notesMatrix = null) => {
   // Crear estructura básica de loop (sin objetos de audio)
   const createBasicLoop = (id, scaleName, adaptiveVolume = 0.5, adaptiveDensity = null) => {
     // scaleName parameter is the scale NAME (e.g., 'major', 'minorPentatonic')
+    // Ensure we have a valid scale name
+    if (!scaleName || scaleName === 'null') {
+      console.warn(`Invalid scale name provided: "${scaleName}", using 'major' as default`)
+      scaleName = 'major'
+    }
+    
     // Get intervals for note generation
     const scale = useScales().getScale(scaleName)
 

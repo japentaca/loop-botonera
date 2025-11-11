@@ -83,7 +83,7 @@ export const useAudioStore = defineStore('audio', () => {
   }, 750) // OPTIMIZED: increased from 500ms to 750ms to reduce 140ms blocking tasks
 
   // Estado específico del store principal (coordinación entre módulos)
-  const currentScale = ref('major')
+  const currentScale = ref('major') // Default scale - must be set before loop initialization
 
   // Estado de evolución automática (coordinación entre módulos)
   const autoEvolve = ref(false)
@@ -141,19 +141,23 @@ export const useAudioStore = defineStore('audio', () => {
 
     audioStoreInitializing = true
 
+    // Step 1: Initialize only Tone.js audio engine
     await audioEngine.initAudio()
 
-    // Configurar callback del transporte para reproducir loops
+    // Step 2: Setup transport callback (but don't initialize loops yet)
     audioEngine.setupTransportCallback(playActiveLoops)
 
-    // Inicializar loops con configuración por defecto - pass scale NAME not intervals
+    audioStoreInitializing = false
+    return true
+  }
+
+  // Initialize music components after preset is loaded
+  const initMusicComponents = async () => {
+    // Initialize loops with the current scale
     loopManager.initializeLoops(currentScale.value, audioEngine)
 
     // Initialize active loops cache
     updateActiveLoopsCache()
-
-    audioStoreInitializing = false
-    return true
   }
 
   // Control de reproducción
@@ -320,13 +324,9 @@ export const useAudioStore = defineStore('audio', () => {
     console.log(`[updateScale] Changing global scale from "${currentScale.value}" to "${newScale}", intervals: [${scale}]`)
     currentScale.value = newScale
 
-    // Update the global scale in the notes matrix using setter
-    if (notesMatrix && notesMatrix.setGlobalScale) {
-      notesMatrix.setGlobalScale(newScale)
-    }
+    // Scale is now managed by audioStore only - removed setGlobalScale call
 
     if (!audioEngine.audioInitialized.value) {
-      // If not initialized, just update the scale reference in the matrix
       console.log('[updateScale] Audio not initialized, only updating scale reference')
       return
     }
@@ -442,7 +442,11 @@ export const useAudioStore = defineStore('audio', () => {
     const caller = pickCaller(callerCandidates.length ? callerCandidates : activeLoops)
     lastCallerId.value = caller?.id ?? null
 
-    const scale = useScales().getScale(currentScale.value) || useScales().getScale('major')
+    const scale = useScales().getScale(currentScale.value)
+    if (!scale) {
+      console.error(`No scale found for currentScale: "${currentScale.value}"`)
+      throw new Error(`Invalid current scale: "${currentScale.value}"`)
+    }
 
     // Fijar base del respondedor cercana a la del caller si existe, con pequeña variación de octava
     const baseNotes = [36, 48, 60, 72]
@@ -734,6 +738,7 @@ export const useAudioStore = defineStore('audio', () => {
 
     // Funciones principales
     initAudio,
+    initMusicComponents,
     togglePlay,
     toggleLoop,
     setLoopActive,
