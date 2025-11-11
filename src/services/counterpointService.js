@@ -10,7 +10,6 @@
  * @returns {Set<number>} Set of occupied MIDI note numbers
  */
 export function analyzeActiveLoops(loopsArray, currentStep) {
-  const melLog = (...args) => console.log('[MelGen]', ...args);
 
   const occupiedNotes = new Set();
 
@@ -19,13 +18,13 @@ export function analyzeActiveLoops(loopsArray, currentStep) {
     if (loopNotes && loopNotes[currentStep] !== null) {
       const note = loopNotes[currentStep];
       if (occupiedNotes.has(note)) {
-        melLog(`analyzeActiveLoops step=${currentStep} collision detected: note ${note} in multiple loops`);
+        //console.log(`[MelGen] analyzeActiveLoops step=${currentStep} collision detected: note ${note} in multiple loops`);
       }
       occupiedNotes.add(note);
     }
   }
 
-  melLog(`analyzeActiveLoops step=${currentStep} occupied=${Array.from(occupiedNotes).sort().join(',') || 'none'}`);
+  //console.log(`[MelGen] analyzeActiveLoops step=${currentStep} occupied=${Array.from(occupiedNotes).sort().join(',') || 'none'}`);
   return occupiedNotes;
 }
 
@@ -40,7 +39,6 @@ export function analyzeActiveLoops(loopsArray, currentStep) {
  * @returns {number} Adjusted note (or original if no conflict)
  */
 export function avoidConflicts(proposedNote, occupiedNotes, scale, options = {}) {
-  const melLog = (...args) => console.log('[MelGen]', ...args);
 
   // No conflict if note is not occupied
   if (!occupiedNotes.has(proposedNote)) {
@@ -56,7 +54,7 @@ export function avoidConflicts(proposedNote, occupiedNotes, scale, options = {})
   const alternatives = possibleNotes.filter(note => !occupiedNotes.has(note));
 
   if (alternatives.length === 0) {
-    melLog(`avoidConflicts note=${proposedNote} no alternatives available, keeping original`);
+    console.log(`[MelGen] avoidConflicts note=${proposedNote} no alternatives available, keeping original`);
     return proposedNote; // No alternatives, keep original
   }
 
@@ -64,7 +62,7 @@ export function avoidConflicts(proposedNote, occupiedNotes, scale, options = {})
   alternatives.sort((a, b) => Math.abs(a - proposedNote) - Math.abs(b - proposedNote));
 
   const chosen = alternatives[0];
-  melLog(`avoidConflicts note=${proposedNote} occupied, moved to ${chosen}`);
+  console.log(`[MelGen] avoidConflicts note=${proposedNote} occupied, moved to ${chosen}`);
   return chosen;
 }
 
@@ -76,7 +74,6 @@ export function avoidConflicts(proposedNote, occupiedNotes, scale, options = {})
  * @returns {boolean} True if no conflicts, false if conflicts exist
  */
 export function validateCounterpoint(loopId, noteArray, otherLoops) {
-  const melLog = (...args) => console.log('[MelGen]', ...args);
 
   let hasConflicts = false;
   const conflicts = [];
@@ -92,15 +89,15 @@ export function validateCounterpoint(loopId, noteArray, otherLoops) {
       if (otherNotes && otherNotes[step] === note) {
         hasConflicts = true;
         conflicts.push({ step, note, conflictingLoop: otherLoopId });
-        melLog(`validateCounterpoint loop=${loopId} conflict at step=${step} note=${note} with loop=${otherLoopId}`);
+        console.log(`[MelGen] validateCounterpoint loop=${loopId} conflict at step=${step} note=${note} with loop=${otherLoopId}`);
       }
     }
   }
 
   if (!hasConflicts) {
-    melLog(`validateCounterpoint loop=${loopId} no conflicts detected`);
+    console.log(`[MelGen] validateCounterpoint loop=${loopId} no conflicts detected`);
   } else {
-    melLog(`validateCounterpoint loop=${loopId} found ${conflicts.length} conflicts`);
+    console.log(`[MelGen] validateCounterpoint loop=${loopId} found ${conflicts.length} conflicts`);
   }
 
   return !hasConflicts;
