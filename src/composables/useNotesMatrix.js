@@ -210,16 +210,7 @@ export function useNotesMatrix() {
 
   // Performance optimization: Efficient metadata update
   function updateLoopMetadata(loopId, metadata) {
-    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) {
-      console.log('[NotesMatrix] updateLoopMetadata: Invalid loopId or metadata', { loopId, metadata })
-      return
-    }
-
-    console.log('[NotesMatrix] updateLoopMetadata called:', {
-      loopId,
-      metadata,
-      currentMetadata: loopMetadata[loopId]
-    })
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
 
     batchUpdate(() => {
       // Validate density if provided
@@ -228,15 +219,8 @@ export function useNotesMatrix() {
       }
       Object.assign(loopMetadata[loopId], metadata)
       loopMetadata[loopId].lastModified = Date.now()
-
-      console.log('[NotesMatrix] Metadata updated:', {
-        loopId,
-        updatedMetadata: loopMetadata[loopId]
-      })
     })
-  }
-
-  // Performance optimization: Efficient note retrieval
+  }  // Performance optimization: Efficient note retrieval
   function getLoopNotes(loopId) {
     if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return []
 

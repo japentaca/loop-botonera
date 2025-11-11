@@ -241,7 +241,6 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Actualizar metadata del loop (patrones, rangos de notas, etc.)
   const updateLoopMetadata = (loopId, metadata) => {
-    console.log('[AudioStore] updateLoopMetadata called:', { loopId, metadata })
     notesMatrix.updateLoopMetadata(loopId, metadata)
 
     // Disparar notificación de cambios para activar auto-guardado en el preset
