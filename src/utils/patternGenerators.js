@@ -88,19 +88,8 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   // Debug: log the scale notes being used
   console.log(`Scale notes (${sortedNotes.length}): ${sortedNotes.map(noteToMidi).join(', ')}`);
 
-  // Choose fixed spacing restricted to 16th/8th/quarter.
-  const allowedIntervals = [1, 2, 4];
-  let stepInterval;
-  if (typeof options.stepInterval === 'string') {
-    const map = { '16n': 1, '8n': 2, '4n': 4 };
-    stepInterval = map[options.stepInterval] ?? null;
-  } else if (typeof options.stepInterval === 'number' && isFinite(options.stepInterval)) {
-    const v = Math.floor(options.stepInterval);
-    stepInterval = allowedIntervals.includes(v) ? v : null;
-  }
-  if (!stepInterval) {
-    stepInterval = allowedIntervals[Math.floor(Math.random() * allowedIntervals.length)];
-  }
+  // Fixed step interval for density calculation (16th notes)
+  const stepInterval = 1;
   // Determine start offset: use explicit metadata pulse index if provided,
   // otherwise default to a 3th-grid phase within the first measure window.
   const hasExplicitStart = typeof options.startOffset === 'number' && isFinite(options.startOffset);
@@ -160,7 +149,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
       arpeggioSequence.push(sortedNotes[0]);
     }
   } else {
-    const randomStartIndex = Math.floor(Math.random() * sortedNotes.length);
+    const randomStartIndex = 0;
     let leadIdx = randomStartIndex;
     // Primary cadence direction: UP = +1, DOWN = -1
     let dir = arpeggioType === 'UP_RANDOM_BACK' ? 1 : -1;
@@ -179,23 +168,11 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
 
       if (arpeggioSequence.length >= sequenceLength) break;
 
-      // Create the "tail" - notes that follow the lead in opposite direction
+      // Create the "tail" - notes that follow the lead in the same direction
       if (tailLength > 0) {
+        console.log(`  Tail direction: ${dir === 1 ? 'UP' : 'DOWN'} (lead dir=${dir})`);
         if (dir === 1) {
-          // Lead going UP: tail follows DOWN
-          for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
-            const tailIdx = leadIdx - step;
-            if (tailIdx < 0) {
-              console.log(`  Tail boundary hit: leadIdx=${leadIdx}, step=${step}, tailIdx=${tailIdx} (too low)`);
-              break; // guard bottom boundary
-            }
-            const tailNote = sortedNotes[tailIdx];
-            console.log(`  Tail DOWN: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
-            arpeggioSequence.push(tailNote);
-            currentTail.push(tailNote);
-          }
-        } else {
-          // Lead going DOWN: tail follows UP
+          // Lead going UP: tail follows UP
           for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
             const tailIdx = leadIdx + step;
             if (tailIdx >= sortedNotes.length) {
@@ -204,6 +181,19 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
             }
             const tailNote = sortedNotes[tailIdx];
             console.log(`  Tail UP: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
+            arpeggioSequence.push(tailNote);
+            currentTail.push(tailNote);
+          }
+        } else {
+          // Lead going DOWN: tail follows DOWN
+          for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
+            const tailIdx = leadIdx - step;
+            if (tailIdx < 0) {
+              console.log(`  Tail boundary hit: leadIdx=${leadIdx}, step=${step}, tailIdx=${tailIdx} (too low)`);
+              break; // guard bottom boundary
+            }
+            const tailNote = sortedNotes[tailIdx];
+            console.log(`  Tail DOWN: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
             arpeggioSequence.push(tailNote);
             currentTail.push(tailNote);
           }
@@ -256,8 +246,14 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   console.log(`Full sequence: ${compactNames.join(' ')}`);
 
   const elapsed = performance.now() - startTime;
-  console.log(`generateArpeggioPattern steps=${length} type=${arpeggioType} density=${density.toFixed(2)} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} tail=on time=${elapsed.toFixed(1)}ms`);
-  console.log(pattern)
+  console.log(`generateArpeggioPattern steps=${length} type=${arpeggioType} density=${Number(density).toFixed(2)} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} tail=on time=${elapsed.toFixed(1)}ms`);
+  console.log(pattern);
+
+  // Debug: sequence range
+  const minSeq = Math.min(...arpeggioSequence);
+  const maxSeq = Math.max(...arpeggioSequence);
+  console.log(`Sequence range: ${noteToMidi(minSeq)} (${minSeq}) to ${noteToMidi(maxSeq)} (${maxSeq})`);
+
   return pattern;
 }
 
