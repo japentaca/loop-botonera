@@ -66,27 +66,24 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   }
 
-  const createRandomNoteForLoop = (loop, globalScaleIntervals) => {
-    const intervals = pickScaleIntervals(loop, globalScaleIntervals)
-    const baseNote = notesMatrix.loopMetadata[loop.id].baseNote
-    const octaveRange = notesMatrix.loopMetadata[loop.id].octaveRange
-    const rangeMin = notesMatrix.loopMetadata[loop.id].noteRangeMin ?? 24
-    const rangeMax = notesMatrix.loopMetadata[loop.id].noteRangeMax ?? 96
-
-    const interval = intervals[Math.floor(Math.random() * intervals.length)]
-    const octave = Math.floor(Math.random() * octaveRange)
-    const rawNote = baseNote + interval + (octave * 12)
-    const note = clampToNoteRange(rawNote, rangeMin, rangeMax)
-
-    return note
-  }
+  
 
   const ensureLoopHasNotes = (loopId, globalScaleIntervals) => {
     const density = notesMatrix.getLoopNoteDensity(loopId)
     if (density > 0) return
 
     const loop = audioStore.loops[loopId]
-    notesMatrix.setLoopNote(loopId, 0, createRandomNoteForLoop(loop, globalScaleIntervals))
+    const intervals = pickScaleIntervals(loop, globalScaleIntervals)
+    const meta = notesMatrix.loopMetadata[loopId] || {}
+    const baseNote = meta.baseNote
+    const octaveRange = meta.octaveRange
+    const rangeMin = meta.noteRangeMin ?? 24
+    const rangeMax = meta.noteRangeMax ?? 96
+    const interval = intervals[Math.floor(Math.random() * intervals.length)]
+    const octave = Math.floor(Math.random() * octaveRange)
+    const rawNote = baseNote + interval + (octave * 12)
+    const note = clampToNoteRange(rawNote, rangeMin, rangeMax)
+    notesMatrix.setLoopNote(loopId, 0, note)
   }
 
   const mutateLoopRhythm = (loop, globalScaleIntervals, intensity = evolutionIntensity.value) => {
@@ -119,7 +116,16 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
       if (action < mutationProbabilities.value.addNote && emptyPositions.length > 0) {
         // Add note to a distributed empty position
         const stepIndex = emptyPositions.shift()
-        const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
+        const intervals = pickScaleIntervals(loop, globalScaleIntervals)
+        const meta = notesMatrix.loopMetadata[loop.id] || {}
+        const baseNote = meta.baseNote
+        const octaveRange = meta.octaveRange
+        const rangeMin = meta.noteRangeMin ?? 24
+        const rangeMax = meta.noteRangeMax ?? 96
+        const interval = intervals[Math.floor(Math.random() * intervals.length)]
+        const octave = Math.floor(Math.random() * octaveRange)
+        const rawNote = baseNote + interval + (octave * 12)
+        const newNote = clampToNoteRange(rawNote, rangeMin, rangeMax)
         notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
         mutated = true
       } else if (action < mutationProbabilities.value.addNote + mutationProbabilities.value.removeNote && activePositions.length > 1) {
@@ -172,7 +178,16 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     // Add notes to distributed inactive positions
     while (activeIndices.length < desiredActive && inactiveIndices.length > 0) {
       const stepIndex = inactiveIndices.shift()
-      const newNote = createRandomNoteForLoop(loop, globalScaleIntervals)
+      const intervals = pickScaleIntervals(loop, globalScaleIntervals)
+      const meta = notesMatrix.loopMetadata[loop.id] || {}
+      const baseNote = meta.baseNote
+      const octaveRange = meta.octaveRange
+      const rangeMin = meta.noteRangeMin ?? 24
+      const rangeMax = meta.noteRangeMax ?? 96
+      const interval = intervals[Math.floor(Math.random() * intervals.length)]
+      const octave = Math.floor(Math.random() * octaveRange)
+      const rawNote = baseNote + interval + (octave * 12)
+      const newNote = clampToNoteRange(rawNote, rangeMin, rangeMax)
       notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
       activeIndices.push(stepIndex)
     }

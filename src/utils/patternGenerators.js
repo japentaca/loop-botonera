@@ -303,22 +303,7 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
   return pattern
 }
 
-export function generateBooleanRhythm({ length, density }) {
-  const pattern = new Array(length).fill(false)
-  const d = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.35
 
-  for (let i = 0; i < length; i++) {
-    if (Math.random() < d) {
-      pattern[i] = true
-    }
-  }
-
-  if (!pattern.some(Boolean)) {
-    pattern[0] = true
-  }
-
-  return pattern
-}
 
 // Helper functions
 

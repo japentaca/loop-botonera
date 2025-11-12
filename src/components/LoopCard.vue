@@ -74,17 +74,7 @@
         :label="showPatternSettings ? 'Ocultar Patrones' : 'Mostrar Patrones'" size="small" outlined
         :disabled="!audioStore.audioInitialized" />
 
-      <!-- New buttons to call specific generation functions -->
-      <Button @click="generateRandomPatternClick" class="edit-button" icon="pi pi-sliders-h"
-        label="Patrón Aleatorio" size="small" outlined :disabled="!audioStore.audioInitialized" />
-      <Button @click="generateLoopNotesLegacyClick" class="edit-button" icon="pi pi-sliders-h"
-        label="Loop Legacy" size="small" outlined :disabled="!audioStore.audioInitialized" />
-      <Button @click="generateRandomNotesAliasClick" class="edit-button" icon="pi pi-sliders-h"
-        label="Alias Aleatorio" size="small" outlined :disabled="!audioStore.audioInitialized" />
-      <Button @click="generateRhythmPatternClick" class="edit-button" icon="pi pi-sliders-h"
-        label="Mapa Ritmo" size="small" outlined :disabled="!audioStore.audioInitialized" />
-      <Button @click="createRandomNoteForLoopClick" class="edit-button" icon="pi pi-music"
-        label="Nota Única" size="small" outlined :disabled="!audioStore.audioInitialized" />
+      
     </div>
 
     <div v-if="showPatternSettings" class="pattern-settings-section">
@@ -106,16 +96,13 @@
   import { useAudioStore } from '../stores/audioStore'
   import { useSynthStore } from '../stores/synthStore'
   import PatternSettings from './PatternSettings.vue'
-  import { useNotesMatrix } from '../composables/useNotesMatrix'
-  import { useScales } from '../composables/useMusic'
-  import { generateRandomPattern, generateBooleanRhythm } from '../utils/patternGenerators'
+  
 
   const componentId = Math.random().toString(36).substr(2, 9)
 
   const audioStore = useAudioStore()
   const synthStore = useSynthStore()
-  const notesMatrix = useNotesMatrix()
-  const { getScale } = useScales()
+  
 
   const props = defineProps({
     loop: {
@@ -214,117 +201,7 @@
     audioStore.updateLoopMetadata(loopId, updates)
   }
 
-  // Generate pattern via utils/patternGenerators.generateRandomPattern
-  const generateRandomPatternClick = () => {
-    console.log('[LoopCard] Calling utils/patternGenerators.generateRandomPattern (melodic)')
-    const meta = audioStore.loopMetadata[props.loop.id] || {}
-    const length = meta.length ?? 16
-    const baseNote = meta.baseNote ?? 60
-    const density = meta.density ?? 0.3
-    const noteRangeMin = meta.noteRangeMin ?? 36
-    const noteRangeMax = meta.noteRangeMax ?? 84
-    const scaleName = (typeof meta.scale === 'string')
-      ? meta.scale
-      : (typeof audioStore.currentScale === 'string'
-          ? audioStore.currentScale
-          : (audioStore.currentScale?.value ?? 'major'))
-    const scale = getScale(scaleName)
-    const notes = generateRandomPattern({
-      length,
-      scale,
-      baseNote,
-      noteRange: { min: noteRangeMin, max: noteRangeMax },
-      density,
-      options: {}
-    })
-    notesMatrix.setLoopNotes(props.loop.id, notes)
-  }
-
-  // Generate notes via legacy notesMatrix.generateLoopNotes (melodic strategy)
-  const generateLoopNotesLegacyClick = () => {
-    console.log('[LoopCard] Calling composables/useNotesMatrix.generateLoopNotes')
-    const meta = audioStore.loopMetadata[props.loop.id] || {}
-    const density = meta.density ?? 0.35
-    notesMatrix.generateLoopNotes(props.loop.id, density)
-  }
-
-  // Generate random notes via notesMatrix alias (generateRandomNotes)
-  const generateRandomNotesAliasClick = () => {
-    console.log('[LoopCard] Calling notesMatrixAliases.generateRandomNotes (alias)')
-    const meta = audioStore.loopMetadata[props.loop.id] || {}
-    const density = meta.density ?? 0.3
-    notesMatrix.generateRandomNotes(props.loop.id, density)
-  }
-
-  // Generate rhythm-only pattern and map to random scale notes
-  const generateRhythmPatternClick = () => {
-    console.log('[LoopCard] Calling utils/patternGenerators.generateBooleanRhythm')
-    const meta = audioStore.loopMetadata[props.loop.id] || {}
-    const length = meta.length ?? 16
-    const density = meta.density ?? 0.3
-    const baseNote = meta.baseNote ?? 60
-    const noteRangeMin = meta.noteRangeMin ?? 36
-    const noteRangeMax = meta.noteRangeMax ?? 84
-    const scaleName = (typeof meta.scale === 'string')
-      ? meta.scale
-      : (typeof audioStore.currentScale === 'string'
-          ? audioStore.currentScale
-          : (audioStore.currentScale?.value ?? 'major'))
-    const scaleIntervals = getScale(scaleName)
-
-    // Rhythm as booleans
-    const rhythm = generateBooleanRhythm({
-      length,
-      density
-    })
-
-    // Build possible notes within range based on scale
-    const possibleNotes = []
-    for (let octave = -3; octave <= 5; octave++) {
-      for (let i = 0; i < scaleIntervals.length; i++) {
-        const note = baseNote + scaleIntervals[i] + octave * 12
-        if (note >= noteRangeMin && note <= noteRangeMax) {
-          possibleNotes.push(note)
-        }
-      }
-    }
-    if (possibleNotes.length === 0) {
-      possibleNotes.push(baseNote)
-    }
-
-    const notes = new Array(length).fill(null)
-    for (let i = 0; i < length; i++) {
-      if (rhythm[i]) {
-        const pick = possibleNotes[Math.floor(Math.random() * possibleNotes.length)]
-        notes[i] = pick
-      }
-    }
-    notesMatrix.setLoopNotes(props.loop.id, notes)
-  }
-
-  // Create a single random note like evolutionSystem.createRandomNoteForLoop
-  const createRandomNoteForLoopClick = () => {
-    console.log('[LoopCard] Calling evolutionSystem.createRandomNoteForLoop')
-    const meta = audioStore.loopMetadata[props.loop.id] || {}
-    const length = meta.length ?? 16
-    const baseNote = meta.baseNote ?? 60
-    const noteRangeMin = meta.noteRangeMin ?? 36
-    const noteRangeMax = meta.noteRangeMax ?? 84
-    const scaleName = (typeof meta.scale === 'string')
-      ? meta.scale
-      : (typeof audioStore.currentScale === 'string'
-          ? audioStore.currentScale
-          : (audioStore.currentScale?.value ?? 'major'))
-    const scaleIntervals = getScale(scaleName)
-
-    const randomStep = Math.floor(Math.random() * length)
-    const scaleIndex = Math.floor(Math.random() * scaleIntervals.length)
-    const octave = Math.floor(Math.random() * 3) // 0-2 octaves
-    let newNote = baseNote + scaleIntervals[scaleIndex] + (octave * 12)
-    if (newNote < noteRangeMin) newNote = noteRangeMin
-    if (newNote > noteRangeMax) newNote = noteRangeMax
-    notesMatrix.setLoopNote(props.loop.id, randomStep, newNote)
-  }
+  
 </script>
 
 <style scoped>
