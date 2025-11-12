@@ -53,14 +53,12 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
  * @param {Array<number>} params.scale - Scale intervals array
  * @param {number} params.baseNote - Base MIDI note number
  * @param {Object} params.noteRange - {min: number, max: number} MIDI range
- * @param {number} params.density - Density factor (0-1), controls rests between notes
+ * @param {number} params.density - Density factor (0-1), controls number of arpeggio sequences
  * @param {Object} params.options - Additional options (arpeggioType, etc.)
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */
 export function generateArpeggioPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
   const startTime = performance.now();
-
-  // Density is ignored for arpeggio placement; spacing is fixed per generation
 
   // Arpeggio subtypes: support 'UP_RANDOM_BACK' and 'DOWN_RANDOM_BACK'
   // If no subtype is provided, select randomly between the two
@@ -132,9 +130,14 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
       pos = next;
     }
   } else {
-    for (let p = startOffset; p < length; p += stepInterval) {
-      positions.push(p);
-    }
+    // Calculate max possible sequences based on stepInterval
+    const maxSequences = Math.floor(length / stepInterval);
+    // Number of sequences based on density
+    const numSequences = Math.max(1, Math.floor(maxSequences * density));
+    // Use Euclidean rhythm to distribute positions evenly
+    const rawPositions = euclideanRhythm(numSequences, length);
+    // Apply startOffset for phasing
+    positions.push(...rawPositions.map(p => (p + startOffset) % length));
   }
 
   // Generate arpeggio sequence sized to placements
@@ -253,7 +256,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   console.log(`Full sequence: ${compactNames.join(' ')}`);
 
   const elapsed = performance.now() - startTime;
-  console.log(`generateArpeggioPattern steps=${length} type=${arpeggioType} interval=${stepInterval} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} bounce=on tail=on time=${elapsed.toFixed(1)}ms`);
+  console.log(`generateArpeggioPattern steps=${length} type=${arpeggioType} density=${density.toFixed(2)} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} tail=on time=${elapsed.toFixed(1)}ms`);
   console.log(pattern)
   return pattern;
 }
