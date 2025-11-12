@@ -16,8 +16,6 @@
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */
 export function generateEuclideanPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
-  const melLog = (...args) => console.log('[MelGen]', ...args);
-
   const startTime = performance.now();
 
   // Ensure density is a valid number
@@ -43,7 +41,7 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
   });
 
   const elapsed = performance.now() - startTime;
-  melLog(`generateEuclideanPattern steps=${length} pulses=${pulses} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
+  console.log(`generateEuclideanPattern steps=${length} pulses=${pulses} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
 
   return pattern;
 }
@@ -60,8 +58,6 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */
 export function generateArpeggioPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
-  const melLog = (...args) => console.log('[MelGen]', ...args);
-
   const startTime = performance.now();
 
   // Density is ignored for arpeggio placement; spacing is fixed per generation
@@ -76,7 +72,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
 
   if (possibleNotes.length === 0) {
-    melLog(`generateArpeggioPattern failed: no possible notes in range`);
+    console.log(`generateArpeggioPattern failed: no possible notes in range`);
     return new Array(length).fill(null);
   }
 
@@ -92,7 +88,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b);
 
   // Debug: log the scale notes being used
-  melLog(`Scale notes (${sortedNotes.length}): ${sortedNotes.map(noteToMidi).join(', ')}`);
+  console.log(`Scale notes (${sortedNotes.length}): ${sortedNotes.map(noteToMidi).join(', ')}`);
 
   // Choose fixed spacing restricted to 16th/8th/quarter.
   const allowedIntervals = [1, 2, 4];
@@ -174,7 +170,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
       const leadNote = sortedNotes[leadIdx];
       arpeggioSequence.push(leadNote);
       leadNotes.push(leadNote);
-      melLog(`Lead: ${noteToMidi(leadNote)} (idx ${leadIdx}, dir=${dir})`);
+      console.log(`Lead: ${noteToMidi(leadNote)} (idx ${leadIdx}, dir=${dir})`);
 
       const currentTail = [];
 
@@ -187,11 +183,11 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
           for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
             const tailIdx = leadIdx - step;
             if (tailIdx < 0) {
-              melLog(`  Tail boundary hit: leadIdx=${leadIdx}, step=${step}, tailIdx=${tailIdx} (too low)`);
+              console.log(`  Tail boundary hit: leadIdx=${leadIdx}, step=${step}, tailIdx=${tailIdx} (too low)`);
               break; // guard bottom boundary
             }
             const tailNote = sortedNotes[tailIdx];
-            melLog(`  Tail DOWN: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
+            console.log(`  Tail DOWN: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
             arpeggioSequence.push(tailNote);
             currentTail.push(tailNote);
           }
@@ -200,11 +196,11 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
           for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
             const tailIdx = leadIdx + step;
             if (tailIdx >= sortedNotes.length) {
-              melLog(`  Tail boundary hit: leadIdx=${leadIdx}, step=${step}, tailIdx=${tailIdx} (too high, max=${sortedNotes.length - 1})`);
+              console.log(`  Tail boundary hit: leadIdx=${leadIdx}, step=${step}, tailIdx=${tailIdx} (too high, max=${sortedNotes.length - 1})`);
               break; // guard top boundary
             }
             const tailNote = sortedNotes[tailIdx];
-            melLog(`  Tail UP: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
+            console.log(`  Tail UP: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
             arpeggioSequence.push(tailNote);
             currentTail.push(tailNote);
           }
@@ -227,18 +223,18 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     }
 
     // Log detailed cascade visualization
-    melLog('=== ARPEGGIO CASCADE PATTERN ===');
+    console.log('=== ARPEGGIO CASCADE PATTERN ===');
     leadNotes.forEach((lead, i) => {
       const tail = tailGroups[i];
       const leadName = noteToMidi(lead);
       if (tail && tail.length > 0) {
         const tailNames = tail.map(note => noteToMidi(note)).join('-');
-        melLog(`${leadName} → ${tailNames}`);
+        console.log(`${leadName} → ${tailNames}`);
       } else {
-        melLog(`${leadName} (no tail)`);
+        console.log(`${leadName} (no tail)`);
       }
     });
-    melLog('================================');
+    console.log('================================');
   }
 
   // Build pattern with placements; rest elsewhere
@@ -254,10 +250,10 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   };
 
   const compactNames = arpeggioSequence.map(noteToCompactName);
-  melLog(`Full sequence: ${compactNames.join(' ')}`);
+  console.log(`Full sequence: ${compactNames.join(' ')}`);
 
   const elapsed = performance.now() - startTime;
-  melLog(`generateArpeggioPattern steps=${length} type=${arpeggioType} interval=${stepInterval} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} bounce=on tail=on time=${elapsed.toFixed(1)}ms`);
+  console.log(`generateArpeggioPattern steps=${length} type=${arpeggioType} interval=${stepInterval} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} bounce=on tail=on time=${elapsed.toFixed(1)}ms`);
   console.log(pattern)
   return pattern;
 }
@@ -274,14 +270,13 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
  * @returns {Array<boolean>} Boolean rhythm pattern (true=active, false=rest)
 */
 export function generateRandomPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
-  const melLog = (...args) => console.log('[MelGen]', ...args)
   const startTime = performance.now()
 
   density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3
 
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
   if (possibleNotes.length === 0) {
-    melLog('generateRandomPattern failed: no possible notes in range')
+    console.log('generateRandomPattern failed: no possible notes in range')
     return new Array(length).fill(null)
   }
 
@@ -292,14 +287,32 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
     positions.add(Math.floor(Math.random() * length))
   }
 
+  // Select notes to place, evenly distributed across the available range
+  const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
+  const notesToPlace = []
+  if (noteCount <= sortedNotes.length) {
+    // Pick evenly spaced notes across the range
+    for (let i = 0; i < noteCount; i++) {
+      const index = Math.floor(i * sortedNotes.length / noteCount)
+      notesToPlace.push(sortedNotes[index])
+    }
+  } else {
+    // Cycle through all notes to ensure full range coverage even with repeats
+    for (let i = 0; i < noteCount; i++) {
+      notesToPlace.push(sortedNotes[i % sortedNotes.length])
+    }
+  }
+
   const pattern = new Array(length).fill(null)
-  for (const pos of positions) {
-    pattern[pos] = possibleNotes[Math.floor(Math.random() * possibleNotes.length)]
+  const posArray = Array.from(positions)
+  for (let i = 0; i < posArray.length; i++) {
+    pattern[posArray[i]] = notesToPlace[i]
   }
 
   const elapsed = performance.now() - startTime
-  melLog(`generateRandomPattern steps=${length} notes=${noteCount} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`)
+  console.log(`generateRandomPattern steps=${length} notes=${noteCount} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`)
 
+  console.log(pattern)
   return pattern
 }
 
