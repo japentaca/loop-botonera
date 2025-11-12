@@ -18,29 +18,36 @@
 export function generateEuclideanPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
   const startTime = performance.now();
 
-  // Ensure density is a valid number
+  // Ensure density is a valid number (allow 0 for silent patterns)
   density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
 
-  // Calculate number of pulses based on density
-  const pulses = Math.max(1, Math.floor(length * density));
+  // Choose timing mode (euclidean|even|random|fillAll)
+  const timing = options.timing ?? 'euclidean';
 
-  // Generate Euclidean distribution
-  const positions = euclideanRhythm(pulses, length);
+  // Compute placement positions using unified helper (allows zero density)
+  const positions = computePositions({ length, density, mode: timing, startOffset: options.startOffset ?? 0, allowZero: true });
 
   // Generate possible notes within range
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
 
+  // Sort notes to ensure smooth transitions
+  possibleNotes.sort((a, b) => a - b);
+
   // Create pattern array
   const pattern = new Array(length).fill(null);
 
-  // Place notes at Euclidean positions
-  positions.forEach(pos => {
-    if (possibleNotes.length > 0) {
-      pattern[pos] = possibleNotes[Math.floor(Math.random() * possibleNotes.length)];
-    }
-  });
+  // Place notes at selected positions with controlled randomness
+  if (possibleNotes.length > 0 && positions.length > 0) {
+    let currentIndex = Math.floor(Math.random() * possibleNotes.length);
+    positions.forEach(pos => {
+      pattern[pos] = possibleNotes[currentIndex];
+      // Move to a nearby note (1-3 steps forward) for smooth but random progression
+      currentIndex = (currentIndex + Math.floor(Math.random() * 3) + 1) % possibleNotes.length;
+    });
+  }
 
   const elapsed = performance.now() - startTime;
+  const pulses = positions.length;
   console.log(`generateEuclideanPattern steps=${length} pulses=${pulses} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
 
   return pattern;
@@ -60,200 +67,108 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
 export function generateArpeggioPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
   const startTime = performance.now();
 
-  // Arpeggio subtypes: support 'UP_RANDOM_BACK' and 'DOWN_RANDOM_BACK'
-  // If no subtype is provided, select randomly between the two
-  // Older forms (UP, DOWN, UP_DOWN, DOWN_UP) are deprecated and removed.
-  // Cadence now BOUNCES at min/max note limits (no wrapping across range).
-  const arpeggioType = options.arpeggioType ?? (Math.random() < 0.5 ? 'UP_RANDOM_BACK' : 'DOWN_RANDOM_BACK');
+  // keep density handling for compatibility
+  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
 
   // Generate possible notes within range
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
-
   if (possibleNotes.length === 0) {
-    console.log(`generateArpeggioPattern failed: no possible notes in range`);
+    console.log('generateArpeggioPattern failed: no possible notes in range');
     return new Array(length).fill(null);
   }
 
-  // Helper function for debug logging (defined before use)
-  const noteToMidi = (midi) => {
-    const noteNumber = midi % 12;
-    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const octave = Math.floor(midi / 12) - 1;
-    return `${noteNames[noteNumber]}${octave}`;
-  };
-
-  // Sort notes for directional arpeggios
+  // Sort notes so stepping is predictable
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b);
 
-  // Debug: log the scale notes being used
-  console.log(`Scale notes (${sortedNotes.length}): ${sortedNotes.map(noteToMidi).join(', ')}`);
+  // Compute placement positions using randomized spacing (honours density)
+  const positions = computePositions({ length, density, mode: 'random', startOffset: options.startOffset ?? 0, allowZero: true });
+  console.log(`generateArpeggioPattern using randomized positions density=${density}`);
+  const placements = positions.length;
+  if (placements === 0) return new Array(length).fill(null);
 
-  // Fixed step interval for density calculation (16th notes)
-  const stepInterval = 1;
-  // Determine start offset: use explicit metadata pulse index if provided,
-  // otherwise default to a 3th-grid phase within the first measure window.
-  const hasExplicitStart = typeof options.startOffset === 'number' && isFinite(options.startOffset);
-  const startOffset = hasExplicitStart
-    ? Math.max(0, Math.min(length - 1, Math.floor(options.startOffset)))
-    : Math.floor(Math.random() * Math.min(3, length)); // 0..length-1 (first measure window)
+  // Choose a lead note index randomly
+  let leadIdx = Math.floor(Math.random() * sortedNotes.length);
+  const leadNote = sortedNotes[leadIdx];
 
-  // Compute placement positions
-  // If options.fillAll is true, use unit-step bounce to cover all indices.
-  // Otherwise, place notes at fixed interval positions and leave other steps as rests.
-  const positions = [];
-  const min = 0;
-  const max = length - 1;
 
-  if (options.fillAll === true) {
-    let pos = startOffset;
-    let dir = 1; // unit-step bounce
-    for (let i = 0; i < length; i++) {
-      positions.push(pos);
-      let next = pos + dir;
-      if (next > max || next < min) {
-        dir = -dir;
-        next = pos + dir;
-        if (next > max) next = max;
-        if (next < min) next = min;
-      }
-      pos = next;
-    }
-  } else {
-    // Calculate max possible sequences based on stepInterval
-    const maxSequences = Math.floor(length / stepInterval);
-    // Number of sequences based on density
-    const numSequences = Math.max(1, Math.floor(maxSequences * density));
-    // Use Euclidean rhythm to distribute positions evenly
-    const rawPositions = euclideanRhythm(numSequences, length);
-    // Apply startOffset for phasing
-    positions.push(...rawPositions.map(p => (p + startOffset) % length));
-  }
+  // Determine tail length at start and reuse it for the whole sequence
+  const maxTail = typeof options.maxTail === 'number' && isFinite(options.maxTail) ? Math.max(0, Math.floor(options.maxTail)) : 5;
+  const tailLength = (typeof options.tailLength === 'number' && isFinite(options.tailLength))
+    ? Math.max(0, Math.min(options.tailLength, maxTail))
+    : Math.floor(Math.random() * (maxTail + 1)); // chosen once at start
 
-  // Generate arpeggio sequence sized to placements
-  const sequenceLength = positions.length;
-  const arpeggioSequence = [];
-  const leadNotes = []; // Track lead notes for visualization
-  const tailGroups = []; // Track tail groups for visualization
-  // Tail length must be consistent across the whole sequence.
-  // Determine it once at the beginning, clamped to available notes.
-  const tailLengthFixed = (() => {
-    if (typeof options.tailLength === 'number' && isFinite(options.tailLength)) {
-      return Math.max(0, Math.min(options.tailLength, sortedNotes.length - 1));
-    }
-    // Default to 3, limited by available notes below the lead
-    return Math.min(3, sortedNotes.length - 1);
-  })();
+  // Determine tail direction: 'up' | 'down' | 'random' (default random)
+  let dir = options.direction ?? 'random';
+  if (dir === 'random') dir = Math.random() < 0.5 ? 'up' : 'down';
+  const step = dir === 'up' ? 1 : -1;
+  // Log chosen tail parameters for debugging
+  console.log(`generateArpeggioPattern chosen tailLength=${tailLength} direction=${dir} leadIdx=${leadIdx} leadNote=${leadNote}`);
 
+  // Build a full-length arpeggio stream (one note per step) so density only controls placement
+  // and does not truncate or mute the generated arpeggio. We'll generate notes until we
+  // have 'length' notes and then place them into the pattern at the positions selected by density.
+  const seqFull = [];
   if (sortedNotes.length === 1) {
-    while (arpeggioSequence.length < sequenceLength) {
-      arpeggioSequence.push(sortedNotes[0]);
-    }
+    while (seqFull.length < length) seqFull.push(sortedNotes[0]);
   } else {
-    const randomStartIndex = 0;
-    let leadIdx = randomStartIndex;
-    // Primary cadence direction: UP = +1, DOWN = -1
-    let dir = arpeggioType === 'UP_RANDOM_BACK' ? 1 : -1;
+    let currLead = leadIdx;
+    let currStep = step; // will bounce at extremes
 
-    while (arpeggioSequence.length < sequenceLength) {
-      // Use fixed tail length for the entire sequence
-      const tailLength = tailLengthFixed;
+    while (seqFull.length < length) {
+      // Add lead
+      seqFull.push(sortedNotes[currLead]);
+      if (seqFull.length >= length) break;
 
-      // Add the lead note
-      const leadNote = sortedNotes[leadIdx];
-      arpeggioSequence.push(leadNote);
-      leadNotes.push(leadNote);
-      console.log(`Lead: ${noteToMidi(leadNote)} (idx ${leadIdx}, dir=${dir})`);
-
-      const currentTail = [];
-
-      if (arpeggioSequence.length >= sequenceLength) break;
-
-      // Create the "tail" - notes that follow the lead in the same direction
-      if (tailLength > 0) {
-        console.log(`  Tail direction: ${dir === 1 ? 'UP' : 'DOWN'} (lead dir=${dir})`);
-        if (dir === 1) {
-          // Lead going UP: tail follows UP
-          for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
-            const tailIdx = leadIdx + step;
-            if (tailIdx >= sortedNotes.length) {
-              console.log(`  Tail boundary hit: leadIdx=${leadIdx}, step=${step}, tailIdx=${tailIdx} (too high, max=${sortedNotes.length - 1})`);
-              break; // guard top boundary
-            }
-            const tailNote = sortedNotes[tailIdx];
-            console.log(`  Tail UP: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
-            arpeggioSequence.push(tailNote);
-            currentTail.push(tailNote);
-          }
-        } else {
-          // Lead going DOWN: tail follows DOWN
-          for (let step = 1; step <= tailLength && arpeggioSequence.length < sequenceLength; step++) {
-            const tailIdx = leadIdx - step;
-            if (tailIdx < 0) {
-              console.log(`  Tail boundary hit: leadIdx=${leadIdx}, step=${step}, tailIdx=${tailIdx} (too low)`);
-              break; // guard bottom boundary
-            }
-            const tailNote = sortedNotes[tailIdx];
-            console.log(`  Tail DOWN: lead=${noteToMidi(sortedNotes[leadIdx])}, tail=${noteToMidi(tailNote)} (idx ${tailIdx})`);
-            arpeggioSequence.push(tailNote);
-            currentTail.push(tailNote);
-          }
-        }
+      // Add tails using cumulative stepping from the lead (lead-1, lead-2, ... for down)
+      for (let t = 1; t <= tailLength && seqFull.length < length; t++) {
+        const tailIdx = currLead + currStep * t;
+        if (tailIdx < 0 || tailIdx >= sortedNotes.length) break; // stop tails at boundary
+        seqFull.push(sortedNotes[tailIdx]);
       }
 
-      tailGroups.push(currentTail);
-
-      // Advance lead index with BOUNCE at extremes (no wrapping)
-      let nextLead = leadIdx + dir;
+      // Advance lead index by one step so successive groups overlap as in your example
+      let nextLead = currLead + currStep;
       if (nextLead < 0 || nextLead >= sortedNotes.length) {
-        // Reverse cadence when hitting min/max note limits
-        dir = -dir;
-        nextLead = leadIdx + dir;
-        // Clamp just in case of single-element boundaries
+        // reverse direction at boundaries
+        currStep = -currStep;
+        nextLead = currLead + currStep;
         if (nextLead < 0) nextLead = 0;
         if (nextLead >= sortedNotes.length) nextLead = sortedNotes.length - 1;
       }
-      leadIdx = nextLead;
+      currLead = nextLead;
     }
-
-    // Log detailed cascade visualization
-    console.log('=== ARPEGGIO CASCADE PATTERN ===');
-    leadNotes.forEach((lead, i) => {
-      const tail = tailGroups[i];
-      const leadName = noteToMidi(lead);
-      if (tail && tail.length > 0) {
-        const tailNames = tail.map(note => noteToMidi(note)).join('-');
-        console.log(`${leadName} → ${tailNames}`);
-      } else {
-        console.log(`${leadName} (no tail)`);
-      }
-    });
-    console.log('================================');
   }
 
-  // Build pattern with placements; rest elsewhere
+  // Build the pattern: place notes from the full arpeggio stream into selected positions
   const pattern = new Array(length).fill(null);
-  for (let i = 0; i < positions.length; i++) {
-    pattern[positions[i]] = arpeggioSequence[i];
+  const posSet = new Set(positions);
+  for (let i = 0; i < length; i++) {
+    if (posSet.has(i)) {
+      pattern[i] = seqFull[i];
+    }
   }
-
-  // Log the generated arpeggio sequence for debugging (compact format)
-  const noteToCompactName = (note) => {
-    if (note === null) return 'r';
-    return noteToMidi(note);
-  };
-
-  const compactNames = arpeggioSequence.map(noteToCompactName);
-  console.log(`Full sequence: ${compactNames.join(' ')}`);
 
   const elapsed = performance.now() - startTime;
-  console.log(`generateArpeggioPattern steps=${length} type=${arpeggioType} density=${Number(density).toFixed(2)} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} tail=on time=${elapsed.toFixed(1)}ms`);
+  console.log(`generateArpeggioPattern simplified lead=${leadNote} tail=${tailLength} dir=${dir} placements=${placements} time=${elapsed.toFixed(1)}ms`);
+  // Print full pattern so it can be copied for inspection
+  // Randomly shift the final pattern left or right by 0..length-1 steps
+  const shiftAmount = Math.floor(Math.random() * length);
+  if (shiftAmount > 0) {
+    const shiftDir = Math.random() < 0.5 ? 'left' : 'right';
+    if (shiftDir === 'left') {
+      const shifted = pattern.slice(shiftAmount).concat(pattern.slice(0, shiftAmount));
+      console.log(`Shifted left by ${shiftAmount} steps`);
+      console.log(shifted);
+      return shifted;
+    } else {
+      const shifted = pattern.slice(-shiftAmount).concat(pattern.slice(0, -shiftAmount));
+      console.log(`Shifted right by ${shiftAmount} steps`);
+      console.log(shifted);
+      return shifted;
+    }
+  }
+
   console.log(pattern);
-
-  // Debug: sequence range
-  const minSeq = Math.min(...arpeggioSequence);
-  const maxSeq = Math.max(...arpeggioSequence);
-  console.log(`Sequence range: ${noteToMidi(minSeq)} (${minSeq}) to ${noteToMidi(maxSeq)} (${maxSeq})`);
-
   return pattern;
 }
 
@@ -266,11 +181,10 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
  * @param {Object} params.noteRange - {min: number, max: number} MIDI range
  * @param {number} params.density - Density factor (0-1), controls number of notes
  * @param {Object} params.options - Additional options
- * @returns {Array<boolean>} Boolean rhythm pattern (true=active, false=rest)
+ * @returns {Array<number|null>} Array of MIDI notes or nulls
 */
 export function generateRandomPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
   const startTime = performance.now()
-
   density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3
 
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
@@ -279,12 +193,9 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
     return new Array(length).fill(null)
   }
 
-  const noteCount = Math.max(1, Math.floor(length * density))
-
-  const positions = new Set()
-  while (positions.size < noteCount) {
-    positions.add(Math.floor(Math.random() * length))
-  }
+  // Compute positions based on density using random timing mode
+  const positions = computePositions({ length, density, mode: options.timing ?? 'random', startOffset: options.startOffset ?? 0, allowZero: true })
+  const noteCount = positions.length
 
   // Select notes to place, evenly distributed across the available range
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
@@ -292,7 +203,7 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
   if (noteCount <= sortedNotes.length) {
     // Pick evenly spaced notes across the range
     for (let i = 0; i < noteCount; i++) {
-      const index = Math.floor(i * sortedNotes.length / noteCount)
+      const index = Math.floor(i * sortedNotes.length / Math.max(1, noteCount))
       notesToPlace.push(sortedNotes[index])
     }
   } else {
@@ -303,9 +214,8 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
   }
 
   const pattern = new Array(length).fill(null)
-  const posArray = Array.from(positions)
-  for (let i = 0; i < posArray.length; i++) {
-    pattern[posArray[i]] = notesToPlace[i]
+  for (let i = 0; i < positions.length; i++) {
+    pattern[positions[i]] = notesToPlace[i]
   }
 
   const elapsed = performance.now() - startTime
@@ -366,4 +276,57 @@ function euclideanRhythm(pulses, steps) {
     }
   }
   return positions;
+}
+
+/**
+ * Compute positions (indices) for note placement based on mode and density
+ * mode: 'euclidean' | 'even' | 'random' | 'fillAll'
+ * allowZero: when true, density==0 yields zero positions instead of forcing 1
+ */
+function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false }) {
+  const positions = [];
+  const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0));
+
+  if (mode === 'fillAll') {
+    // full unit-step bounce (same as existing behaviour)
+    let pos = startOffset % length;
+    let dir = 1;
+    const min = 0;
+    const max = length - 1;
+    for (let i = 0; i < length; i++) {
+      positions.push(pos);
+      let next = pos + dir;
+      if (next > max || next < min) {
+        dir = -dir;
+        next = pos + dir;
+        if (next > max) next = max;
+        if (next < min) next = min;
+      }
+      pos = next;
+    }
+    return positions;
+  }
+
+  // Compute count based on density. Use Math.round for more intuitive mapping but allow zero.
+  let count = Math.round(length * d);
+  if (!allowZero) count = Math.max(1, count);
+
+  if (count <= 0) return [];
+
+  if (mode === 'even') {
+    for (let i = 0; i < count; i++) {
+      positions.push(Math.floor((i * length) / count));
+    }
+    return positions.map(p => (p + startOffset) % length);
+  }
+
+  if (mode === 'random') {
+    const set = new Set();
+    while (set.size < count) set.add(Math.floor(Math.random() * length));
+    return Array.from(set).map(p => (p + startOffset) % length);
+  }
+
+  // default: euclidean
+  const raw = euclideanRhythm(count, length);
+  return raw.map(p => (p + startOffset) % length);
 }
