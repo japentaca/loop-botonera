@@ -108,11 +108,11 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     stepInterval = allowedIntervals[Math.floor(Math.random() * allowedIntervals.length)];
   }
   // Determine start offset: use explicit metadata pulse index if provided,
-  // otherwise default to a 16th-grid phase within the first measure window.
+  // otherwise default to a 3th-grid phase within the first measure window.
   const hasExplicitStart = typeof options.startOffset === 'number' && isFinite(options.startOffset);
   const startOffset = hasExplicitStart
     ? Math.max(0, Math.min(length - 1, Math.floor(options.startOffset)))
-    : Math.floor(Math.random() * Math.min(16, length)); // 0..length-1 (first measure window)
+    : Math.floor(Math.random() * Math.min(3, length)); // 0..length-1 (first measure window)
 
   // Compute placement positions
   // If options.fillAll is true, use unit-step bounce to cover all indices.
@@ -146,6 +146,15 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   const arpeggioSequence = [];
   const leadNotes = []; // Track lead notes for visualization
   const tailGroups = []; // Track tail groups for visualization
+  // Tail length must be consistent across the whole sequence.
+  // Determine it once at the beginning, clamped to available notes.
+  const tailLengthFixed = (() => {
+    if (typeof options.tailLength === 'number' && isFinite(options.tailLength)) {
+      return Math.max(0, Math.min(options.tailLength, sortedNotes.length - 1));
+    }
+    // Default to 3, limited by available notes below the lead
+    return Math.min(3, sortedNotes.length - 1);
+  })();
 
   if (sortedNotes.length === 1) {
     while (arpeggioSequence.length < sequenceLength) {
@@ -153,14 +162,13 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     }
   } else {
     const randomStartIndex = Math.floor(Math.random() * sortedNotes.length);
-    const maxTailLength = Math.max(1, Math.min(options.tailLength ?? 3, sortedNotes.length - 1));
     let leadIdx = randomStartIndex;
     // Primary cadence direction: UP = +1, DOWN = -1
     let dir = arpeggioType === 'UP_RANDOM_BACK' ? 1 : -1;
 
     while (arpeggioSequence.length < sequenceLength) {
-      // Choose random tail length [0..maxTailLength]
-      const tailLength = Math.floor(Math.random() * (maxTailLength + 1));
+      // Use fixed tail length for the entire sequence
+      const tailLength = tailLengthFixed;
 
       // Add the lead note
       const leadNote = sortedNotes[leadIdx];
@@ -250,7 +258,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
 
   const elapsed = performance.now() - startTime;
   melLog(`generateArpeggioPattern steps=${length} type=${arpeggioType} interval=${stepInterval} offset=${startOffset} placements=${positions.length} range=${noteRange.min}..${noteRange.max} bounce=on tail=on time=${elapsed.toFixed(1)}ms`);
-
+  console.log(pattern)
   return pattern;
 }
 
