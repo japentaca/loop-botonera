@@ -271,43 +271,53 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
  * @param {Object} params.noteRange - {min: number, max: number} MIDI range
  * @param {number} params.density - Density factor (0-1), controls number of notes
  * @param {Object} params.options - Additional options
- * @returns {Array<number|null>} Array of MIDI notes or nulls
- */
+ * @returns {Array<boolean>} Boolean rhythm pattern (true=active, false=rest)
+*/
 export function generateRandomPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
-  const melLog = (...args) => console.log('[MelGen]', ...args);
+  const melLog = (...args) => console.log('[MelGen]', ...args)
+  const startTime = performance.now()
 
-  const startTime = performance.now();
+  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3
 
-  // Ensure density is a valid number
-  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
-
-  // Generate possible notes within range
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
-
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
   if (possibleNotes.length === 0) {
-    melLog(`generateRandomPattern failed: no possible notes in range`);
-    return new Array(length).fill(null);
+    melLog('generateRandomPattern failed: no possible notes in range')
+    return new Array(length).fill(null)
   }
 
-  // Calculate number of notes to place
-  const noteCount = Math.max(1, Math.floor(length * density));
+  const noteCount = Math.max(1, Math.floor(length * density))
 
-  // Select random positions
-  const positions = new Set();
+  const positions = new Set()
   while (positions.size < noteCount) {
-    positions.add(Math.floor(Math.random() * length));
+    positions.add(Math.floor(Math.random() * length))
   }
 
-  // Create pattern
-  const pattern = new Array(length).fill(null);
+  const pattern = new Array(length).fill(null)
   for (const pos of positions) {
-    pattern[pos] = possibleNotes[Math.floor(Math.random() * possibleNotes.length)];
+    pattern[pos] = possibleNotes[Math.floor(Math.random() * possibleNotes.length)]
   }
 
-  const elapsed = performance.now() - startTime;
-  melLog(`generateRandomPattern steps=${length} notes=${noteCount} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
+  const elapsed = performance.now() - startTime
+  melLog(`generateRandomPattern steps=${length} notes=${noteCount} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`)
 
-  return pattern;
+  return pattern
+}
+
+export function generateBooleanRhythm({ length, density }) {
+  const pattern = new Array(length).fill(false)
+  const d = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.35
+
+  for (let i = 0; i < length; i++) {
+    if (Math.random() < d) {
+      pattern[i] = true
+    }
+  }
+
+  if (!pattern.some(Boolean)) {
+    pattern[0] = true
+  }
+
+  return pattern
 }
 
 // Helper functions
