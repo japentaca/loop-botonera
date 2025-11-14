@@ -49,6 +49,10 @@ export const useAudioStore = defineStore('audio', () => {
   const audioEngine = useAudioEngine()
   const loopManager = useLoopManager(notesMatrix)
   const energyManager = useEnergyManager(notesMatrix)
+  // Ensure energy manager knows the configured number of loops from loopManager
+  if (typeof energyManager.updateNumLoops === 'function') {
+    energyManager.updateNumLoops(loopManager.NUM_LOOPS)
+  }
 
   // Inicializar generador melódico con acceso a la matriz
   const melodicGenerator = useMelodicGenerator(notesMatrix)
@@ -81,6 +85,43 @@ export const useAudioStore = defineStore('audio', () => {
   const debouncedEnergyCheck = debounce((loops) => {
     energyManager.checkAndBalanceEnergy(loops)
   }, 750) // OPTIMIZED: increased from 500ms to 750ms to reduce 140ms blocking tasks
+
+  // Dynamic density application (debounced to avoid thrash)
+  const DENSITY_DEBOUNCE_MS = 250
+  const applyDynamicDensities = debounce(() => {
+    try {
+      const loops = loopManager.loops.value
+      const density = energyManager.computeDynamicDensity(loops)
+
+      // Update each active, unlocked loop
+      for (let i = 0; i < loops.length; i++) {
+        const loop = loops[i]
+        if (!loop || !loop.isActive) continue
+
+        const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loop.id]
+        if (meta && meta.generationMode === 'locked') continue
+
+        // Persist density in metadata (clamped by notesMatrix)
+        if (notesMatrix.updateLoopMetadata) {
+          notesMatrix.updateLoopMetadata(loop.id, { density })
+        }
+
+        // Prefer melodic regeneration only when loop metadata explicitly requests it
+        if (meta && meta.generationMode === 'melodic' && typeof melodicGenerator?.regenerateLoop === 'function') {
+          try {
+            melodicGenerator.regenerateLoop(loop.id, audioEngine.currentPulse.value)
+          } catch (e) {
+            notesMatrix.generateLoopNotes(loop.id, density)
+          }
+        } else {
+          // Legacy generation path (safe default)
+          notesMatrix.generateLoopNotes(loop.id, density)
+        }
+      }
+    } catch (err) {
+      console.error('[applyDynamicDensities] error', err)
+    }
+  }, DENSITY_DEBOUNCE_MS)
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major') // Default scale - must be set before loop initialization
@@ -193,6 +234,9 @@ export const useAudioStore = defineStore('audio', () => {
       energyManager.adjustAllLoopVolumes(loopManager.loops.value)
     }
 
+    // Apply dynamic densities (debounced)
+    applyDynamicDensities()
+
     // Notificar cambios para auto-guardado
     notifyPresetChanges()
   }
@@ -217,6 +261,9 @@ export const useAudioStore = defineStore('audio', () => {
     if (energyManager.energyManagementEnabled.value) {
       energyManager.adjustAllLoopVolumes(loopManager.loops.value)
     }
+
+    // Apply dynamic densities (debounced)
+    applyDynamicDensities()
 
     // Notificar cambios (será ignorado si el presetStore está cargando)
     notifyPresetChanges()

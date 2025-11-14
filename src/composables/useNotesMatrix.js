@@ -313,8 +313,29 @@ export function useNotesMatrix() {
   function generateLoopNotes(loopId, density = 0.3, options = {}) {
     if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
 
-    // Check if melodic generation is requested
-    if (options.strategy === 'melodic') {
+    // Backwards-compatible handling: callers sometimes pass an options object as the
+    // second argument. Detect and normalize parameters.
+    if (typeof density === 'object' && density !== null) {
+      options = density
+      density = (options.density !== undefined) ? options.density : 0.3
+    }
+
+    // Coerce density to a number and clamp
+    density = Number(density) || 0
+    density = Math.max(0, Math.min(1, density))
+
+    const meta = loopMetadata[loopId]
+    // Respect locked generationMode: do not overwrite locked loops
+    if (meta && meta.generationMode === 'locked') {
+      // Keep existing metadata; do not generate new content
+      if (isNoteInScaleCached) {
+        // noop, but keep for potential debugging
+      }
+      return
+    }
+
+    // If melodic strategy explicitly requested, delegate
+    if (options && options.strategy === 'melodic') {
       if (!options.melodicGenerator) {
         console.log('[MelGen] path=melodic requested but no melodicGenerator provided')
         return
@@ -325,7 +346,7 @@ export function useNotesMatrix() {
     }
 
     // Default to legacy random generation
-    console.log('[MelGen] path=legacy (melodic not requested)')
+    // console.log('[MelGen] path=legacy (melodic not requested)')
 
     batchUpdate(() => {
       const meta = loopMetadata[loopId]
