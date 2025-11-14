@@ -228,7 +228,7 @@ export const useLoopManager = (notesMatrix = null) => {
       noteRangeMax: 96,        // MIDI note max (default: full range)
       patternProbabilities: {  // Per-loop pattern weights
         euclidean: 0.3,
-        arpeggio: 0.3,
+        scale: 0.3,
         random: 0.4,
         // Will add more in Phase 2
       },

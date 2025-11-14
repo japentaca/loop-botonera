@@ -48,7 +48,7 @@ const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => reactive({
   noteRangeMax: 96,        // MIDI note max (default: full range)
   patternProbabilities: {  // Per-loop pattern weights
     euclidean: 0.3,
-    arpeggio: 0.3,
+    scale: 0.3,
     random: 0.4,
     // Will add more in Phase 2
   },
@@ -174,7 +174,7 @@ export function useNotesMatrix() {
         noteRangeMax: options.noteRangeMax || 96,        // MIDI note max (default: full range)
         patternProbabilities: {  // Per-loop pattern weights
           euclidean: 0.3,
-          arpeggio: 0.3,
+          scale: 0.3,
           random: 0.4
         },
         generationMode: 'auto',  // 'auto' | 'locked'
@@ -657,7 +657,7 @@ export function useNotesMatrix() {
           noteRangeMax: 96,
           patternProbabilities: {
             euclidean: 0.3,
-            arpeggio: 0.3,
+            scale: 0.3,
             random: 0.4
           },
           generationMode: 'auto',

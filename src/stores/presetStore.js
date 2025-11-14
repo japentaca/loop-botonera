@@ -119,7 +119,7 @@ export const usePresetStore = defineStore('preset', () => {
         // Prefer metadata from the central notesMatrix composable if available
         noteRangeMin: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.noteRangeMin : audioStore.loopMetadata[loop.id]?.noteRangeMin) ?? 24,
         noteRangeMax: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.noteRangeMax : audioStore.loopMetadata[loop.id]?.noteRangeMax) ?? 96,
-        patternProbabilities: { ...((notesMatrix ? notesMatrix.loopMetadata[loop.id]?.patternProbabilities : audioStore.loopMetadata[loop.id]?.patternProbabilities) || { euclidean: 0.3, arpeggio: 0.3, random: 0.4 }) },
+        patternProbabilities: { ...((notesMatrix ? notesMatrix.loopMetadata[loop.id]?.patternProbabilities : audioStore.loopMetadata[loop.id]?.patternProbabilities) || { euclidean: 0.3, scale: 0.3, random: 0.4 }) },
         generationMode: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.generationMode : audioStore.loopMetadata[loop.id]?.generationMode) ?? 'auto',
         lastPattern: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.lastPattern : audioStore.loopMetadata[loop.id]?.lastPattern) ?? null
       }
@@ -349,7 +349,7 @@ export const usePresetStore = defineStore('preset', () => {
   // Cargar preset
   const loadPreset = async (presetId) => {
     isLoading.value = true
-    
+
     try {
       const preset = await getPresetById(presetId)
 

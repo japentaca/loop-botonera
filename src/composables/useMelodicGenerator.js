@@ -1,5 +1,5 @@
 import { useScales } from './useMusic'
-import { generateEuclideanPattern, generateArpeggioPattern, generateRandomPattern } from '../utils/patternGenerators'
+import { generateEuclideanPattern, generateScalePattern, generateRandomPattern } from '../utils/patternGenerators'
 import { analyzeActiveLoops, avoidConflicts, isCounterpointEnabled } from '../services/counterpointService'
 import { useAudioStore } from '../stores/audioStore'
 
@@ -55,10 +55,10 @@ export function useMelodicGenerator(notesMatrix) {
       case 'euclidean':
         notes = generateEuclideanPattern(patternOptions)
         break
-      case 'arpeggio':
+      case 'scale':
         // Do not forward implicit metadata startOffset, but allow explicit options.startOffset
-        const { startOffset: _omitTopLevel, ...arpeggioOptions } = patternOptions
-        notes = generateArpeggioPattern(arpeggioOptions)
+        const { startOffset: _omitTopLevel, ...scaleOptions } = patternOptions
+        notes = generateScalePattern(scaleOptions)
         break
       case 'random':
       default:
@@ -146,13 +146,13 @@ export function useMelodicGenerator(notesMatrix) {
   /**
    * Select pattern type based on loop's probability weights
    * @param {number} loopId - The loop ID
-   * @returns {string} Selected pattern type ('euclidean'|'arpeggio'|'random')
+   * @returns {string} Selected pattern type ('euclidean'|'scale'|'random')
    */
   const selectPatternType = (loopId) => {
     const meta = notesMatrix.loopMetadata[loopId]
     if (!meta) {
       // Fallback if metadata is missing
-      const pattern = ['euclidean', 'arpeggio', 'random'][Math.floor(Math.random() * 3)]
+      const pattern = ['euclidean', 'scale', 'random'][Math.floor(Math.random() * 3)]
       melLog(`selectPatternType loop=${loopId} missing metadata -> ${pattern} (fallback)`)
       return pattern
     }
@@ -160,7 +160,7 @@ export function useMelodicGenerator(notesMatrix) {
     // Ensure patternProbabilities exists
     if (!meta.patternProbabilities) {
       notesMatrix.updateLoopMetadata(loopId, {
-        patternProbabilities: { euclidean: 0.3, arpeggio: 0.3, random: 0.4 },
+        patternProbabilities: { euclidean: 0.3, scale: 0.3, random: 0.4 },
         generationMode: 'auto',
         lastPattern: null,
         noteRangeMin: 24,
@@ -172,11 +172,11 @@ export function useMelodicGenerator(notesMatrix) {
     const probs = meta.patternProbabilities
 
     // Normalize probabilities
-    const total = probs.euclidean + probs.arpeggio + probs.random
+    const total = probs.euclidean + probs.scale + probs.random
     if (total === 0) {
       // Fallback to equal distribution
-      const pattern = ['euclidean', 'arpeggio', 'random'][Math.floor(Math.random() * 3)]
-      melLog(`selectPatternType loop=${loopId} probs={euclidean:0,arpeggio:0,random:0} -> ${pattern} (fallback)`)
+      const pattern = ['euclidean', 'scale', 'random'][Math.floor(Math.random() * 3)]
+      melLog(`selectPatternType loop=${loopId} probs={euclidean:0,scale:0,random:0} -> ${pattern} (fallback)`)
       return pattern
     }
 
@@ -185,15 +185,15 @@ export function useMelodicGenerator(notesMatrix) {
     let cumulative = 0
 
     if ((cumulative += probs.euclidean) > rand) {
-      melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},arpeggio:${probs.arpeggio.toFixed(2)},random:${probs.random.toFixed(2)}} -> euclidean`)
+      melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},scale:${probs.scale.toFixed(2)},random:${probs.random.toFixed(2)}} -> euclidean`)
       return 'euclidean'
     }
-    if ((cumulative += probs.arpeggio) > rand) {
-      melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},arpeggio:${probs.arpeggio.toFixed(2)},random:${probs.random.toFixed(2)}} -> arpeggio`)
-      return 'arpeggio'
+    if ((cumulative += probs.scale) > rand) {
+      melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},scale:${probs.scale.toFixed(2)},random:${probs.random.toFixed(2)}} -> scale`)
+      return 'scale'
     }
 
-    melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},arpeggio:${probs.arpeggio.toFixed(2)},random:${probs.random.toFixed(2)}} -> random`)
+    melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},scale:${probs.scale.toFixed(2)},random:${probs.random.toFixed(2)}} -> random`)
     return 'random'
   }
 

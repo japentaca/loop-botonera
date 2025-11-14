@@ -36,8 +36,8 @@ Implementation of a modular melodic generation system with counterpoint awarenes
   - `counterpointService`: collisions detected and resolutions applied.
   - `useNotesMatrix` integration: path chosen (`legacy` vs `melodic`) and reason.
 - Example lines:
-  - `[MelGen] selectPatternType loop=3 probs={euclidean:0.3,arpeggio:0.5,random:0.2} -> arpeggio`
-  - `[MelGen] generateArpeggio steps=16 density=0.4 range=36..84 time=2.7ms`
+  - `[MelGen] selectPatternType loop=3 probs={euclidean:0.3,scale:0.5,random:0.2} -> scale`
+  - `[MelGen] generateScale steps=16 density=0.4 range=36..84 time=2.7ms`
   - `[MelGen] applyCounterpoint loop=3 step=9 conflict=C4 -> moved=D4`
   - `[MelGen] path=legacy (melodic not requested)`
 - Helper:
@@ -67,7 +67,7 @@ const melLog = (...args) => console.log('[MelGen]', ...args);
 // - Output: Array of notes (with nulls for rests)
 // Core patterns for Phase 1:
 // 1. generateEuclideanPattern()
-// 2. generateArpeggioPattern()
+// 2. generateScalePattern()
 // 3. generateRandomPattern() (enhanced current implementation)
 ```
 **Dependencies**: None
@@ -113,7 +113,7 @@ loopMetadata[loopId] = {
   noteRangeMax: 96,        // MIDI note max (default: full range)
   patternProbabilities: {  // Per-loop pattern weights
     euclidean: 0.3,
-    arpeggio: 0.3,
+    scale: 0.3,
     random: 0.4,
     // Will add more in Phase 2
   },
@@ -209,13 +209,13 @@ loopMetadata[loopId] = {
 
 ---
 
-#### Task 2.2: Implement Arpeggio Pattern Generator
+#### Task 2.2: Implement Scale Pattern Generator (formerly called "arpeggio")
 **Status**: NOT_STARTED
 **File**: `src/utils/patternGenerators.js` (add function)
-**Description**: Generate arpeggio patterns (broken chords)
+**Description**: Generate scale patterns (formerly called "arpeggio", broken chords)
 **Implementation Details**:
 ```javascript
-// Arpeggio types (randomly selected or user preference):
+// Scale types (randomly selected or user preference):
 // - UP: scale degrees ascending
 // - DOWN: scale degrees descending
 // - UP_DOWN: ascend then descend
@@ -223,16 +223,16 @@ loopMetadata[loopId] = {
 // - RANDOM: random order of scale degrees
 // 
 // Length behavior: 
-// - Short loops (≤8 steps): Simple 3-4 note arpeggio, repeated
-// - Medium loops (9-16): Extended arpeggio with variations
-// - Long loops (17+): Multiple arpeggio cycles with octave changes
+// - Short loops (≤8 steps): Simple 3-4 note scale, repeated
+// - Medium loops (9-16): Extended scale with variations
+// - Long loops (17+): Multiple scale cycles with octave changes
 //
 // Density handling: Add rests between notes based on density parameter
 ```
 **Dependencies**: Task 1.1
-**Testing**: Manual testing - test all arpeggio types with various loop lengths
+**Testing**: Manual testing - test all scale types with various loop lengths
 **Success Criteria**:
-- All 5 arpeggio types generate correctly
+- All 5 scale types generate correctly
 - Respects note range constraints
 - Adapts to different loop lengths appropriately
 
@@ -273,8 +273,8 @@ loopMetadata[loopId] = {
 // 3. Use weighted random selection
 // 4. Return selected pattern type string
 //
-// Example: { euclidean: 0.3, arpeggio: 0.5, random: 0.2 }
-// Should select arpeggio 50% of the time
+// Example: { euclidean: 0.3, scale: 0.5, random: 0.2 }
+// Should select scale 50% of the time
 ```
 **Dependencies**: Tasks 2.1, 2.2, 2.3
 **Testing**: Manual testing - verify pattern selection matches probabilities over multiple generations
@@ -295,7 +295,7 @@ loopMetadata[loopId] = {
 ```vue
 <!-- Component structure:
 - Display for loop metadata
-- Sliders for each pattern type (euclidean, arpeggio, random)
+- Sliders for each pattern type (euclidean, scale, random)
 - Note range min/max inputs
 - Lock/unlock toggle
 - Visual feedback for current pattern type
@@ -551,7 +551,7 @@ src/
 
 ### Phase 2 Testing
 - [ ] Euclidean patterns mathematically correct
-- [ ] Arpeggios generate correctly in all modes
+- [ ] Scales generate correctly in all modes
 - [ ] Random patterns properly distributed
 - [ ] Pattern selection probabilities accurate
 - [ ] All patterns respect note range constraints

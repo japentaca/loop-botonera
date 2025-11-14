@@ -21,11 +21,11 @@
       </div>
 
       <div class="probability-control">
-        <span class="control-label">Arpeggio</span>
-        <Slider :modelValue="patternProbabilities.arpeggio * 100"
-          @update:modelValue="updateProbability('arpeggio', $event / 100)" :min="0" :max="100" :step="1"
+        <span class="control-label">Scale</span>
+        <Slider :modelValue="patternProbabilities.scale * 100"
+          @update:modelValue="updateProbability('scale', $event / 100)" :min="0" :max="100" :step="1"
           class="probability-slider" />
-        <span class="probability-value">{{ Math.round(patternProbabilities.arpeggio * 100) }}%</span>
+        <span class="probability-value">{{ Math.round(patternProbabilities.scale * 100) }}%</span>
       </div>
 
       <div class="probability-control">
@@ -75,7 +75,7 @@
   const metadata = computed(() => props.loopMetadata?.[props.loopId])
 
   // Local reactive state for immediate UI updates
-  const localProbabilities = ref({ euclidean: 0.3, arpeggio: 0.3, random: 0.4 })
+  const localProbabilities = ref({ euclidean: 0.3, scale: 0.3, random: 0.4 })
 
   // Sync local state with metadata
   watch(() => metadata.value?.patternProbabilities, (newProbs) => {
@@ -339,7 +339,7 @@
     color: var(--blue-800);
   }
 
-  .pattern-arpeggio {
+  .pattern-scale {
     background: var(--green-100);
     color: var(--green-800);
   }

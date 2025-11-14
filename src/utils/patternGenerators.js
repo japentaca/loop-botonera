@@ -54,17 +54,17 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
 }
 
 /**
- * Generate arpeggio pattern (broken chord progression)
+ * Generate scale pattern (formerly called "arpeggio" / broken chord progression)
  * @param {Object} params
  * @param {number} params.length - Total number of steps in the pattern
  * @param {Array<number>} params.scale - Scale intervals array
  * @param {number} params.baseNote - Base MIDI note number
  * @param {Object} params.noteRange - {min: number, max: number} MIDI range
- * @param {number} params.density - Density factor (0-1), controls number of arpeggio sequences
- * @param {Object} params.options - Additional options (arpeggioType, etc.)
+ * @param {number} params.density - Density factor (0-1), controls number of scale sequences
+ * @param {Object} params.options - Additional options (scaleType, etc.)
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */
-export function generateArpeggioPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
+export function generateScalePattern({ length, scale, baseNote, noteRange, density, options = {} }) {
   const startTime = performance.now();
 
   // keep density handling for compatibility
@@ -73,7 +73,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   // Generate possible notes within range
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
   if (possibleNotes.length === 0) {
-    console.log('generateArpeggioPattern failed: no possible notes in range');
+    console.log('generateScalePattern failed: no possible notes in range');
     return new Array(length).fill(null);
   }
 
@@ -82,7 +82,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
 
   // Compute placement positions using randomized spacing (honours density)
   const positions = computePositions({ length, density, mode: 'random', startOffset: options.startOffset ?? 0, allowZero: true });
-  console.log(`generateArpeggioPattern using randomized positions density=${density}`);
+  console.log(`generateScalePattern using randomized positions density=${density}`);
   const placements = positions.length;
   if (placements === 0) return new Array(length).fill(null);
 
@@ -102,10 +102,10 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   if (dir === 'random') dir = Math.random() < 0.5 ? 'up' : 'down';
   const step = dir === 'up' ? 1 : -1;
   // Log chosen tail parameters for debugging
-  console.log(`generateArpeggioPattern chosen tailLength=${tailLength} direction=${dir} leadIdx=${leadIdx} leadNote=${leadNote}`);
+  console.log(`generateScalePattern chosen tailLength=${tailLength} direction=${dir} leadIdx=${leadIdx} leadNote=${leadNote}`);
 
-  // Build a full-length arpeggio stream (one note per step) so density only controls placement
-  // and does not truncate or mute the generated arpeggio. We'll generate notes until we
+  // Build a full-length scale stream (one note per step) so density only controls placement
+  // and does not truncate or mute the generated scale. We'll generate notes until we
   // have 'length' notes and then place them into the pattern at the positions selected by density.
   const seqFull = [];
   if (sortedNotes.length === 1) {
@@ -139,7 +139,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
     }
   }
 
-  // Build the pattern: place notes from the full arpeggio stream into selected positions
+  // Build the pattern: place notes from the full scale stream into selected positions
   const pattern = new Array(length).fill(null);
   const posSet = new Set(positions);
   for (let i = 0; i < length; i++) {
@@ -149,7 +149,7 @@ export function generateArpeggioPattern({ length, scale, baseNote, noteRange, de
   }
 
   const elapsed = performance.now() - startTime;
-  console.log(`generateArpeggioPattern simplified lead=${leadNote} tail=${tailLength} dir=${dir} placements=${placements} time=${elapsed.toFixed(1)}ms`);
+  console.log(`generateScalePattern simplified lead=${leadNote} tail=${tailLength} dir=${dir} placements=${placements} time=${elapsed.toFixed(1)}ms`);
   // Print full pattern so it can be copied for inspection
   // Randomly shift the final pattern left or right by 0..length-1 steps
   const shiftAmount = Math.floor(Math.random() * length);
