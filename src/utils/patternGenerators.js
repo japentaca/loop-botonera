@@ -115,20 +115,15 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
   } else {
     let currLead = leadIdx;
     let currStep = step;
-    let toggle = true;
+    let cycles = 0;
 
     while (seqFull.length < length) {
-      // Add lead
       seqFull.push(sortedNotes[currLead]);
-      if (seqFull.length >= length) break;
-
-      // Add tails using cumulative stepping from the lead (lead-1, lead-2, ... for down)
       for (let t = 1; t <= tailLength && seqFull.length < length; t++) {
         const tailIdx = currLead + currStep * t;
-        if (tailIdx < 0 || tailIdx >= sortedNotes.length) break; // stop tails at boundary
+        if (tailIdx < 0 || tailIdx >= sortedNotes.length) break;
         seqFull.push(sortedNotes[tailIdx]);
       }
-
       let nextLead = currLead + currStep;
       if (nextLead < 0 || nextLead >= sortedNotes.length) {
         currStep = -currStep;
@@ -137,8 +132,8 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
         if (nextLead >= sortedNotes.length) nextLead = sortedNotes.length - 1;
       }
       currLead = nextLead;
-      if (toggle) currStep = -currStep;
-      toggle = !toggle;
+      cycles++;
+      if (cycles % 2 === 1) currStep = -currStep;
     }
   }
 
