@@ -3,6 +3,7 @@
  * Pure functions for generating melodic patterns with counterpoint awareness
  * All functions return arrays of MIDI note numbers or null (for rests)
  */
+const DEBUG = false
 
 /**
  * Generate Euclidean rhythm pattern using Bjorklund's algorithm
@@ -48,7 +49,7 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
 
   const elapsed = performance.now() - startTime;
   const pulses = positions.length;
-  console.log(`generateEuclideanPattern steps=${length} pulses=${pulses} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
+  DEBUG && console.log(`generateEuclideanPattern steps=${length} pulses=${pulses} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
 
   return pattern;
 }
@@ -73,7 +74,7 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
   // Generate possible notes within range
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
   if (possibleNotes.length === 0) {
-    console.log('generateScalePattern failed: no possible notes in range');
+    DEBUG && console.log('generateScalePattern failed: no possible notes in range');
     return new Array(length).fill(null);
   }
 
@@ -82,7 +83,7 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
 
   // Compute placement positions using randomized spacing (honours density)
   const positions = computePositions({ length, density, mode: 'random', startOffset: options.startOffset ?? 0, allowZero: true });
-  console.log(`generateScalePattern using randomized positions density=${density}`);
+  DEBUG && console.log(`generateScalePattern using randomized positions density=${density}`);
   const placements = positions.length;
   if (placements === 0) return new Array(length).fill(null);
 
@@ -102,7 +103,7 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
   if (dir === 'random') dir = Math.random() < 0.5 ? 'up' : 'down';
   const step = dir === 'up' ? 1 : -1;
   // Log chosen tail parameters for debugging
-  console.log(`generateScalePattern chosen tailLength=${tailLength} direction=${dir} leadIdx=${leadIdx} leadNote=${leadNote}`);
+  DEBUG && console.log(`generateScalePattern chosen tailLength=${tailLength} direction=${dir} leadIdx=${leadIdx} leadNote=${leadNote}`);
 
   // Build a full-length scale stream (one note per step) so density only controls placement
   // and does not truncate or mute the generated scale. We'll generate notes until we
@@ -149,7 +150,7 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
   }
 
   const elapsed = performance.now() - startTime;
-  console.log(`generateScalePattern simplified lead=${leadNote} tail=${tailLength} dir=${dir} placements=${placements} time=${elapsed.toFixed(1)}ms`);
+  DEBUG && console.log(`generateScalePattern simplified lead=${leadNote} tail=${tailLength} dir=${dir} placements=${placements} time=${elapsed.toFixed(1)}ms`);
   // Print full pattern so it can be copied for inspection
   // Randomly shift the final pattern left or right by 0..length-1 steps
   const shiftAmount = Math.floor(Math.random() * length);
@@ -157,18 +158,18 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
     const shiftDir = Math.random() < 0.5 ? 'left' : 'right';
     if (shiftDir === 'left') {
       const shifted = pattern.slice(shiftAmount).concat(pattern.slice(0, shiftAmount));
-      console.log(`Shifted left by ${shiftAmount} steps`);
-      console.log(shifted);
+      DEBUG && console.log(`Shifted left by ${shiftAmount} steps`);
+      DEBUG && console.log(shifted);
       return shifted;
     } else {
       const shifted = pattern.slice(-shiftAmount).concat(pattern.slice(0, -shiftAmount));
-      console.log(`Shifted right by ${shiftAmount} steps`);
-      console.log(shifted);
+      DEBUG && console.log(`Shifted right by ${shiftAmount} steps`);
+      DEBUG && console.log(shifted);
       return shifted;
     }
   }
 
-  console.log(pattern);
+  DEBUG && console.log(pattern);
   return pattern;
 }
 
@@ -189,7 +190,7 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
 
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
   if (possibleNotes.length === 0) {
-    console.log('generateRandomPattern failed: no possible notes in range')
+    DEBUG && console.log('generateRandomPattern failed: no possible notes in range')
     return new Array(length).fill(null)
   }
 
@@ -219,9 +220,9 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
   }
 
   const elapsed = performance.now() - startTime
-  console.log(`generateRandomPattern steps=${length} notes=${noteCount} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`)
+  DEBUG && console.log(`generateRandomPattern steps=${length} notes=${noteCount} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`)
 
-  console.log(pattern)
+  DEBUG && console.log(pattern)
   return pattern
 }
 
