@@ -1,5 +1,5 @@
 import { ref, readonly, triggerRef, computed, reactive } from 'vue'
-import { useScales, useNoteUtils } from './useMusic'
+import { useScales } from './useMusic'
 import { useMelodicGenerator } from './useMelodicGenerator'
 
 // Get scale utility at module level
@@ -154,7 +154,6 @@ function computeLoopDensityMetrics(loopId) {
 
 export function useNotesMatrix() {
   // Initialize music utilities
-  const { quantizeToScale } = useNoteUtils()  // Performance optimization: Efficient loop initialization
   // Performance optimization: Efficient loop initialization
   function initializeLoop(loopId, options = {}) {
     if (loopId >= MAX_LOOPS) return
