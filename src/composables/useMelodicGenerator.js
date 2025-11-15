@@ -76,10 +76,15 @@ export function useMelodicGenerator(notesMatrix) {
       notesMatrix.updateLoopMetadata(loopId, { lastPattern: patternType, lastModified: Date.now() })
     }
 
-    const elapsed = performance.now() - startTime
-    melLog(`generateLoopMelody loop=${loopId} pattern=${patternType} length=${notes.length} time=${elapsed.toFixed(1)}ms`)
+    // Clamp to loop note range to ensure final notes respect per-loop bounds
+    const minRange = typeof meta.noteRangeMin === 'number' ? meta.noteRangeMin : 24
+    const maxRange = typeof meta.noteRangeMax === 'number' ? meta.noteRangeMax : 96
+    const clamped = notes.map(n => (typeof n === 'number' ? Math.max(minRange, Math.min(maxRange, n)) : n))
 
-    return notes
+    const elapsed = performance.now() - startTime
+    melLog(`generateLoopMelody loop=${loopId} pattern=${patternType} length=${clamped.length} time=${elapsed.toFixed(1)}ms`)
+
+    return clamped
   }
 
   /**
