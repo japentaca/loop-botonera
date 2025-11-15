@@ -1,4 +1,3 @@
-import { ref, computed } from 'vue'
 import { useScales, useChords } from './musicTheory.js'
 import { clampToMidiRange, quantizeToScale as _quantizeSingle } from './musicUtils.js'
 
@@ -53,7 +52,6 @@ export function useNoteUtils() {
 
 export function useMusic() {
   const { scales, getRandomScale, getScale, generateScaleNotes } = useScales()
-  const { midiToNoteName, noteNameToMidi } = useNoteUtils()
 
   // Funciones para escalas consonantes y disonantes
   const getConsonantScale = (currentScale = null, recentScales = []) => {
