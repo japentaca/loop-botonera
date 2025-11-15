@@ -67,139 +67,39 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
  */
 export function generateScalePattern({ length, scale, baseNote, noteRange, density, options = {} }) {
   const startTime = performance.now();
-
-  // keep density handling for compatibility
   density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
-
-  // Generate possible notes within range
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
   if (possibleNotes.length === 0) {
-    DEBUG && console.log('generateScalePattern failed: no possible notes in range');
     return new Array(length).fill(null);
   }
-
-  // Sort notes so stepping is predictable
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b);
   const timingMode = options.densityTiming ?? 'random';
   const positions = computePositions({ length, density, mode: timingMode, startOffset: options.startOffset ?? 0, allowZero: true });
   const placements = positions.length;
   if (placements === 0) return new Array(length).fill(null);
-  const override = (typeof window !== 'undefined' && window.__DBG && window.__DBG.__genParams) ? window.__DBG.__genParams : null;
-  const mid = Math.floor(sortedNotes.length / 2);
-  const hasOverrideBias = typeof override?.centerBias === 'number' && isFinite(override.centerBias);
-  const bias = hasOverrideBias ? Math.max(-0.6, Math.min(0.6, override.centerBias)) : null;
-  let leadIdx = hasOverrideBias
-    ? Math.max(0, Math.min(sortedNotes.length - 1, mid + Math.round(bias * Math.floor(sortedNotes.length / 2))))
-    : Math.floor(Math.random() * sortedNotes.length);
-  const maxTail = typeof options.maxTail === 'number' && isFinite(options.maxTail) ? Math.max(0, Math.floor(options.maxTail)) : 5;
-  const tailLength = typeof override?.tailLength === 'number' && isFinite(override.tailLength)
-    ? Math.max(0, Math.min(override.tailLength, maxTail))
-    : Math.max(3, Math.floor(Math.random() * (maxTail + 1)));
-  const directionMode = (override?.directionMode === 'alternate' || override?.directionMode === 'random')
-    ? override.directionMode
-    : 'random';
-  const leadAdvance = typeof override?.leadAdvance === 'number' && isFinite(override.leadAdvance)
-    ? Math.max(1, Math.min(2, Math.floor(override.leadAdvance)))
-    : 2;
-
-  // Build a full-length scale stream (one note per step) so density only controls placement
-  // and does not truncate or mute the generated scale. We'll generate notes until we
-  // have 'length' notes and then place them into the pattern at the positions selected by density.
-  const seqFull = [];
-  if (sortedNotes.length === 1) {
-    while (seqFull.length < length) seqFull.push(sortedNotes[0]);
-  } else {
-    let currLead = leadIdx;
-    let currStep = Math.random() < 0.5 ? 1 : -1;
-    let cycles = 0;
-
-    while (seqFull.length < length) {
-      seqFull.push(sortedNotes[currLead]);
-      for (let t = 1; t <= tailLength && seqFull.length < length; t++) {
-        const tailIdx = currLead + currStep * t;
-        if (tailIdx < 0 || tailIdx >= sortedNotes.length) break;
-        seqFull.push(sortedNotes[tailIdx]);
-      }
-      let nextLead = currLead + currStep * leadAdvance;
-      if (nextLead < 0 || nextLead >= sortedNotes.length) {
-        currStep = -currStep;
-        nextLead = currLead + currStep * leadAdvance;
-        if (nextLead < 0) nextLead = 0;
-        if (nextLead >= sortedNotes.length) nextLead = sortedNotes.length - 1;
-      }
-      currLead = nextLead;
-      cycles++;
-      if (directionMode === 'random') {
-        if (Math.random() < 0.1) currStep = Math.random() < 0.5 ? 1 : -1;
-      }
-    }
-  }
-
+  const dir = Math.random() < 0.5 ? 'ascending' : 'descending';
+  const ts = 1 + Math.floor(Math.random() * 4);
+  const startIdx = Math.floor(Math.random() * sortedNotes.length);
+  const moves = Math.max(1, Math.ceil(placements / (1 + ts)));
+  const seqObj = generateHeadTailScaleSequence({ scaleNotes: sortedNotes, startIndex: startIdx, moves, direction: dir, tailSize: ts });
+  const seq = seqObj.sequence;
   const pattern = new Array(length).fill(null);
   const mapping = options.positionMapping ?? 'sequential';
   if (mapping === 'sequential') {
     const sortedPos = [...positions].sort((a, b) => a - b);
     for (let k = 0; k < sortedPos.length; k++) {
-      const idx = Math.floor((k * seqFull.length) / sortedPos.length);
-      pattern[sortedPos[k]] = seqFull[idx];
+      if (k >= seq.length) break;
+      pattern[sortedPos[k]] = seq[k];
     }
   } else {
     for (let i = 0; i < positions.length; i++) {
       const pos = positions[i];
-      pattern[pos] = seqFull[pos % seqFull.length];
+      pattern[pos] = seq.length ? seq[i % seq.length] : null;
     }
   }
-
-  const distinctPlaced = new Set(pattern.filter(n => typeof n === 'number'));
-  const minDistinct = Math.max(5, Math.ceil(placements / 4));
-  if (distinctPlaced.size < minDistinct) {
-    const forcedTail = maxTail;
-    const forcedAdvance = 2;
-    const sortedPos = [...positions].sort((a, b) => a - b);
-    const seq2 = [];
-    let p = leadIdx;
-    let d = Math.random() < 0.5 ? 1 : -1;
-    while (seq2.length < length) {
-      seq2.push(sortedNotes[p]);
-      for (let t = 1; t <= forcedTail && seq2.length < length; t++) {
-        const ti = p + d * t;
-        if (ti < 0 || ti >= sortedNotes.length) break;
-        seq2.push(sortedNotes[ti]);
-      }
-      let nx = p + d * forcedAdvance;
-      if (nx < 0 || nx >= sortedNotes.length) {
-        d = -d;
-        nx = p + d * forcedAdvance;
-        if (nx < 0) nx = 0;
-        if (nx >= sortedNotes.length) nx = sortedNotes.length - 1;
-      }
-      p = nx;
-    }
-    for (let k = 0; k < sortedPos.length; k++) {
-      const idx = Math.floor((k * seq2.length) / sortedPos.length);
-      pattern[sortedPos[k]] = seq2[idx];
-    }
-  }
-
   const elapsed = performance.now() - startTime;
-  const info = {
-    loopId: options.loopId ?? null,
-    patternType: 'scale',
-    length,
-    range: { min: noteRange.min, max: noteRange.max },
-    baseNote,
-    density,
-    tailLength,
-    directionMode,
-    leadAdvance,
-    centerBias: bias,
-  };
   const oob = pattern.filter(n => typeof n === 'number' && (n < noteRange.min || n > noteRange.max)).length;
-  if (typeof options.log === 'function') options.log({ ...info, oob });
-  if (typeof window !== 'undefined' && window.__LOOP_DEBUG) {
-    const preview = seqFull.slice(0, Math.min(16, seqFull.length));
-    console.log('[ScaleGen Preview]', preview);
-  }
+  if (typeof options.log === 'function') options.log({ loopId: options.loopId ?? null, patternType: 'scale', length, range: { min: noteRange.min, max: noteRange.max }, baseNote, density, direction: dir, tailSize: ts, movesGenerated: seqObj.steps.length, oob, timeMs: Number(elapsed.toFixed(1)) });
   return pattern;
 }
 
@@ -360,4 +260,48 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
   // default: euclidean
   const raw = euclideanRhythm(count, length);
   return raw.map(p => (p + startOffset) % length);
+}
+
+export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, direction, tailSize }) {
+  const arr = Array.isArray(scaleNotes) ? scaleNotes.slice().sort((a, b) => a - b) : [];
+  const n = arr.length;
+  if (n === 0) return { sequence: [], steps: [], direction: 'ascending', tailSize: 1 };
+  const dir = direction === 'descending' ? 'descending' : (direction === 'ascending' ? 'ascending' : (Math.random() < 0.5 ? 'ascending' : 'descending'));
+  const ts = typeof tailSize === 'number' && isFinite(tailSize) ? Math.max(1, Math.min(4, Math.floor(tailSize))) : (1 + Math.floor(Math.random() * 4));
+  let head = Math.max(0, Math.min(n - 1, Math.floor(startIndex ?? 0)));
+  let remaining = Math.max(0, Math.floor(moves ?? 0));
+  const seq = [];
+  const steps = [];
+  while (remaining > 0) {
+    const maxJ = computeMaxJump(n, head, dir, ts);
+    if (maxJ < 1) break;
+    const j = 1 + Math.floor(Math.random() * maxJ);
+    head = dir === 'ascending' ? head + j : head - j;
+    const headNote = arr[head];
+    seq.push(headNote);
+    const tail = [];
+    for (let k = 1; k <= ts; k++) {
+      const ti = dir === 'ascending' ? head - j * k : head + j * k;
+      if (ti < 0 || ti >= n) break;
+      tail.push({ index: ti, note: arr[ti], jump: dir === 'ascending' ? -j : j });
+      seq.push(arr[ti]);
+    }
+    steps.push({ headIndex: head, headJump: dir === 'ascending' ? j : -j, tail });
+    remaining--;
+  }
+  return { sequence: seq, steps, direction: dir, tailSize: ts };
+}
+
+function computeMaxJump(n, headIdx, dir, ts) {
+  if (dir === 'ascending') {
+    const headBound = (n - 1) - headIdx;
+    if (ts <= 1) return Math.max(0, headBound);
+    const tailBound = Math.floor(headIdx / (ts - 1));
+    return Math.max(0, Math.min(headBound, tailBound));
+  } else {
+    const headBound = headIdx;
+    if (ts <= 1) return Math.max(0, headBound);
+    const tailBound = Math.floor(((n - 1) - headIdx) / (ts - 1));
+    return Math.max(0, Math.min(headBound, tailBound));
+  }
 }
