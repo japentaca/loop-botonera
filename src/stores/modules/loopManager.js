@@ -68,6 +68,23 @@ export const useLoopManager = (notesMatrix = null) => {
     // Delta de transposición (en semitonos) con cuantización posterior a la escala
     const transposeDelta = options.transposeDelta ?? ([2, 3, 4][Math.floor(Math.random() * 3)])
 
+    // Build allowed notes for responder within its note range
+    const meta = notesMatrix && notesMatrix.loopMetadata ? notesMatrix.loopMetadata[responderLoop.id] : null
+    const minRange = meta && typeof meta.noteRangeMin === 'number' ? meta.noteRangeMin : 24
+    const maxRange = meta && typeof meta.noteRangeMax === 'number' ? meta.noteRangeMax : 96
+    const allowedNotes = (() => {
+      const arr = []
+      const minOct = Math.floor((minRange - baseNote) / 12)
+      const maxOct = Math.floor((maxRange - baseNote) / 12)
+      for (let oct = minOct; oct <= maxOct; oct++) {
+        for (const interval of scale) {
+          const cand = baseNote + interval + (oct * 12)
+          if (cand >= minRange && cand <= maxRange) arr.push(cand)
+        }
+      }
+      return arr.sort((a, b) => a - b)
+    })()
+
     const transformNote = (note, idx) => {
       let transformed = note
       switch (strategy) {
@@ -91,7 +108,18 @@ export const useLoopManager = (notesMatrix = null) => {
       }
       transformed = clampToMidiRange(transformed)
       const quantized = quantizeToScale(transformed, scale, baseNote)
-      return quantized
+      if (typeof quantized !== 'number' || allowedNotes.length === 0) return quantized
+      // Snap to nearest allowed note inside responder's range
+      let nearest = allowedNotes[0]
+      let bestDist = Math.abs(quantized - nearest)
+      for (let i = 1; i < allowedNotes.length; i++) {
+        const d = Math.abs(quantized - allowedNotes[i])
+        if (d < bestDist) {
+          bestDist = d
+          nearest = allowedNotes[i]
+        }
+      }
+      return nearest
     }
 
     // Construir la secuencia transformada
@@ -104,7 +132,6 @@ export const useLoopManager = (notesMatrix = null) => {
       const src = seq.length ? seq[i % seq.length] : null
       return transformNote(src, i)
     })
-
     return result
   }
 
