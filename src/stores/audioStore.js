@@ -101,21 +101,9 @@ export const useAudioStore = defineStore('audio', () => {
         const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loop.id]
         if (meta && meta.generationMode === 'locked') continue
 
-        // Persist density in metadata (clamped by notesMatrix)
+        // Persist density in metadata only (no regeneration here)
         if (notesMatrix.updateLoopMetadata) {
           notesMatrix.updateLoopMetadata(loop.id, { density })
-        }
-
-        // Prefer melodic regeneration only when loop metadata explicitly requests it
-        if (meta && meta.generationMode === 'melodic' && typeof melodicGenerator?.regenerateLoop === 'function') {
-          try {
-            melodicGenerator.regenerateLoop(loop.id, audioEngine.currentPulse.value)
-          } catch (e) {
-            notesMatrix.generateLoopNotes(loop.id, density)
-          }
-        } else {
-          // Legacy generation path (safe default)
-          notesMatrix.generateLoopNotes(loop.id, density)
         }
       }
     } catch (err) {

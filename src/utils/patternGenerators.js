@@ -87,8 +87,9 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
   const placements = positions.length;
   if (placements === 0) return new Array(length).fill(null);
 
-  // Choose a lead note index randomly
-  let leadIdx = Math.floor(Math.random() * sortedNotes.length);
+  const mid = Math.floor(sortedNotes.length / 2);
+  const spread = Math.max(1, Math.floor(sortedNotes.length * 0.25));
+  let leadIdx = Math.max(0, Math.min(sortedNotes.length - 1, mid + Math.floor(Math.random() * (2 * spread + 1)) - spread));
   const leadNote = sortedNotes[leadIdx];
 
 
@@ -113,7 +114,8 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
     while (seqFull.length < length) seqFull.push(sortedNotes[0]);
   } else {
     let currLead = leadIdx;
-    let currStep = step; // will bounce at extremes
+    let currStep = step;
+    let toggle = true;
 
     while (seqFull.length < length) {
       // Add lead
@@ -127,26 +129,24 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
         seqFull.push(sortedNotes[tailIdx]);
       }
 
-      // Advance lead index by one step so successive groups overlap as in your example
       let nextLead = currLead + currStep;
       if (nextLead < 0 || nextLead >= sortedNotes.length) {
-        // reverse direction at boundaries
         currStep = -currStep;
         nextLead = currLead + currStep;
         if (nextLead < 0) nextLead = 0;
         if (nextLead >= sortedNotes.length) nextLead = sortedNotes.length - 1;
       }
       currLead = nextLead;
+      if (toggle) currStep = -currStep;
+      toggle = !toggle;
     }
   }
 
   // Build the pattern: place notes from the full scale stream into selected positions
   const pattern = new Array(length).fill(null);
-  const posSet = new Set(positions);
-  for (let i = 0; i < length; i++) {
-    if (posSet.has(i)) {
-      pattern[i] = seqFull[i];
-    }
+  const sortedPos = [...positions].sort((a, b) => a - b);
+  for (let k = 0; k < sortedPos.length; k++) {
+    pattern[sortedPos[k]] = seqFull[k];
   }
 
   const elapsed = performance.now() - startTime;
