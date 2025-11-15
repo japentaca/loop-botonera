@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useScales, useMusic } from '../composables/useMusic'
 import { useNotesMatrix } from '../composables/useNotesMatrix'
-import { useMelodicGenerator } from '../composables/useMelodicGenerator'
 
 // Importar los nuevos módulos especializados
 import { useAudioEngine } from './modules/audioEngine'
@@ -54,10 +53,9 @@ export const useAudioStore = defineStore('audio', () => {
     energyManager.updateNumLoops(loopManager.NUM_LOOPS)
   }
 
-  // Inicializar generador melódico con acceso a la matriz
-  const melodicGenerator = useMelodicGenerator(notesMatrix)
+  
 
-  const evolutionSystem = useEvolutionSystem(notesMatrix, melodicGenerator)
+  const evolutionSystem = useEvolutionSystem(notesMatrix)
 
   // Performance optimization: maintain cache of active loop IDs
   // Updated whenever a loop's active state changes
@@ -411,8 +409,8 @@ export const useAudioStore = defineStore('audio', () => {
       getNotes: (id) => notesMatrix.getLoopNotes(id),
       setMeta: (id, updates) => notesMatrix.updateLoopMetadata(id, updates),
       loops: loopManager.loops,
-      selectPatternType: (id) => melodicGenerator.selectPatternType ? melodicGenerator.selectPatternType(id) : null,
-      regenerate: (id) => melodicGenerator.regenerateLoop(id, audioEngine.currentPulse.value),
+      selectPatternType: (id) => notesMatrix.selectPatternType ? notesMatrix.selectPatternType(id) : null,
+      regenerate: (id) => notesMatrix.generateLoopNotes(id),
       setGenParams: (params) => { window.__DBG.__genParams = { ...params } },
       clearGenParams: () => { delete window.__DBG.__genParams },
       getGenParams: () => window.__DBG.__genParams || null
@@ -613,10 +611,15 @@ export const useAudioStore = defineStore('audio', () => {
 
       const start = performance.now()
       if (doGlobalRegeneration) {
-        melodicGenerator.regenerateAllLoops(audioEngine.currentPulse.value)
+        for (let loopId = 0; loopId < notesMatrix.MAX_LOOPS; loopId++) {
+          const meta = notesMatrix.loopMetadata[loopId]
+          if (meta && meta.isActive) {
+            notesMatrix.generateLoopNotes(loopId)
+          }
+        }
       } else {
         regenIntents.forEach(i => {
-          melodicGenerator.regenerateLoop(i.loopId, audioEngine.currentPulse.value)
+          notesMatrix.generateLoopNotes(i.loopId)
         })
       }
 

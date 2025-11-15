@@ -38,14 +38,9 @@ export const useLoopManager = (notesMatrix = null) => {
   // Removed legacy local generators to avoid duplication; use melodic generator delegation instead
 
   const generateLoopMelodyFor = (loopId, options = {}) => {
-    if (!notesMatrix || !melodicGenerator || typeof melodicGenerator.generateLoopMelody !== 'function') {
-      return []
-    }
-    const notes = melodicGenerator.generateLoopMelody(loopId, options)
-    if (Array.isArray(notes) && typeof notesMatrix.setLoopNotes === 'function') {
-      notesMatrix.setLoopNotes(loopId, notes)
-    }
-    return notes || []
+    if (!notesMatrix) return []
+    notesMatrix.generateLoopNotes(loopId, options)
+    return notesMatrix.getLoopNotes(loopId)
   }
 
   // Generar una respuesta derivada de un loop "call"

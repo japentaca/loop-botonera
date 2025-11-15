@@ -37,9 +37,11 @@ export function generateEuclideanPattern(loopId, options = {}) {
   const density = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3)
   const currentPulse = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
   const startOffset = options.startOffset ?? (meta.startOffset ?? (length > 0 ? (currentPulse % length) : 0))
-  const timing = options.timing ?? 'euclidean'
+  const sel1 = chooseTimingAndJitter(loopId, length, density, options)
+  const timing = sel1.timingMode ?? 'euclidean'
+  const jitter = sel1.jitter ?? 0
 
-  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true })
+  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true, jitter })
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
   possibleNotes.sort((a, b) => a - b)
   const pattern = new Array(length).fill(null)
@@ -86,14 +88,16 @@ export function generateScalePattern(loopId, options = {}) {
   const density = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3)
   const currentPulse = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
   const startOffset = options.startOffset ?? (meta.startOffset ?? (length > 0 ? (currentPulse % length) : 0))
-  const timingMode = options.densityTiming ?? 'even'
+  const sel2 = chooseTimingAndJitter(loopId, length, density, options)
+  const timingMode = options.densityTiming ?? (sel2.timingMode ?? 'even')
+  const jitter2 = sel2.jitter ?? 0
 
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
   if (possibleNotes.length === 0) {
     return new Array(length).fill(null)
   }
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
-  const positions = computePositions({ length, density, mode: timingMode, startOffset, allowZero: true })
+  const positions = computePositions({ length, density, mode: timingMode, startOffset, allowZero: true, jitter: jitter2 })
   const placements = positions.length
   if (placements === 0) return new Array(length).fill(null)
 
@@ -156,7 +160,10 @@ export function generateRandomPattern(loopId, options = {}) {
     return new Array(length).fill(null)
   }
 
-  const positions = computePositions({ length, density, mode: options.timing ?? 'random', startOffset, allowZero: true })
+  const sel3 = chooseTimingAndJitter(loopId, length, density, options)
+  const mode3 = sel3.timingMode ?? (options.timing ?? 'random')
+  const jitter3 = sel3.jitter ?? 0
+  const positions = computePositions({ length, density, mode: mode3, startOffset, allowZero: true, jitter: jitter3 })
   const noteCount = positions.length
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
   const notesToPlace = []
@@ -240,7 +247,7 @@ function euclideanRhythm(pulses, steps) {
  * mode: 'euclidean' | 'even' | 'random' | 'fillAll'
  * allowZero: when true, density==0 yields zero positions instead of forcing 1
  */
-function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false }) {
+function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false, jitter = 0 }) {
   const positions = [];
   const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0));
 
@@ -264,7 +271,6 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     return positions;
   }
 
-  // Compute count based on density. Use Math.round for more intuitive mapping but allow zero.
   let count = Math.round(length * d);
   if (!allowZero) count = Math.max(1, count);
 
@@ -283,9 +289,89 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     return Array.from(set).map(p => (p + startOffset) % length);
   }
 
+  if (mode === 'bernoulli') {
+    for (let i = 0; i < length; i++) {
+      if (Math.random() < d) positions.push(i);
+    }
+    if (positions.length === 0 && !allowZero && length > 0) positions.push(startOffset % length);
+    return positions.map(p => (p + startOffset) % length);
+  }
+
+  if (mode === 'poisson') {
+    const lambda = Math.max(1e-6, d);
+    let t = 0;
+    while (t < length) {
+      const u = Math.random();
+      const gap = Math.max(0, Math.floor(-Math.log(1 - u) / lambda));
+      t += gap + 1;
+      if (t < length) positions.push(t);
+    }
+    if (positions.length === 0 && !allowZero && length > 0) positions.push(startOffset % length);
+    return positions.map(p => (p + startOffset) % length);
+  }
+
+  if (mode === 'geometric') {
+    const p = Math.max(1e-6, d);
+    let t = 0;
+    while (t < length) {
+      const u = Math.random();
+      const gap = Math.max(0, Math.floor(Math.log(1 - u) / Math.log(1 - p)));
+      t += gap + 1;
+      if (t < length) positions.push(t);
+    }
+    if (positions.length === 0 && !allowZero && length > 0) positions.push(startOffset % length);
+    return positions.map(p => (p + startOffset) % length);
+  }
+
+  if (mode === 'markov') {
+    let state = 0;
+    for (let i = 0; i < length; i++) {
+      if (state === 0) {
+        if (Math.random() < d) state = 1; else state = 0;
+      } else {
+        if (Math.random() < (1 - d)) state = 0; else state = 1;
+      }
+      if (state === 1) positions.push(i);
+    }
+    if (positions.length === 0 && !allowZero && length > 0) positions.push(startOffset % length);
+    return positions.map(p => (p + startOffset) % length);
+  }
+
   // default: euclidean
   const raw = euclideanRhythm(count, length);
+  if (jitter && jitter > 0) {
+    const j = Math.floor(jitter);
+    for (let i = 0; i < raw.length; i++) {
+      const r = (raw[i] + (Math.floor(Math.random() * (2 * j + 1)) - j)) % length;
+      const rp = r < 0 ? r + length : r;
+      positions.push(rp);
+    }
+    return positions.map(p => (p + startOffset) % length);
+  }
   return raw.map(p => (p + startOffset) % length);
+}
+
+function stableHash(input) {
+  const s = String(input ?? '')
+  let h = 0
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) >>> 0
+  }
+  return h
+}
+
+function chooseTimingAndJitter(loopId, length, density, options) {
+  let mode = options.timing ?? options.densityTiming
+  let j = options.jitter
+  if (!mode) {
+    const modes = ['random', 'bernoulli', 'poisson', 'geometric', 'markov', 'euclidean']
+    mode = modes[Math.floor(Math.random() * modes.length)]
+  }
+  if (typeof j !== 'number' || isNaN(j)) {
+    const maxJ = Math.max(0, Math.floor(length / 6))
+    j = maxJ > 0 ? Math.floor(Math.random() * (maxJ + 1)) : 0
+  }
+  return { timingMode: mode, jitter: j }
 }
 
 export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, direction, tailSize }) {
