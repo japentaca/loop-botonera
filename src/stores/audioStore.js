@@ -399,6 +399,18 @@ export const useAudioStore = defineStore('audio', () => {
     notifyPresetChanges()
   }
 
+  if (typeof window !== 'undefined') {
+    window.__LOOP_DEBUG = true
+    window.__DBG = {
+      getMeta: (id) => notesMatrix.loopMetadata[id],
+      getNotes: (id) => notesMatrix.getLoopNotes(id),
+      setMeta: (id, updates) => notesMatrix.updateLoopMetadata(id, updates),
+      loops: loopManager.loops,
+      selectPatternType: (id) => melodicGenerator.selectPatternType ? melodicGenerator.selectPatternType(id) : null,
+      regenerate: (id) => melodicGenerator.regenerateLoop(id, audioEngine.currentPulse.value)
+    }
+  }
+
   // Actualizar división del delay
   const updateDelayDivision = (division) => {
     audioEngine.updateDelayDivision(division)
