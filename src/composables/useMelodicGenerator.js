@@ -11,7 +11,11 @@ export function useMelodicGenerator(notesMatrix) {
   const { getScale } = useScales()
   const audioStore = useAudioStore()
 
-  const melLog = (...args) => console.log('[MelGen]', ...args)
+  const melLog = (...args) => {
+    if (typeof window !== 'undefined' && window.__LOOP_DEBUG) {
+      console.log('[MelGen]', ...args)
+    }
+  }
 
   /**
    * Generate a melody for a specific loop using melodic generation

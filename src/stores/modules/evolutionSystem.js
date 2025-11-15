@@ -82,14 +82,15 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     console.log(`[Evolution] ensureLoopHasNotes: loop=${loopId} set note=${note}`)
   }
 
+  const createRegenerateIntent = (loopId, options = {}) => ({ type: 'regenerate', loopId, options })
+  const createMetadataUpdateIntent = (loopId, updates = {}) => ({ type: 'metadataUpdate', loopId, updates })
+  const createQuantizeIntent = (loopId) => ({ type: 'quantize', loopId })
+
   const mutateLoopRhythm = (loop, globalScaleIntervals, intensity = evolutionIntensity.value) => {
-    // Delegated rhythm mutation: let melodicGenerator handle any changes.
-    if (!melodicGenerator) return false
-    console.log(`[Evolution] mutateLoopRhythm: delegating regenerateLoop for loop=${loop.id} intensity=${intensity}`)
-    melodicGenerator.regenerateLoop(loop.id, { intensity })
-    // ensure at least one note exists
-    ensureLoopHasNotes(loop.id, globalScaleIntervals)
-    return true
+    const intents = []
+    intents.push(createRegenerateIntent(loop.id, { intensity }))
+    intents.push(createMetadataUpdateIntent(loop.id, { ensureNotes: true, globalScaleIntervals }))
+    return intents
   }
 
   const adjustLoopDensity = (loop, targetDensity, globalScaleIntervals) => {
@@ -144,17 +145,10 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   // Generar variación de notas/melodía
   const evolveNotes = (loopId, currentNotes, scaleIntervals, intensity = evolutionIntensity.value) => {
-    // Delegated note evolution: prefer melodicGenerator to produce coherent melodies.
-    // If melodicGenerator cannot handle this, return the unchanged notes.
-    if (melodicGenerator && typeof melodicGenerator.regenerateLoop === 'function') {
-      console.log(`[Evolution] evolveNotes: delegating regenerateLoop for loop=${loopId} intensity=${intensity}`)
-      melodicGenerator.regenerateLoop(loopId, { intensity })
-      // After regeneration, read notes back from matrix if available
-      const updated = notesMatrix.getLoopNotes(loopId) || currentNotes
-      console.log(`[Evolution] evolveNotes: loop=${loopId} returned ${updated ? updated.length : 0} notes`)
-      return updated
-    }
-    return currentNotes
+    const intents = []
+    intents.push(createRegenerateIntent(loopId, { intensity }))
+    intents.push(createQuantizeIntent(loopId))
+    return intents
   }
 
 
@@ -182,70 +176,35 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   // Evolucionar un loop específico
   const evolveLoop = (loop, globalScaleIntervals, options = {}) => {
-    // Comprobar propiedad de bloqueo del loop (generationMode === 'locked')
+    const intents = []
     const meta = notesMatrix.loopMetadata?.[loop.id]
-
-    // Si el loop NO está bloqueado, regenerar patrón y NO aplicar evolución
     if (meta && meta.generationMode !== 'locked') {
-      if (melodicGenerator) {
-        console.log(`[Evolution] evolveLoop: loop=${loop.id} not locked -> regenerateLoop`)
-        melodicGenerator.regenerateLoop(loop.id)
-      } else {
-        console.log(`[Evolution] evolveLoop: loop=${loop.id} not locked but no melodicGenerator present`)
-      }
-      // No aplicar evolución (patrón, notas ni creativo) en loops no bloqueados
-      return loop
+      intents.push(createRegenerateIntent(loop.id, { intensity: evolutionIntensity.value, types: evolutionTypes.value, options }))
+      intents.push(createMetadataUpdateIntent(loop.id, { ensureNotes: true, globalScaleIntervals }))
+      return intents
     }
-
-    // Loop bloqueado: delegate full regeneration to melodicGenerator when available
-    if (melodicGenerator && typeof melodicGenerator.regenerateLoop === 'function') {
-      console.log(`[Evolution] evolveLoop: loop=${loop.id} locked -> delegate regenerateLoop intensity=${evolutionIntensity.value}`)
-      melodicGenerator.regenerateLoop(loop.id, { intensity: evolutionIntensity.value, types: evolutionTypes.value, options })
-      // melodicGenerator is expected to update notesMatrix and loop state
-      if (creativeModeEnabled.value && typeof melodicGenerator.applyCreativeEvolution === 'function') {
-        console.log(`[Evolution] evolveLoop: loop=${loop.id} applying creative evolution via melodicGenerator`)
-        melodicGenerator.applyCreativeEvolution(loop.id)
-      }
-      return loop
+    intents.push(createRegenerateIntent(loop.id, { intensity: evolutionIntensity.value, types: evolutionTypes.value, options }))
+    intents.push(createQuantizeIntent(loop.id))
+    if (creativeModeEnabled.value) {
+      intents.push(createMetadataUpdateIntent(loop.id, { creative: true }))
     }
-
-    // Fallback: if melodicGenerator not provided, keep original loop unchanged
-    return loop
+    return intents
   }
 
   // Evolucionar múltiples loops de forma coordinada
   const evolveMultipleLoops = (loops, globalScaleIntervals, options = {}) => {
     const activeLoops = loops.filter(loop => loop.isActive)
-    if (activeLoops.length === 0) return loops
-
-    // OPTIMIZATION: Use batch mode to defer reactivity triggers
-    if (notesMatrix && notesMatrix.beginBatch) {
-      notesMatrix.beginBatch()
-    }
-
-    try {
-      // Seleccionar loops para evolucionar basado en la intensidad
-      const loopsToEvolve = Math.max(1, Math.floor(activeLoops.length * evolutionIntensity.value))
-      const selectedLoops = activeLoops
-        .sort(() => Math.random() - 0.5)
-        .slice(0, loopsToEvolve)
-
-      console.log(`[Evolution] evolveMultipleLoops: selected ${selectedLoops.length}/${activeLoops.length} loops for evolution`)
-      const result = loops.map(loop => {
-        if (selectedLoops.includes(loop)) {
-          console.log(`[Evolution] evolveMultipleLoops: evolving loop=${loop.id}`)
-          return evolveLoop(loop, globalScaleIntervals, options)
-        }
-        return loop
-      })
-
-      return result
-    } finally {
-      // OPTIMIZATION: Trigger single reactivity update after all mutations
-      if (notesMatrix && notesMatrix.endBatch) {
-        notesMatrix.endBatch()
-      }
-    }
+    if (activeLoops.length === 0) return []
+    const loopsToEvolve = Math.max(1, Math.floor(activeLoops.length * evolutionIntensity.value))
+    const selectedLoops = activeLoops
+      .sort(() => Math.random() - 0.5)
+      .slice(0, loopsToEvolve)
+    const intents = []
+    selectedLoops.forEach(loop => {
+      const loopIntents = evolveLoop(loop, globalScaleIntervals, options)
+      loopIntents.forEach(i => intents.push(i))
+    })
+    return intents
   }
 
   // Verificar si es tiempo de evolucionar

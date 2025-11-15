@@ -167,6 +167,9 @@ export const useAudioStore = defineStore('audio', () => {
         loopManager.playLoopNote(loop, audioEngine, step, time)
       }
     })
+    if (autoEvolve.value && (audioEngine.currentPulse.value % 16 === 0)) {
+      checkEvolve()
+    }
   }
 
   // Inicialización de audio
@@ -376,6 +379,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Actualizar escala musical
   const updateScale = (newScale) => {
+    if (newScale === currentScale.value) return
     const scale = useScales().getScale(newScale)
     if (!scale) {
       console.error(`[updateScale] Invalid scale name: "${newScale}"`)
@@ -404,7 +408,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   if (typeof window !== 'undefined') {
-    window.__LOOP_DEBUG = true
+    window.__LOOP_DEBUG = false
     window.__DBG = {
       getMeta: (id) => notesMatrix.loopMetadata[id],
       getNotes: (id) => notesMatrix.getLoopNotes(id),
@@ -593,28 +597,44 @@ export const useAudioStore = defineStore('audio', () => {
         }
       }
 
-      // Usar el sistema de evolución para evolucionar loops
-      // Pass the global scale intervals instead of availableScales
       const currentScaleIntervals = useScales().getScale(currentScale.value)
-
-      // Excluir reverb y delay de la evolución cuando se están aplicando cambios de estilo
       const isStyleChange = momentumEnabled.value || callResponseEnabled.value || tensionReleaseMode.value
       const evolutionOptions = isStyleChange ? { excludeReverb: true, excludeDelay: true } : {}
+      const intents = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, currentScaleIntervals, evolutionOptions)
 
-      const evolvedLoops = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, currentScaleIntervals, evolutionOptions)
+      const activeLoopsCount = loopManager.loops.value.filter(l => l.isActive).length
+      const regenIntents = intents.filter(i => i.type === 'regenerate')
+      const doGlobalRegeneration = regenIntents.length > Math.floor(activeLoopsCount / 2)
+      const metadataUpdatesByLoop = {}
+      intents.forEach(i => {
+        if (i.type === 'metadataUpdate') {
+          const k = i.loopId
+          const prev = metadataUpdatesByLoop[k] || {}
+          metadataUpdatesByLoop[k] = { ...prev, ...i.updates }
+        }
+      })
 
-      // Aplicar call & response si está activado
+      const start = performance.now()
+      if (doGlobalRegeneration) {
+        melodicGenerator.regenerateAllLoops(audioEngine.currentPulse.value)
+      } else {
+        regenIntents.forEach(i => {
+          melodicGenerator.regenerateLoop(i.loopId, audioEngine.currentPulse.value)
+        })
+      }
+
+      Object.keys(metadataUpdatesByLoop).forEach(loopId => {
+        notesMatrix.updateLoopMetadata(Number(loopId), metadataUpdatesByLoop[loopId])
+      })
+
+      intents.filter(i => i.type === 'quantize').forEach(i => {
+        notesMatrix.quantizeLoop(i.loopId, currentScale.value)
+      })
+
       if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
         const loopsToReharmonize = selectRandomLoops(Math.ceil(evolutionSystem.evolutionIntensity.value * 5))
         applyCallResponse(loopsToReharmonize)
       }
-
-      // Actualizar loops con las evoluciones
-      evolvedLoops.forEach((evolvedLoop, index) => {
-        if (evolvedLoop !== loopManager.loops.value[index]) {
-          Object.assign(loopManager.loops.value[index], evolvedLoop)
-        }
-      })
 
       // Aplicar gestión de energía después de la evolución
       energyManager.checkAndBalanceEnergy(loopManager.loops.value)
@@ -625,6 +645,8 @@ export const useAudioStore = defineStore('audio', () => {
 
       const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
       const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
+      const elapsed = performance.now() - start
+      console.log(`Regeneration plan applied intents=${intents.length} regen=${doGlobalRegeneration ? 'global' : regenIntents.length} time=${elapsed.toFixed(1)}ms${modeInfo}${tensionInfo}`)
     } finally {
       // Finalizar modo batch y guardar una sola vez si no está en autoEvolve
       if (presetStore && presetStore.endBatchMode) {
@@ -636,7 +658,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   const checkEvolve = () => {
     if (!autoEvolve.value || !audioEngine.isPlaying.value) return
-
+    if ((audioEngine.currentPulse.value % 16) !== 0) return
     // Verificar evolución basada en compases musicales
     const currentMeasure = Math.floor(audioEngine.currentPulse.value / 16)
     const targetMeasure = Math.floor(nextEvolveMeasure.value / 16)
@@ -664,11 +686,7 @@ export const useAudioStore = defineStore('audio', () => {
     evolveStartTime.value = Date.now()
     momentumLevel.value = 0
 
-    evolveIntervalId = setInterval(() => {
-      if (audioEngine.isPlaying.value) {
-        checkEvolve()
-      }
-    }, 100)
+    evolveIntervalId = null
   }
 
   const stopAutoEvolve = async () => {
@@ -823,7 +841,6 @@ export const useAudioStore = defineStore('audio', () => {
     updateLoopParam,
     updateLoopSynth,
     regenerateLoop,
-    regenerateAllLoops,
     regenerateLoopMelody,
     regenerateAllMelodies,
     logNotesMatrix,
