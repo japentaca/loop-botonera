@@ -303,9 +303,9 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
   const evolveMatrixLoop = (loopId, notesMatrix, intensity = evolutionIntensity.value) => {
     // Delegated matrix evolution: let melodicGenerator or notesMatrix handle mutations.
     if (!evolutionTypes.value.notes) return false
-    if (melodicGenerator && typeof melodicGenerator.regenerateLoop === 'function') {
-      console.log(`[Evolution] evolveMatrixLoop: delegating regenerateLoop for loop=${loopId} intensity=${intensity}`)
-      melodicGenerator.regenerateLoop(loopId, { intensity })
+    if (notesMatrix && typeof notesMatrix.generateLoopNotes === 'function') {
+      console.log(`[Evolution] evolveMatrixLoop: regenerating via notesMatrix for loop=${loopId} intensity=${intensity}`)
+      notesMatrix.generateLoopNotes(loopId)
       return true
     }
 

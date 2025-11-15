@@ -11,7 +11,7 @@
         </Button>
 
         <Button @click="regenerateAllLoops" class="regen-button-compact" icon="pi pi-refresh" label="Regenerar"
-          size="small" :disabled="!audioStore.audioInitialized" />
+          size="small" />
 
         <Button @click="resetSync" class="sync-button-compact" icon="pi pi-sync" label="Sincronizar"
           size="small" title="Resetear contador para re-sincronizar los loops"
@@ -264,7 +264,7 @@
   }
 
   const regenerateAllLoops = () => {
-    audioStore.regenerateAllMelodies()
+    audioStore.regenerateAllLoops()
   }
 
   const resetSync = () => {

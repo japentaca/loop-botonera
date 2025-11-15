@@ -181,12 +181,11 @@ export const useLoopManager = (notesMatrix = null) => {
         octaveRange: 2
       })
 
-      // Generar notas en la matriz centralizada using scale NAME
+      // Generar notas en la matriz centralizada sin pasar densidad explícita
       notesMatrix.generateLoopNotes(id, {
-        scale: scaleName, // This will be resolved to intervals by the function
+        scale: scaleName, // Resuelto internamente por el generador
         baseNote,
         length,
-        density: adaptiveDensity || 0.4,
         octaveRange: 2
       })
     }
@@ -487,19 +486,18 @@ export const useLoopManager = (notesMatrix = null) => {
         notesMatrix.updateLoopMetadata(id, { baseNote: loop.baseNote })
       }
 
-      // Regenerar notas en la matriz centralizada using scale NAME
+      // Regenerar notas en la matriz centralizada usando la densidad efectiva del store
       notesMatrix.generateLoopNotes(id, {
         scale: currentScaleName,
         baseNote: loop.baseNote,
         length: loop.length,
-        density: 0.4,
         octaveRange: 2
       })
     }
   }
 
   // Regenerar loop completo (notas y ajustes relacionados)
-  const regenerateLoop = (id, scale, currentScaleName, adaptiveDensity = null, adaptiveVolume = null, currentPulse = null) => {
+  const regenerateLoop = (id, scale, currentScaleName, adaptiveVolume = null, currentPulse = null) => {
     // scale is the actual scale array (intervals)
     // currentScaleName is the scale name (e.g., 'major', 'minor')
     // currentPulse is the current global pulse for step reset
@@ -513,10 +511,17 @@ export const useLoopManager = (notesMatrix = null) => {
       loop.currentStep = 0
     }
 
-    // Si hay cambio de escala, regenerar la nota base para que esté en la nueva escala
-    if (scale) {
-      const newBaseNote = generateScaleBaseNote(scale)
-      loop.baseNote = newBaseNote
+    // Actualizar baseNote SOLO si la escala cambió o si no pertenece a la escala actual
+    if (scale && currentScaleName) {
+      const meta = notesMatrix && notesMatrix.loopMetadata ? notesMatrix.loopMetadata[id] : null
+      const prevScaleName = meta && meta.scale ? meta.scale : null
+      const baseInterval = loop.baseNote % 12
+      const baseInScale = Array.isArray(scale) ? scale.includes(baseInterval) : true
+      const shouldUpdateBase = (prevScaleName !== currentScaleName) || !baseInScale
+      if (shouldUpdateBase) {
+        const newBaseNote = generateScaleBaseNote(scale)
+        loop.baseNote = newBaseNote
+      }
     }
 
     // Regenerar notas en la matriz centralizada
@@ -529,18 +534,18 @@ export const useLoopManager = (notesMatrix = null) => {
         })
       }
 
-      // Regenerar notas en la matriz centralizada using scale NAME
-      const targetDensity = adaptiveDensity ?? getLoopNoteDensity(id) ?? 0.4
-
-      // Call with correct signature: (loopId, density, options)
-      notesMatrix.generateLoopNotes(id, targetDensity, {
-        // Options are ignored, metadata is used instead
+      // Regenerar notas leyendo únicamente de la metadata del store
+      if (notesMatrix.updateLoopMetadata) {
+        const randomOffset = Math.floor(Math.random() * (loop.length || 16))
+        notesMatrix.updateLoopMetadata(id, { startOffset: randomOffset })
+      }
+      notesMatrix.generateLoopNotes(id, {
       })
       debugLog('regenerate loop', {
         id,
         scaleChanged: Boolean(scale),
         newLength: loop.length,
-        density: targetDensity,
+        density: notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(id) : undefined,
         resetPulse: currentPulse,
         lastResetPulse: loop.lastResetPulse
       })

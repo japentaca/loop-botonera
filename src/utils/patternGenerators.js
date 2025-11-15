@@ -1,9 +1,12 @@
 /**
  * Pattern Generation Module
- * Pure functions for generating melodic patterns with counterpoint awareness
+ * Loop-aware generators that fetch parameters from the central store
  * All functions return arrays of MIDI note numbers or null (for rests)
  */
-const DEBUG = false
+import { useAudioStore } from '../stores/audioStore'
+import { useNotesMatrix } from '../composables/useNotesMatrix'
+import { useScales } from '../composables/useMusic'
+const DEBUG = typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
 
 /**
  * Generate Euclidean rhythm pattern using Bjorklund's algorithm
@@ -16,42 +19,43 @@ const DEBUG = false
  * @param {Object} params.options - Additional options
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */
-export function generateEuclideanPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
-  const startTime = performance.now();
+export function generateEuclideanPattern(loopId, options = {}) {
+  const startTime = performance.now()
+  const notesMatrix = useNotesMatrix()
+  const audioStore = useAudioStore()
+  const { getScale } = useScales()
 
-  // Ensure density is a valid number (allow 0 for silent patterns)
-  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
-
-  // Choose timing mode (euclidean|even|random|fillAll)
-  const timing = options.timing ?? 'euclidean';
-
-  // Compute placement positions using unified helper (allows zero density)
-  const positions = computePositions({ length, density, mode: timing, startOffset: options.startOffset ?? 0, allowZero: true });
-
-  // Generate possible notes within range
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
-
-  // Sort notes to ensure smooth transitions
-  possibleNotes.sort((a, b) => a - b);
-
-  // Create pattern array
-  const pattern = new Array(length).fill(null);
-
-  // Place notes at selected positions with controlled randomness
-  if (possibleNotes.length > 0 && positions.length > 0) {
-    let currentIndex = Math.floor(Math.random() * possibleNotes.length);
-    positions.forEach(pos => {
-      pattern[pos] = possibleNotes[currentIndex];
-      // Move to a nearby note (1-3 steps forward) for smooth but random progression
-      currentIndex = (currentIndex + Math.floor(Math.random() * 3) + 1) % possibleNotes.length;
-    });
+  const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loopId]
+  if (!meta || typeof meta.length !== 'number' || meta.length <= 0) {
+    return []
   }
 
-  const elapsed = performance.now() - startTime;
-  const pulses = positions.length;
-  DEBUG && console.log(`generateEuclideanPattern steps=${length} pulses=${pulses} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`);
+  const length = meta.length
+  const scale = getScale(audioStore.currentScale)
+  const baseNote = meta.baseNote
+  const noteRange = { min: meta.noteRangeMin, max: meta.noteRangeMax }
+  const density = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3)
+  const currentPulse = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
+  const startOffset = options.startOffset ?? (meta.startOffset ?? (length > 0 ? (currentPulse % length) : 0))
+  const timing = options.timing ?? 'euclidean'
 
-  return pattern;
+  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true })
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  possibleNotes.sort((a, b) => a - b)
+  const pattern = new Array(length).fill(null)
+
+  if (possibleNotes.length > 0 && positions.length > 0) {
+    let currentIndex = Math.floor(Math.random() * possibleNotes.length)
+    positions.forEach(pos => {
+      pattern[pos] = possibleNotes[currentIndex]
+      currentIndex = (currentIndex + Math.floor(Math.random() * 3) + 1) % possibleNotes.length
+    })
+  }
+
+  const elapsed = performance.now() - startTime
+  const pulses = positions.length
+  DEBUG && console.log(`generateEuclideanPattern loop=${loopId} steps=${length} pulses=${pulses} density=${Number(density).toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`)
+  return pattern
 }
 
 /**
@@ -65,42 +69,55 @@ export function generateEuclideanPattern({ length, scale, baseNote, noteRange, d
  * @param {Object} params.options - Additional options (scaleType, etc.)
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */
-export function generateScalePattern({ length, scale, baseNote, noteRange, density, options = {} }) {
-  const startTime = performance.now();
-  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3;
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange);
-  if (possibleNotes.length === 0) {
-    return new Array(length).fill(null);
+export function generateScalePattern(loopId, options = {}) {
+  const startTime = performance.now()
+  const notesMatrix = useNotesMatrix()
+  const audioStore = useAudioStore()
+  const { getScale } = useScales()
+
+  const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loopId]
+  if (!meta || typeof meta.length !== 'number' || meta.length <= 0) {
+    return []
   }
-  const sortedNotes = [...possibleNotes].sort((a, b) => a - b);
-  const timingMode = options.densityTiming ?? 'random';
-  const positions = computePositions({ length, density, mode: timingMode, startOffset: options.startOffset ?? 0, allowZero: true });
-  const placements = positions.length;
-  if (placements === 0) return new Array(length).fill(null);
-  const dir = Math.random() < 0.5 ? 'ascending' : 'descending';
-  const ts = 1 + Math.floor(Math.random() * 4);
-  const startIdx = Math.floor(Math.random() * sortedNotes.length);
-  const moves = Math.max(1, Math.ceil(placements / (1 + ts)));
-  const seqObj = generateHeadTailScaleSequence({ scaleNotes: sortedNotes, startIndex: startIdx, moves, direction: dir, tailSize: ts });
-  const seq = seqObj.sequence;
-  const pattern = new Array(length).fill(null);
-  const mapping = options.positionMapping ?? 'sequential';
-  if (mapping === 'sequential') {
-    const sortedPos = [...positions].sort((a, b) => a - b);
-    for (let k = 0; k < sortedPos.length; k++) {
-      if (k >= seq.length) break;
-      pattern[sortedPos[k]] = seq[k];
+  const length = meta.length
+  const scale = getScale(audioStore.currentScale)
+  const baseNote = meta.baseNote
+  const noteRange = { min: meta.noteRangeMin, max: meta.noteRangeMax }
+  const density = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3)
+  const currentPulse = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
+  const startOffset = options.startOffset ?? (meta.startOffset ?? (length > 0 ? (currentPulse % length) : 0))
+  const timingMode = options.densityTiming ?? 'even'
+
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  if (possibleNotes.length === 0) {
+    return new Array(length).fill(null)
+  }
+  const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
+  const positions = computePositions({ length, density, mode: timingMode, startOffset, allowZero: true })
+  const placements = positions.length
+  if (placements === 0) return new Array(length).fill(null)
+
+  const pattern = new Array(length).fill(null)
+  const notesToPlace = []
+  if (placements <= sortedNotes.length) {
+    for (let i = 0; i < placements; i++) {
+      const index = Math.floor(i * sortedNotes.length / Math.max(1, placements))
+      notesToPlace.push(sortedNotes[index])
     }
   } else {
-    for (let i = 0; i < positions.length; i++) {
-      const pos = positions[i];
-      pattern[pos] = seq.length ? seq[i % seq.length] : null;
+    for (let i = 0; i < placements; i++) {
+      notesToPlace.push(sortedNotes[i % sortedNotes.length])
     }
   }
-  const elapsed = performance.now() - startTime;
-  const oob = pattern.filter(n => typeof n === 'number' && (n < noteRange.min || n > noteRange.max)).length;
-  if (typeof options.log === 'function') options.log({ loopId: options.loopId ?? null, patternType: 'scale', length, range: { min: noteRange.min, max: noteRange.max }, baseNote, density, direction: dir, tailSize: ts, movesGenerated: seqObj.steps.length, oob, timeMs: Number(elapsed.toFixed(1)) });
-  return pattern;
+
+  for (let i = 0; i < positions.length; i++) {
+    pattern[positions[i]] = notesToPlace[i]
+  }
+
+  const elapsed = performance.now() - startTime
+  const oob = pattern.filter(n => typeof n === 'number' && (n < noteRange.min || n > noteRange.max)).length
+  if (typeof options.log === 'function') options.log({ loopId, patternType: 'scale', length, range: { min: noteRange.min, max: noteRange.max }, baseNote, density, placements, oob, timeMs: Number(elapsed.toFixed(1)) })
+  return pattern
 }
 
 /**
@@ -114,9 +131,24 @@ export function generateScalePattern({ length, scale, baseNote, noteRange, densi
  * @param {Object} params.options - Additional options
  * @returns {Array<number|null>} Array of MIDI notes or nulls
 */
-export function generateRandomPattern({ length, scale, baseNote, noteRange, density, options = {} }) {
+export function generateRandomPattern(loopId, options = {}) {
   const startTime = performance.now()
-  density = typeof density === 'number' && !isNaN(density) ? Math.max(0, Math.min(1, density)) : 0.3
+  const notesMatrix = useNotesMatrix()
+  const audioStore = useAudioStore()
+  const { getScale } = useScales()
+
+  const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loopId]
+  if (!meta || typeof meta.length !== 'number' || meta.length <= 0) {
+    return []
+  }
+
+  const length = meta.length
+  const scale = getScale(audioStore.currentScale)
+  const baseNote = meta.baseNote
+  const noteRange = { min: meta.noteRangeMin, max: meta.noteRangeMax }
+  const density = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3)
+  const currentPulse = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
+  const startOffset = options.startOffset ?? (meta.startOffset ?? (length > 0 ? (currentPulse % length) : 0))
 
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
   if (possibleNotes.length === 0) {
@@ -124,21 +156,16 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
     return new Array(length).fill(null)
   }
 
-  // Compute positions based on density using random timing mode
-  const positions = computePositions({ length, density, mode: options.timing ?? 'random', startOffset: options.startOffset ?? 0, allowZero: true })
+  const positions = computePositions({ length, density, mode: options.timing ?? 'random', startOffset, allowZero: true })
   const noteCount = positions.length
-
-  // Select notes to place, evenly distributed across the available range
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
   const notesToPlace = []
   if (noteCount <= sortedNotes.length) {
-    // Pick evenly spaced notes across the range
     for (let i = 0; i < noteCount; i++) {
       const index = Math.floor(i * sortedNotes.length / Math.max(1, noteCount))
       notesToPlace.push(sortedNotes[index])
     }
   } else {
-    // Cycle through all notes to ensure full range coverage even with repeats
     for (let i = 0; i < noteCount; i++) {
       notesToPlace.push(sortedNotes[i % sortedNotes.length])
     }
@@ -150,8 +177,7 @@ export function generateRandomPattern({ length, scale, baseNote, noteRange, dens
   }
 
   const elapsed = performance.now() - startTime
-  DEBUG && console.log(`generateRandomPattern steps=${length} notes=${noteCount} density=${density.toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`)
-
+  DEBUG && console.log(`generateRandomPattern loop=${loopId} steps=${length} notes=${noteCount} density=${Number(density).toFixed(2)} range=${noteRange.min}..${noteRange.max} time=${elapsed.toFixed(1)}ms`)
   DEBUG && console.log(pattern)
   return pattern
 }
@@ -277,14 +303,24 @@ export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, d
     if (maxJ < 1) break;
     const j = 1 + Math.floor(Math.random() * maxJ);
     head = dir === 'ascending' ? head + j : head - j;
-    const headNote = arr[head];
+    let headNote = arr[head];
+    if (seq.length && headNote === seq[seq.length - 1]) {
+      const altUp = head + (dir === 'ascending' ? 1 : -1);
+      const altDown = head - (dir === 'ascending' ? 1 : -1);
+      if (altUp >= 0 && altUp < n) headNote = arr[altUp];
+      else if (altDown >= 0 && altDown < n) headNote = arr[altDown];
+    }
     seq.push(headNote);
     const tail = [];
     for (let k = 1; k <= ts; k++) {
       const ti = dir === 'ascending' ? head - j * k : head + j * k;
       if (ti < 0 || ti >= n) break;
-      tail.push({ index: ti, note: arr[ti], jump: dir === 'ascending' ? -j : j });
-      seq.push(arr[ti]);
+      const tailNote = arr[ti];
+      tail.push({ index: ti, note: tailNote, jump: dir === 'ascending' ? -j : j });
+      const nextNote = (seq.length && tailNote === seq[seq.length - 1])
+        ? (ti + 1 < n ? arr[ti + 1] : (ti - 1 >= 0 ? arr[ti - 1] : tailNote))
+        : tailNote;
+      seq.push(nextNote);
     }
     steps.push({ headIndex: head, headJump: dir === 'ascending' ? j : -j, tail });
     remaining--;

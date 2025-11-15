@@ -121,7 +121,11 @@ export const usePresetStore = defineStore('preset', () => {
         noteRangeMax: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.noteRangeMax : audioStore.loopMetadata[loop.id]?.noteRangeMax) ?? 96,
         patternProbabilities: { ...((notesMatrix ? notesMatrix.loopMetadata[loop.id]?.patternProbabilities : audioStore.loopMetadata[loop.id]?.patternProbabilities) || { euclidean: 0.3, scale: 0.3, random: 0.4 }) },
         generationMode: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.generationMode : audioStore.loopMetadata[loop.id]?.generationMode) ?? 'auto',
-        lastPattern: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.lastPattern : audioStore.loopMetadata[loop.id]?.lastPattern) ?? null
+        lastPattern: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.lastPattern : audioStore.loopMetadata[loop.id]?.lastPattern) ?? null,
+        // Density configuration (single source of truth in notesMatrix)
+        densityMode: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.densityMode : audioStore.loopMetadata[loop.id]?.densityMode) ?? 'auto',
+        manualDensity: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.manualDensity : audioStore.loopMetadata[loop.id]?.manualDensity) ?? 0.3,
+        autoDensity: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.autoDensity : audioStore.loopMetadata[loop.id]?.autoDensity) ?? 0.3
       }
     })
 
@@ -229,13 +233,19 @@ export const usePresetStore = defineStore('preset', () => {
       if (presetLoop.noteRangeMin !== undefined ||
         presetLoop.noteRangeMax !== undefined ||
         presetLoop.patternProbabilities ||
-        presetLoop.generationMode !== undefined) {
+        presetLoop.generationMode !== undefined ||
+        presetLoop.densityMode !== undefined ||
+        presetLoop.manualDensity !== undefined ||
+        presetLoop.autoDensity !== undefined) {
         const metadataUpdates = {}
         if (presetLoop.noteRangeMin !== undefined) metadataUpdates.noteRangeMin = presetLoop.noteRangeMin
         if (presetLoop.noteRangeMax !== undefined) metadataUpdates.noteRangeMax = presetLoop.noteRangeMax
         if (presetLoop.patternProbabilities) metadataUpdates.patternProbabilities = { ...presetLoop.patternProbabilities }
         if (presetLoop.generationMode !== undefined) metadataUpdates.generationMode = presetLoop.generationMode
         if (presetLoop.lastPattern !== undefined) metadataUpdates.lastPattern = presetLoop.lastPattern
+        if (presetLoop.densityMode !== undefined) metadataUpdates.densityMode = presetLoop.densityMode
+        if (presetLoop.manualDensity !== undefined) metadataUpdates.manualDensity = presetLoop.manualDensity
+        if (presetLoop.autoDensity !== undefined) metadataUpdates.autoDensity = presetLoop.autoDensity
 
         audioStore.updateLoopMetadata(index, metadataUpdates)
       }
@@ -307,7 +317,7 @@ export const usePresetStore = defineStore('preset', () => {
         }
 
         // Use global scale for all loops
-        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, density, null)
+        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, null)
       })
     }
 

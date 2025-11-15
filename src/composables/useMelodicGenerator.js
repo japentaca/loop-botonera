@@ -1,5 +1,4 @@
 import { useScales } from './useMusic'
-import { generateEuclideanPattern, generateScalePattern, generateRandomPattern } from '../utils/patternGenerators'
 import { analyzeActiveLoops, avoidConflicts, isCounterpointEnabled } from '../services/counterpointService'
 import { useAudioStore } from '../stores/audioStore'
 
@@ -23,18 +22,21 @@ export function useMelodicGenerator(notesMatrix) {
    * @param {Object} options - Generation options
    * @returns {Array<number|null>} Generated melody notes
    */
-  const buildPatternOptions = (meta, options = {}) => {
-    const providedDensity = (options && typeof options.density === 'number') ? options.density : undefined
-    const fallbackDensity = (typeof meta.density === 'number') ? meta.density : 0.3
+  const buildPatternOptions = (loopId, meta, options = {}) => {
+    const so = (() => {
+      const p = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
+      const len = typeof meta.length === 'number' ? meta.length : 0
+      return len > 0 ? (p % len) : 0
+    })()
     return {
       length: meta.length,
       scale: getScale(audioStore.currentScale),
       baseNote: meta.baseNote,
       noteRange: { min: meta.noteRangeMin, max: meta.noteRangeMax },
-      density: providedDensity !== undefined ? providedDensity : fallbackDensity,
+      density: typeof notesMatrix.getEffectiveDensity === 'function' ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3),
       densityTiming: meta.densityTiming ?? 'random',
       positionMapping: meta.positionMapping ?? 'sequential',
-      startOffset: meta.startOffset ?? 0,
+      startOffset: (meta.startOffset ?? so),
       ...options
     }
   }
@@ -42,13 +44,12 @@ export function useMelodicGenerator(notesMatrix) {
   const generateBasePattern = (patternType, patternOptions) => {
     switch (patternType) {
       case 'euclidean':
-        return generateEuclideanPattern(patternOptions)
-      case 'scale': {
-        return generateScalePattern(patternOptions)
-      }
+        return euclidFromOptions(patternOptions)
+      case 'scale':
+        return scaleFromOptions(patternOptions)
       case 'random':
       default:
-        return generateRandomPattern(patternOptions)
+        return randomFromOptions(patternOptions)
     }
   }
 
@@ -70,7 +71,8 @@ export function useMelodicGenerator(notesMatrix) {
     }
     const scale = getScale(scaleName)
     const patternType = selectPatternType(loopId)
-    const patternOptions = buildPatternOptions(meta, options)
+    const patternOptions = buildPatternOptions(loopId, meta, options)
+    console.log('[MelGen] selected pattern', { loopId, patternType, density: Number(patternOptions.density).toFixed(3) })
     melLog('options', {
       loopId,
       patternType,
@@ -103,6 +105,7 @@ export function useMelodicGenerator(notesMatrix) {
     const maxRange = typeof meta.noteRangeMax === 'number' ? meta.noteRangeMax : 96
     const outOfRange = notes.filter(n => typeof n === 'number' && (n < minRange || n > maxRange)).length
     melLog(`generateLoopMelody loop=${loopId} pattern=${patternType} length=${notes.length} oob=${outOfRange} time=${elapsed.toFixed(1)}ms`)
+    console.log('[MelGen] output', { loopId, patternType, length: notes.length, timeMs: Number(elapsed.toFixed(1)) })
 
     return notes
   }
@@ -312,4 +315,140 @@ export function useMelodicGenerator(notesMatrix) {
     applyCounterpoint,
     getActiveLoops
   }
+}
+
+function generatePossibleNotes(scale, baseNote, noteRange) {
+  const possibleNotes = []
+  const minOctave = Math.floor((noteRange.min - baseNote) / 12)
+  const maxOctave = Math.floor((noteRange.max - baseNote) / 12)
+  for (let oct = minOctave; oct <= maxOctave; oct++) {
+    for (const interval of scale) {
+      const note = baseNote + interval + (oct * 12)
+      if (note >= noteRange.min && note <= noteRange.max) {
+        possibleNotes.push(note)
+      }
+    }
+  }
+  return possibleNotes
+}
+
+function euclideanRhythm(pulses, steps) {
+  if (pulses <= 0) return []
+  if (pulses >= steps) {
+    return Array.from({ length: steps }, (_, i) => i)
+  }
+  const positions = []
+  for (let i = 0; i < steps; i++) {
+    if ((i * pulses) % steps < pulses) {
+      positions.push(i)
+    }
+  }
+  return positions
+}
+
+function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false }) {
+  const positions = []
+  const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0))
+  if (mode === 'fillAll') {
+    let pos = startOffset % length
+    let dir = 1
+    const min = 0
+    const max = length - 1
+    for (let i = 0; i < length; i++) {
+      positions.push(pos)
+      let next = pos + dir
+      if (next > max || next < min) {
+        dir = -dir
+        next = pos + dir
+        if (next > max) next = max
+        if (next < min) next = min
+      }
+      pos = next
+    }
+    return positions
+  }
+  let count = Math.round(length * d)
+  if (!allowZero) count = Math.max(1, count)
+  if (count <= 0) return []
+  if (mode === 'even') {
+    for (let i = 0; i < count; i++) {
+      positions.push(Math.floor((i * length) / count))
+    }
+    return positions.map(p => (p + startOffset) % length)
+  }
+  if (mode === 'random') {
+    const set = new Set()
+    while (set.size < count) set.add(Math.floor(Math.random() * length))
+    return Array.from(set).map(p => (p + startOffset) % length)
+  }
+  const raw = euclideanRhythm(count, length)
+  return raw.map(p => (p + startOffset) % length)
+}
+
+function euclidFromOptions({ length, scale, baseNote, noteRange, density, timing = 'euclidean', startOffset = 0 }) {
+  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true })
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  possibleNotes.sort((a, b) => a - b)
+  const pattern = new Array(length).fill(null)
+  if (possibleNotes.length > 0 && positions.length > 0) {
+    let currentIndex = Math.floor(Math.random() * possibleNotes.length)
+    positions.forEach(pos => {
+      pattern[pos] = possibleNotes[currentIndex]
+      currentIndex = (currentIndex + Math.floor(Math.random() * 3) + 1) % possibleNotes.length
+    })
+  }
+  return pattern
+}
+
+function scaleFromOptions({ length, scale, baseNote, noteRange, density, densityTiming = 'even', startOffset = 0 }) {
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  if (possibleNotes.length === 0) {
+    return new Array(length).fill(null)
+  }
+  const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
+  const positions = computePositions({ length, density, mode: densityTiming, startOffset, allowZero: true })
+  const placements = positions.length
+  if (placements === 0) return new Array(length).fill(null)
+  const pattern = new Array(length).fill(null)
+  const notesToPlace = []
+  if (placements <= sortedNotes.length) {
+    for (let i = 0; i < placements; i++) {
+      const index = Math.floor(i * sortedNotes.length / Math.max(1, placements))
+      notesToPlace.push(sortedNotes[index])
+    }
+  } else {
+    for (let i = 0; i < placements; i++) {
+      notesToPlace.push(sortedNotes[i % sortedNotes.length])
+    }
+  }
+  for (let i = 0; i < positions.length; i++) {
+    pattern[positions[i]] = notesToPlace[i]
+  }
+  return pattern
+}
+
+function randomFromOptions({ length, scale, baseNote, noteRange, density, timing = 'random', startOffset = 0 }) {
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  if (possibleNotes.length === 0) {
+    return new Array(length).fill(null)
+  }
+  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true })
+  const noteCount = positions.length
+  const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
+  const notesToPlace = []
+  if (noteCount <= sortedNotes.length) {
+    for (let i = 0; i < noteCount; i++) {
+      const index = Math.floor(i * sortedNotes.length / Math.max(1, noteCount))
+      notesToPlace.push(sortedNotes[index])
+    }
+  } else {
+    for (let i = 0; i < noteCount; i++) {
+      notesToPlace.push(sortedNotes[i % sortedNotes.length])
+    }
+  }
+  const pattern = new Array(length).fill(null)
+  for (let i = 0; i < positions.length; i++) {
+    pattern[positions[i]] = notesToPlace[i]
+  }
+  return pattern
 }

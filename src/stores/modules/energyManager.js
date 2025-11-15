@@ -29,7 +29,7 @@ export const useEnergyManager = (notesMatrix = null) => {
   const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
   const debugLog = (label, payload = {}) => {
     if (isDebugEnabled()) {
-      // console.log(`[EnergyManager] ${label}`, payload)
+      console.log(`[EnergyManager] ${label}`, payload)
     }
   }
 

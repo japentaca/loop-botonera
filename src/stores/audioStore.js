@@ -306,28 +306,26 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Regenerar loop individual
   const regenerateLoop = (id) => {
-    if (!audioEngine.audioInitialized.value) return
 
     const scale = useScales().getScale(currentScale.value)
-    const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
     const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, id)
 
     // Pass both scale intervals and scale name, plus current pulse for step reset
-    loopManager.regenerateLoop(id, scale, currentScale.value, adaptiveDensity, adaptiveVolume, audioEngine.currentPulse.value)
+    console.log('[Regeneration] regenerateLoop id=', id)
+    loopManager.regenerateLoop(id, scale, currentScale.value, adaptiveVolume, audioEngine.currentPulse.value)
   }
 
   // Regenerar todos los loops
   const regenerateAllLoops = () => {
-    if (!audioEngine.audioInitialized.value) return
 
     const scale = useScales().getScale(currentScale.value)
     const currentPulse = audioEngine.currentPulse.value
-
-    for (let i = 0; i < loopManager.NUM_LOOPS; i++) {
-      const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
+    const activeIds = loopManager.loops.value.filter(l => l && l.isActive).map(l => l.id)
+    console.log('[Regeneration] regenerateAllLoops active=', activeIds)
+    for (const i of activeIds) {
       const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, i)
-      // Pass both scale intervals and scale name, plus current pulse for step reset
-      loopManager.regenerateLoop(i, scale, currentScale.value, adaptiveDensity, adaptiveVolume, currentPulse)
+      console.log('[Regeneration] regenerateAllLoops -> loop', i)
+      loopManager.regenerateLoop(i, scale, currentScale.value, adaptiveVolume, currentPulse)
     }
 
     // Ajustar volúmenes después de regenerar todos
@@ -336,7 +334,6 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Regenerar loop individual con generación melódica
   const regenerateLoopMelody = (loopId) => {
-    if (!audioEngine.audioInitialized.value) return
     if (loopId >= loopManager.NUM_LOOPS) return
 
     melodicGenerator.regenerateLoop(loopId, audioEngine.currentPulse.value)
@@ -408,7 +405,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   if (typeof window !== 'undefined') {
-    window.__LOOP_DEBUG = false
+    window.__LOOP_DEBUG = true
     window.__DBG = {
       getMeta: (id) => notesMatrix.loopMetadata[id],
       getNotes: (id) => notesMatrix.getLoopNotes(id),
@@ -841,6 +838,7 @@ export const useAudioStore = defineStore('audio', () => {
     updateLoopParam,
     updateLoopSynth,
     regenerateLoop,
+    regenerateAllLoops,
     regenerateLoopMelody,
     regenerateAllMelodies,
     logNotesMatrix,

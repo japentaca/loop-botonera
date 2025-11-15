@@ -67,8 +67,8 @@
     <div class="loop-actions">
       <Button @click="synthStore.openSynthEditor(loop.id)" class="edit-button" icon="pi pi-cog" label="Editar Synth"
         size="small" outlined :disabled="!audioStore.audioInitialized" />
-      <Button @click="audioStore.regenerateLoopMelody(loop.id)" class="edit-button" icon="pi pi-refresh"
-        label="Regenerar Loop" size="small" outlined :disabled="!audioStore.audioInitialized" />
+      <Button @click="audioStore.regenerateLoop(loop.id)" class="edit-button" icon="pi pi-refresh"
+        label="Regenerar Loop" size="small" outlined />
       <Button @click="showPatternSettings = !showPatternSettings" class="edit-button"
         :icon="showPatternSettings ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
         :label="showPatternSettings ? 'Ocultar Patrones' : 'Mostrar Patrones'" size="small" outlined

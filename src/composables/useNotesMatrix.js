@@ -336,18 +336,9 @@ export function useNotesMatrix() {
   }
 
   // Performance optimization: Efficient loop generation
-  function generateLoopNotes(loopId, density = 0.3, options = {}) {
+  function generateLoopNotes(loopId, options = {}) {
     if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
-    if (typeof density === 'object' && density !== null) {
-      options = density
-      density = (options.density !== undefined) ? options.density : 0.3
-    }
-    // If no explicit density provided, use effective density from metadata
-    if (options.density === undefined) {
-      density = getEffectiveDensity(loopId)
-    }
-    density = Number(density) || 0
-    density = Math.max(0, Math.min(1, density))
+    const density = getEffectiveDensity(loopId)
     const meta = loopMetadata[loopId]
     if (meta && meta.generationMode === 'locked') {
       return
@@ -360,11 +351,15 @@ export function useNotesMatrix() {
       setLoopNotes,
       updateLoopMetadata
     })
-    const notes = generator.generateLoopMelody(loopId, { density })
+    console.log('[NotesMatrix] generateLoopNotes', { loopId, mode: meta.densityMode, density: Number(density).toFixed(3) })
+    const notes = generator.generateLoopMelody(loopId, { })
     if (Array.isArray(notes)) {
       setLoopNotes(loopId, notes)
-      const effective = Math.max(0, Math.min(1, Number(density) || 0))
-      updateLoopMetadata(loopId, { density: effective })
+      updateLoopMetadata(loopId, { density })
+      const metrics = computeLoopDensityMetrics(loopId)
+      console.log('[NotesMatrix] applied', { loopId, noteCount: metrics.noteCount, length: metrics.length, density: Number(metrics.density).toFixed(3) })
+      const sample = getLoopNotes(loopId).slice(0, Math.min(32, metrics.length))
+      console.log('[NotesMatrix] sample', { loopId, sample })
     }
   }
 
