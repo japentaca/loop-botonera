@@ -40,8 +40,9 @@ export function generateEuclideanPattern(loopId, options = {}) {
   const sel1 = chooseTimingAndJitter(loopId, length, density, options)
   const timing = sel1.timingMode ?? 'euclidean'
   const jitter = sel1.jitter ?? 0
+  const seed1 = stableHash(String(loopId) + ':' + String(length) + ':' + String(currentPulse) + ':' + String(Math.floor(performance.now())))
 
-  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true, jitter })
+  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true, jitter, seed: seed1 })
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
   possibleNotes.sort((a, b) => a - b)
   const pattern = new Array(length).fill(null)
@@ -91,31 +92,41 @@ export function generateScalePattern(loopId, options = {}) {
   const sel2 = chooseTimingAndJitter(loopId, length, density, options)
   const timingMode = options.densityTiming ?? (sel2.timingMode ?? 'even')
   const jitter2 = sel2.jitter ?? 0
+  const seed2 = stableHash(String(loopId) + ':' + String(length) + ':' + String(currentPulse) + ':' + String(Math.floor(performance.now())))
 
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
   if (possibleNotes.length === 0) {
     return new Array(length).fill(null)
   }
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
-  const positions = computePositions({ length, density, mode: timingMode, startOffset, allowZero: true, jitter: jitter2 })
-  const placements = positions.length
+  const it = timingIterator({ length, density, mode: timingMode, startOffset, allowZero: true, jitter: jitter2, seed: seed2 })
+  const allow = new Set()
+  for (const p of it) allow.add(p)
+  const placements = allow.size
   if (placements === 0) return new Array(length).fill(null)
 
-  const pattern = new Array(length).fill(null)
-  const notesToPlace = []
-  if (placements <= sortedNotes.length) {
-    for (let i = 0; i < placements; i++) {
-      const index = Math.floor(i * sortedNotes.length / Math.max(1, placements))
-      notesToPlace.push(sortedNotes[index])
+  const seqGen = generateHeadTailScaleSequence({
+    scaleNotes: sortedNotes,
+    startIndex: Math.floor(Math.random() * Math.max(1, sortedNotes.length)),
+    moves: length,
+    direction: options.direction,
+    tailSize: options.tailSize
+  })
+  const seq = Array.isArray(seqGen.sequence) ? seqGen.sequence : []
+  const skeleton = new Array(length).fill(null)
+  for (let i = 0; i < length; i++) {
+    let note = seq[i % Math.max(1, seq.length)]
+    if (typeof note !== 'number') note = sortedNotes[i % Math.max(1, sortedNotes.length)]
+    if (i > 0 && note === skeleton[i - 1] && sortedNotes.length > 1) {
+      const altIdx = (sortedNotes.indexOf(note) + 1) % sortedNotes.length
+      note = sortedNotes[altIdx]
     }
-  } else {
-    for (let i = 0; i < placements; i++) {
-      notesToPlace.push(sortedNotes[i % sortedNotes.length])
-    }
+    skeleton[i] = note
   }
 
-  for (let i = 0; i < positions.length; i++) {
-    pattern[positions[i]] = notesToPlace[i]
+  const pattern = new Array(length).fill(null)
+  for (let i = 0; i < length; i++) {
+    if (allow.has(i)) pattern[i] = skeleton[i]
   }
 
   const elapsed = performance.now() - startTime
@@ -163,7 +174,8 @@ export function generateRandomPattern(loopId, options = {}) {
   const sel3 = chooseTimingAndJitter(loopId, length, density, options)
   const mode3 = sel3.timingMode ?? (options.timing ?? 'random')
   const jitter3 = sel3.jitter ?? 0
-  const positions = computePositions({ length, density, mode: mode3, startOffset, allowZero: true, jitter: jitter3 })
+  const seed3 = stableHash(String(loopId) + ':' + String(length) + ':' + String(currentPulse) + ':' + String(Math.floor(performance.now())))
+  const positions = computePositions({ length, density, mode: mode3, startOffset, allowZero: true, jitter: jitter3, seed: seed3 })
   const noteCount = positions.length
   const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
   const notesToPlace = []
@@ -247,9 +259,10 @@ function euclideanRhythm(pulses, steps) {
  * mode: 'euclidean' | 'even' | 'random' | 'fillAll'
  * allowZero: when true, density==0 yields zero positions instead of forcing 1
  */
-function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false, jitter = 0 }) {
+function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false, jitter = 0, seed }) {
   const positions = [];
   const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0));
+  const rng = createRng(seed);
 
   if (mode === 'fillAll') {
     // full unit-step bounce (same as existing behaviour)
@@ -285,13 +298,13 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
 
   if (mode === 'random') {
     const set = new Set();
-    while (set.size < count) set.add(Math.floor(Math.random() * length));
+    while (set.size < count) set.add(Math.floor((rng() || Math.random()) * length));
     return Array.from(set).map(p => (p + startOffset) % length);
   }
 
   if (mode === 'bernoulli') {
     for (let i = 0; i < length; i++) {
-      if (Math.random() < d) positions.push(i);
+      if ((rng() || Math.random()) < d) positions.push(i);
     }
     if (positions.length === 0 && !allowZero && length > 0) positions.push(startOffset % length);
     return positions.map(p => (p + startOffset) % length);
@@ -301,7 +314,7 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     const lambda = Math.max(1e-6, d);
     let t = 0;
     while (t < length) {
-      const u = Math.random();
+      const u = rng() || Math.random();
       const gap = Math.max(0, Math.floor(-Math.log(1 - u) / lambda));
       t += gap + 1;
       if (t < length) positions.push(t);
@@ -314,7 +327,7 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     const p = Math.max(1e-6, d);
     let t = 0;
     while (t < length) {
-      const u = Math.random();
+      const u = rng() || Math.random();
       const gap = Math.max(0, Math.floor(Math.log(1 - u) / Math.log(1 - p)));
       t += gap + 1;
       if (t < length) positions.push(t);
@@ -327,11 +340,33 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     let state = 0;
     for (let i = 0; i < length; i++) {
       if (state === 0) {
-        if (Math.random() < d) state = 1; else state = 0;
+        if ((rng() || Math.random()) < d) state = 1; else state = 0;
       } else {
-        if (Math.random() < (1 - d)) state = 0; else state = 1;
+        if ((rng() || Math.random()) < (1 - d)) state = 0; else state = 1;
       }
       if (state === 1) positions.push(i);
+    }
+    if (positions.length === 0 && !allowZero && length > 0) positions.push(startOffset % length);
+    return positions.map(p => (p + startOffset) % length);
+  }
+
+  if (mode === 'organic') {
+    let budget = Math.max(0, Math.round(length * d));
+    if (!allowZero) budget = Math.max(1, budget);
+    let pcur = d;
+    let gap = 3;
+    for (let i = 0; i < length; i++) {
+      const noise = ((rng() || Math.random()) - 0.5) * 0.25;
+      const bias = gap >= 2 ? 0.12 : -0.12;
+      pcur = Math.max(0, Math.min(1, pcur + (d - pcur) * 0.35 + noise + bias));
+      const hit = ((rng() || Math.random()) < pcur) && budget > 0;
+      if (hit) {
+        positions.push(i);
+        budget--;
+        gap = 0;
+      } else {
+        gap++;
+      }
     }
     if (positions.length === 0 && !allowZero && length > 0) positions.push(startOffset % length);
     return positions.map(p => (p + startOffset) % length);
@@ -342,13 +377,29 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
   if (jitter && jitter > 0) {
     const j = Math.floor(jitter);
     for (let i = 0; i < raw.length; i++) {
-      const r = (raw[i] + (Math.floor(Math.random() * (2 * j + 1)) - j)) % length;
+      const r = (raw[i] + (Math.floor(((rng() || Math.random()) * (2 * j + 1)) - j))) % length;
       const rp = r < 0 ? r + length : r;
       positions.push(rp);
     }
     return positions.map(p => (p + startOffset) % length);
   }
   return raw.map(p => (p + startOffset) % length);
+}
+
+function* timingIterator({ length, density, mode, startOffset, allowZero, jitter, seed }) {
+  const pos = computePositions({ length, density, mode, startOffset, allowZero, jitter, seed })
+  for (let i = 0; i < pos.length; i++) yield pos[i]
+}
+
+function createRng(seed) {
+  if (typeof seed !== 'number' || !isFinite(seed)) return () => Math.random()
+  let a = seed >>> 0
+  return function() {
+    a = (a + 0x6D2B79F5) >>> 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) >>> 0
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
 }
 
 function stableHash(input) {
@@ -364,7 +415,7 @@ function chooseTimingAndJitter(loopId, length, density, options) {
   let mode = options.timing ?? options.densityTiming
   let j = options.jitter
   if (!mode) {
-    const modes = ['random', 'bernoulli', 'poisson', 'geometric', 'markov', 'euclidean']
+    const modes = ['organic', 'bernoulli', 'poisson', 'geometric', 'markov', 'random']
     mode = modes[Math.floor(Math.random() * modes.length)]
   }
   if (typeof j !== 'number' || isNaN(j)) {
@@ -385,8 +436,13 @@ export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, d
   const seq = [];
   const steps = [];
   while (remaining > 0) {
-    const maxJ = computeMaxJump(n, head, dir, ts);
-    if (maxJ < 1) break;
+    let maxJ = computeMaxJump(n, head, dir, ts);
+    if (maxJ < 1) {
+      if (dir === 'ascending' && head >= n - 1) head = Math.max(0, n - 2);
+      else if (dir === 'descending' && head <= 0) head = Math.min(n - 1, 1);
+      maxJ = computeMaxJump(n, head, dir, ts);
+      if (maxJ < 1) break;
+    }
     const j = 1 + Math.floor(Math.random() * maxJ);
     head = dir === 'ascending' ? head + j : head - j;
     let headNote = arr[head];
@@ -399,12 +455,12 @@ export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, d
     seq.push(headNote);
     const tail = [];
     for (let k = 1; k <= ts; k++) {
-      const ti = dir === 'ascending' ? head - j * k : head + j * k;
+      const ti = dir === 'ascending' ? head - k : head + k;
       if (ti < 0 || ti >= n) break;
       const tailNote = arr[ti];
-      tail.push({ index: ti, note: tailNote, jump: dir === 'ascending' ? -j : j });
+      tail.push({ index: ti, note: tailNote, jump: dir === 'ascending' ? -1 : 1 });
       const nextNote = (seq.length && tailNote === seq[seq.length - 1])
-        ? (ti + 1 < n ? arr[ti + 1] : (ti - 1 >= 0 ? arr[ti - 1] : tailNote))
+        ? (dir === 'ascending' ? (ti + 1 < n ? arr[ti + 1] : tailNote) : (ti - 1 >= 0 ? arr[ti - 1] : tailNote))
         : tailNote;
       seq.push(nextNote);
     }
@@ -417,13 +473,9 @@ export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, d
 function computeMaxJump(n, headIdx, dir, ts) {
   if (dir === 'ascending') {
     const headBound = (n - 1) - headIdx;
-    if (ts <= 1) return Math.max(0, headBound);
-    const tailBound = Math.floor(headIdx / (ts - 1));
-    return Math.max(0, Math.min(headBound, tailBound));
+    return Math.max(0, headBound);
   } else {
     const headBound = headIdx;
-    if (ts <= 1) return Math.max(0, headBound);
-    const tailBound = Math.floor(((n - 1) - headIdx) / (ts - 1));
-    return Math.max(0, Math.min(headBound, tailBound));
+    return Math.max(0, headBound);
   }
 }

@@ -355,20 +355,13 @@ export function useNotesMatrix() {
 
     const out = new Array(meta.length).fill(null)
     if (patternType === 'scale') {
-      const placements = positions.length
-      const notesToPlace = []
-      if (placements <= possibleNotes.length) {
-        for (let i = 0; i < placements; i++) {
-          const index = Math.floor(i * possibleNotes.length / Math.max(1, placements))
-          notesToPlace.push(possibleNotes[index])
-        }
-      } else {
-        for (let i = 0; i < placements; i++) {
-          notesToPlace.push(possibleNotes[i % possibleNotes.length])
-        }
-      }
+      const startIndex = Math.floor(Math.random() * Math.max(1, possibleNotes.length))
+      const dir = Math.random() < 0.5 ? 'ascending' : 'descending'
+      const stepsToEdge = dir === 'ascending' ? ((possibleNotes.length - 1) - startIndex) : startIndex
+      const seqGen = generateHeadTail({ scaleNotes: possibleNotes, startIndex, moves: Math.max(positions.length, stepsToEdge + 1), direction: dir })
+      const seq = Array.isArray(seqGen.sequence) ? seqGen.sequence : []
       for (let i = 0; i < positions.length; i++) {
-        out[positions[i]] = notesToPlace[i]
+        out[positions[i]] = seq.length ? seq[i % seq.length] : possibleNotes[i % possibleNotes.length]
       }
     } else if (patternType === 'euclidean') {
       if (possibleNotes.length > 0 && positions.length > 0) {
@@ -1026,6 +1019,56 @@ function generatePossibleNotes(scale, baseNote, noteRange) {
     }
   }
   return possibleNotes
+}
+
+function generateHeadTail({ scaleNotes, startIndex, moves, direction, tailSize }) {
+  const arr = Array.isArray(scaleNotes) ? scaleNotes.slice().sort((a, b) => a - b) : []
+  const n = arr.length
+  if (n === 0) return { sequence: [], steps: [], direction: 'ascending', tailSize: 1 }
+  const dir = direction === 'descending' ? 'descending' : (direction === 'ascending' ? 'ascending' : (Math.random() < 0.5 ? 'ascending' : 'descending'))
+  const ts = typeof tailSize === 'number' && isFinite(tailSize) ? Math.max(1, Math.min(4, Math.floor(tailSize))) : (1 + Math.floor(Math.random() * 4))
+  let head = Math.max(0, Math.min(n - 1, Math.floor(startIndex ?? 0)))
+  let remaining = Math.max(0, Math.floor(moves ?? 0))
+  const seq = []
+  const steps = []
+  while (remaining > 0) {
+    let maxJ = computeMaxJump2(n, head, dir, ts)
+    if (maxJ < 1) break
+    const j = 1
+    head = dir === 'ascending' ? head + j : head - j
+    let headNote = arr[head]
+    if (seq.length && headNote === seq[seq.length - 1]) {
+      const altUp = head + (dir === 'ascending' ? 1 : -1)
+      const altDown = head - (dir === 'ascending' ? 1 : -1)
+      if (altUp >= 0 && altUp < n) headNote = arr[altUp]
+      else if (altDown >= 0 && altDown < n) headNote = arr[altDown]
+    }
+    seq.push(headNote)
+    const tail = []
+    for (let k = 1; k <= ts; k++) {
+      const ti = dir === 'ascending' ? head - k : head + k
+      if (ti < 0 || ti >= n) break
+      const tailNote = arr[ti]
+      tail.push({ index: ti, note: tailNote, jump: dir === 'ascending' ? -1 : 1 })
+      const nextNote = (seq.length && tailNote === seq[seq.length - 1])
+        ? (dir === 'ascending' ? (ti + 1 < n ? arr[ti + 1] : tailNote) : (ti - 1 >= 0 ? arr[ti - 1] : tailNote))
+        : tailNote
+      seq.push(nextNote)
+    }
+    steps.push({ headIndex: head, headJump: dir === 'ascending' ? j : -j, tail })
+    remaining--
+  }
+  return { sequence: seq, steps, direction: dir, tailSize: ts }
+}
+
+function computeMaxJump2(n, headIdx, dir, ts) {
+  if (dir === 'ascending') {
+    const headBound = (n - 1) - headIdx
+    return Math.max(0, headBound)
+  } else {
+    const headBound = headIdx
+    return Math.max(0, headBound)
+  }
 }
 
 // Backwards-compatible aliases for older modules that expect different method names
