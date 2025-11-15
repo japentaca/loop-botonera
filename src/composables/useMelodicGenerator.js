@@ -26,6 +26,9 @@ export function useMelodicGenerator(notesMatrix) {
       baseNote: meta.baseNote,
       noteRange: { min: meta.noteRangeMin, max: meta.noteRangeMax },
       density: meta.density,
+      densityTiming: meta.densityTiming ?? 'random',
+      positionMapping: meta.positionMapping ?? 'sequential',
+      startOffset: meta.startOffset ?? 0,
       ...options
     }
   }
@@ -35,8 +38,7 @@ export function useMelodicGenerator(notesMatrix) {
       case 'euclidean':
         return generateEuclideanPattern(patternOptions)
       case 'scale': {
-        const { startOffset: _omit, ...scaleOptions } = patternOptions
-        return generateScalePattern(scaleOptions)
+        return generateScalePattern(patternOptions)
       }
       case 'random':
       default:
@@ -71,7 +73,13 @@ export function useMelodicGenerator(notesMatrix) {
       range: { min: meta.noteRangeMin, max: meta.noteRangeMax },
       density: patternOptions.density
     })
-    const notes = generateBasePattern(patternType, patternOptions)
+    const notes = generateBasePattern(patternType, {
+      ...patternOptions,
+      loopId,
+      log: (info) => {
+        melLog('scaleGen', info)
+      }
+    })
 
     // Apply counterpoint only if enabled and there are active loops
     const activeLoops = getActiveLoops()

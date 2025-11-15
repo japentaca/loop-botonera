@@ -401,7 +401,10 @@ export const useAudioStore = defineStore('audio', () => {
       setMeta: (id, updates) => notesMatrix.updateLoopMetadata(id, updates),
       loops: loopManager.loops,
       selectPatternType: (id) => melodicGenerator.selectPatternType ? melodicGenerator.selectPatternType(id) : null,
-      regenerate: (id) => melodicGenerator.regenerateLoop(id, audioEngine.currentPulse.value)
+      regenerate: (id) => melodicGenerator.regenerateLoop(id, audioEngine.currentPulse.value),
+      setGenParams: (params) => { window.__DBG.__genParams = { ...params } },
+      clearGenParams: () => { delete window.__DBG.__genParams },
+      getGenParams: () => window.__DBG.__genParams || null
     }
   }
 
