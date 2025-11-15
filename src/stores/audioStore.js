@@ -340,6 +340,12 @@ export const useAudioStore = defineStore('audio', () => {
     melodicGenerator.regenerateAllLoops(audioEngine.currentPulse.value)
   }
 
+  const logNotesMatrix = () => {
+    const activeIds = loopManager.loops.value.filter(l => l && l.isActive).map(l => l.id)
+    const payload = activeIds.map(id => ({ id, notes: notesMatrix.getLoopNotes(id) }))
+    console.log('[NotesMatrix]', payload)
+  }
+
   // Distribución panorámica
   const applySparseDistribution = () => {
     if (!audioEngine.audioInitialized.value) return
@@ -805,6 +811,7 @@ export const useAudioStore = defineStore('audio', () => {
     regenerateAllLoops,
     regenerateLoopMelody,
     regenerateAllMelodies,
+    logNotesMatrix,
     applySparseDistribution,
     updateTempo,
     updateMasterVolume,
