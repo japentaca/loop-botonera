@@ -844,31 +844,3 @@ export function useNotesMatrix() {
 
 // Backwards-compatible aliases for older modules that expect different method names
 // These keep the composable API stable while allowing legacy callers to continue working
-export const notesMatrixAliases = {
-  activateLoop: (id) => {
-    const s = useNotesMatrix()
-    if (s && s.setLoopActive) s.setLoopActive(id, true)
-  },
-  deactivateLoop: (id) => {
-    const s = useNotesMatrix()
-    if (s && s.setLoopActive) s.setLoopActive(id, false)
-  },
-  generateRandomNotes: (loopId, density, options) => {
-    const s = useNotesMatrix()
-    if (s && s.generateLoopNotes) return s.generateLoopNotes(loopId, density, options)
-  },
-  quantizeLoopToScale: (loopId, scale, baseNote) => {
-    const s = useNotesMatrix()
-    if (s && s.quantizeLoop) return s.quantizeLoop(loopId, scale)
-  },
-  quantizeAllToScale: (scale) => {
-    const s = useNotesMatrix()
-    if (s && s.quantizeAllActiveLoops) return s.quantizeAllActiveLoops(scale)
-  },
-  inverseLoop: (loopId, centerNote) => {
-    const s = useNotesMatrix()
-    if (s && s.invertLoop) return s.invertLoop(loopId)
-  },
-  // Provide direct access to the composable for modules that import the alias bundle
-  getNotesMatrix: () => useNotesMatrix()
-}

@@ -2,23 +2,8 @@ import { ref, shallowRef, triggerRef } from 'vue'
 import * as Tone from 'tone'
 import { useScales, useNoteUtils } from '../../composables/useMusic'
 import { useMelodicGenerator } from '../../composables/useMelodicGenerator'
+import { clampToMidiRange } from '../../composables/musicUtils.js'
 
-// Helper function for efficient MIDI note clamping
-const clampToMidiRange = (note) => {
-  const MIN_MIDI = 24
-  const MAX_MIDI = 96
-  const OCTAVE = 12
-
-  if (note < MIN_MIDI) {
-    const octavesBelow = Math.ceil((MIN_MIDI - note) / OCTAVE)
-    return note + (octavesBelow * OCTAVE)
-  }
-  if (note > MAX_MIDI) {
-    const octavesAbove = Math.ceil((note - MAX_MIDI) / OCTAVE)
-    return note - (octavesAbove * OCTAVE)
-  }
-  return note
-}
 
 /**
  * Gestor de loops que maneja la creación, configuración y 
@@ -50,45 +35,7 @@ export const useLoopManager = (notesMatrix = null) => {
     return notesMatrix.getLoopNoteDensity(loopId)
   }
 
-  const generateNotes = (scale, baseNote, length) => {
-    // scale should be intervals array here
-
-    const notes = Array.from({ length }, (_, idx) => {
-      const scaleIndex = Math.floor(Math.random() * scale.length)
-      const octave = Math.floor(Math.random() * 3)
-      const note = baseNote + scale[scaleIndex] + (octave * 12)
-
-      // Asegurar que la nota esté en rango MIDI válido SIN salirse de la escala
-      const finalNote = clampToMidiRange(note)
-
-      if (idx < 3) { // Log first 3 notes
-      }
-
-      return finalNote
-    })
-    return notes
-  }
-
-  const generateNotesInRange = (scale, baseNote, length, maxOctaves = 2) => {
-    // scale should be intervals array here
-
-    return Array.from({ length }, (_, idx) => {
-      if (Math.random() < 0.3) return null // 30% silencio
-
-      const scaleIndex = Math.floor(Math.random() * scale.length)
-      const octave = Math.floor(Math.random() * maxOctaves)
-      const note = baseNote + scale[scaleIndex] + (octave * 12)
-
-      // Asegurar rango MIDI válido manteniendo la nota en escala
-      // Note: using 84 as upper limit instead of 96 for this function
-      const finalNote = Math.min(84, clampToMidiRange(note))
-
-      if (idx < 3 && finalNote !== null) { // Log first 3 non-null notes
-      }
-
-      return finalNote
-    })
-  }
+  // Removed legacy local generators to avoid duplication; use melodic generator delegation instead
 
   const generateLoopMelodyFor = (loopId, options = {}) => {
     if (!notesMatrix || !melodicGenerator || typeof melodicGenerator.generateLoopMelody !== 'function') {
@@ -121,8 +68,6 @@ export const useLoopManager = (notesMatrix = null) => {
     // Delta de transposición (en semitonos) con cuantización posterior a la escala
     const transposeDelta = options.transposeDelta ?? ([2, 3, 4][Math.floor(Math.random() * 3)])
 
-    const clampMidi = (n) => n
-
     const transformNote = (note, idx) => {
       let transformed = note
       switch (strategy) {
@@ -144,7 +89,7 @@ export const useLoopManager = (notesMatrix = null) => {
         default:
           transformed = note
       }
-      transformed = clampMidi(transformed)
+      transformed = clampToMidiRange(transformed)
       const quantized = quantizeToScale(transformed, scale, baseNote)
       return quantized
     }
@@ -772,8 +717,6 @@ export const useLoopManager = (notesMatrix = null) => {
     applySparseDistribution,
 
     // Funciones de generación
-    generateNotes,
-    generateNotesInRange,
     generateLoopMelodyFor,
     generateScaleBaseNote,
     generateResponseFromCall,
