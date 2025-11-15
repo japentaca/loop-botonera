@@ -1,5 +1,6 @@
 import { ref, readonly, triggerRef, computed, reactive } from 'vue'
 import { useScales, useNoteUtils } from './useMusic'
+import { useMelodicGenerator } from './useMelodicGenerator'
 
 // Get scale utility at module level
 const { getScale } = useScales()
@@ -312,83 +313,29 @@ export function useNotesMatrix() {
   // Performance optimization: Efficient loop generation
   function generateLoopNotes(loopId, density = 0.3, options = {}) {
     if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
-
-    // Backwards-compatible handling: callers sometimes pass an options object as the
-    // second argument. Detect and normalize parameters.
     if (typeof density === 'object' && density !== null) {
       options = density
       density = (options.density !== undefined) ? options.density : 0.3
     }
-
-    // Coerce density to a number and clamp
     density = Number(density) || 0
     density = Math.max(0, Math.min(1, density))
-
     const meta = loopMetadata[loopId]
-    // Respect locked generationMode: do not overwrite locked loops
     if (meta && meta.generationMode === 'locked') {
-      // Keep existing metadata; do not generate new content
-      if (isNoteInScaleCached) {
-        // noop, but keep for potential debugging
-      }
       return
     }
-
-    // If melodic strategy explicitly requested, delegate
-    if (options && options.strategy === 'melodic') {
-      if (!options.melodicGenerator) {
-        console.log('[MelGen] path=melodic requested but no melodicGenerator provided')
-        return
-      }
-      console.log('[MelGen] path=melodic (explicitly requested)')
-      options.melodicGenerator.regenerateLoop(loopId)
-      return
-    }
-
-    // Default to legacy random generation
-    // console.log('[MelGen] path=legacy (melodic not requested)')
-
-    batchUpdate(() => {
-      const meta = loopMetadata[loopId]
-      const scaleIntervals = getScaleIntervalsCached(meta.scale)
-      const loopNotes = notesMatrix[loopId]
-
-      // Clear existing notes
-      for (let i = 0; i < MAX_STEPS; i++) {
-        loopNotes[i] = null
-      }
-
-      // Generate new notes
-      const noteCount = Math.floor(meta.length * density)
-      const positions = new Set()
-
-      // Performance optimization: Use efficient random position selection
-      while (positions.size < noteCount) {
-        positions.add(Math.floor(Math.random() * meta.length))
-      }
-
-      // Performance optimization: Pre-compute possible notes
-      const possibleNotes = []
-      for (let oct = 0; oct < meta.octaveRange; oct++) {
-        for (const interval of scaleIntervals) {
-          const note = meta.baseNote + interval + (oct * 12)
-          if (note >= MIN_NOTE && note <= MAX_NOTE) {
-            possibleNotes.push(note)
-          }
-        }
-      }
-
-      // Set notes at selected positions
-      for (const pos of positions) {
-        if (possibleNotes.length > 0) {
-          loopNotes[pos] = possibleNotes[Math.floor(Math.random() * possibleNotes.length)]
-        }
-      }
-
-      // Update metadata
-      meta.lastModified = Date.now()
-      meta.density = density
+    const generator = options.melodicGenerator || useMelodicGenerator({
+      MAX_LOOPS,
+      MAX_STEPS,
+      notesMatrix,
+      loopMetadata,
+      setLoopNotes,
+      updateLoopMetadata
     })
+    const notes = generator.generateLoopMelody(loopId, { density })
+    if (Array.isArray(notes)) {
+      setLoopNotes(loopId, notes)
+      updateLoopMetadata(loopId, { density })
+    }
   }
 
   // Performance optimization: Efficient loop resizing

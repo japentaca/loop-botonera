@@ -1,6 +1,7 @@
 import { ref, shallowRef, triggerRef } from 'vue'
 import * as Tone from 'tone'
 import { useScales, useNoteUtils } from '../../composables/useMusic'
+import { useMelodicGenerator } from '../../composables/useMelodicGenerator'
 
 // Helper function for efficient MIDI note clamping
 const clampToMidiRange = (note) => {
@@ -29,6 +30,8 @@ export const useLoopManager = (notesMatrix = null) => {
   // We don't need deep reactivity since currentStep is now computed in components
   const loops = shallowRef([])
   const NUM_LOOPS = 8
+
+  const melodicGenerator = notesMatrix ? useMelodicGenerator(notesMatrix) : null
 
   // Global root note for harmonic consistency - all loops use the same root
   let globalRootNote = 60 // Default to C (middle C)
@@ -85,6 +88,17 @@ export const useLoopManager = (notesMatrix = null) => {
 
       return finalNote
     })
+  }
+
+  const generateLoopMelodyFor = (loopId, options = {}) => {
+    if (!notesMatrix || !melodicGenerator || typeof melodicGenerator.generateLoopMelody !== 'function') {
+      return []
+    }
+    const notes = melodicGenerator.generateLoopMelody(loopId, options)
+    if (Array.isArray(notes) && typeof notesMatrix.setLoopNotes === 'function') {
+      notesMatrix.setLoopNotes(loopId, notes)
+    }
+    return notes || []
   }
 
   // Generar una respuesta derivada de un loop "call"
@@ -760,6 +774,7 @@ export const useLoopManager = (notesMatrix = null) => {
     // Funciones de generación
     generateNotes,
     generateNotesInRange,
+    generateLoopMelodyFor,
     generateScaleBaseNote,
     generateResponseFromCall,
     regenerateLoopNotes,

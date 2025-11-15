@@ -19,6 +19,31 @@ export function useMelodicGenerator(notesMatrix) {
    * @param {Object} options - Generation options
    * @returns {Array<number|null>} Generated melody notes
    */
+  const buildPatternOptions = (meta, options = {}) => {
+    return {
+      length: meta.length,
+      scale: getScale(audioStore.currentScale),
+      baseNote: meta.baseNote,
+      noteRange: { min: meta.noteRangeMin, max: meta.noteRangeMax },
+      density: meta.density,
+      ...options
+    }
+  }
+
+  const generateBasePattern = (patternType, patternOptions) => {
+    switch (patternType) {
+      case 'euclidean':
+        return generateEuclideanPattern(patternOptions)
+      case 'scale': {
+        const { startOffset: _omit, ...scaleOptions } = patternOptions
+        return generateScalePattern(scaleOptions)
+      }
+      case 'random':
+      default:
+        return generateRandomPattern(patternOptions)
+    }
+  }
+
   const generateLoopMelody = (loopId, options = {}) => {
     const startTime = performance.now()
 
@@ -36,35 +61,9 @@ export function useMelodicGenerator(notesMatrix) {
       throw new Error('Current scale is undefined')
     }
     const scale = getScale(scaleName)
-
-    // Select pattern type based on probabilities
     const patternType = selectPatternType(loopId)
-
-    // Generate base pattern
-    const patternOptions = {
-      length: meta.length,
-      scale,
-      baseNote: meta.baseNote,
-      noteRange: { min: meta.noteRangeMin, max: meta.noteRangeMax },
-      density: meta.density,
-      ...options
-    }
-
-    let notes
-    switch (patternType) {
-      case 'euclidean':
-        notes = generateEuclideanPattern(patternOptions)
-        break
-      case 'scale':
-        // Do not forward implicit metadata startOffset, but allow explicit options.startOffset
-        const { startOffset: _omitTopLevel, ...scaleOptions } = patternOptions
-        notes = generateScalePattern(scaleOptions)
-        break
-      case 'random':
-      default:
-        notes = generateRandomPattern(patternOptions)
-        break
-    }
+    const patternOptions = buildPatternOptions(meta, options)
+    const notes = generateBasePattern(patternType, patternOptions)
 
     // Apply counterpoint only if enabled and there are active loops
     const activeLoops = getActiveLoops()
@@ -72,9 +71,10 @@ export function useMelodicGenerator(notesMatrix) {
       notes = applyCounterpoint(loopId, notes, activeLoops)
     }
 
-    // Update metadata
-    meta.lastPattern = patternType
-    meta.lastModified = Date.now()
+    // Update metadata via notesMatrix to avoid readonly mutation warnings
+    if (typeof notesMatrix.updateLoopMetadata === 'function') {
+      notesMatrix.updateLoopMetadata(loopId, { lastPattern: patternType, lastModified: Date.now() })
+    }
 
     const elapsed = performance.now() - startTime
     melLog(`generateLoopMelody loop=${loopId} pattern=${patternType} length=${notes.length} time=${elapsed.toFixed(1)}ms`)
@@ -169,10 +169,15 @@ export function useMelodicGenerator(notesMatrix) {
       melLog(`selectPatternType loop=${loopId} initialized missing patternProbabilities`)
     }
 
-    const probs = meta.patternProbabilities
+    const normalize = (raw) => ({
+      euclidean: Number((raw && raw.euclidean) || 0),
+      scale: Number((raw && raw.scale) || 0),
+      random: Number((raw && raw.random) || 0)
+    })
+    const { euclidean: eu, scale: sc, random: rnd } = normalize(meta.patternProbabilities)
 
     // Normalize probabilities
-    const total = probs.euclidean + probs.scale + probs.random
+    const total = eu + sc + rnd
     if (total === 0) {
       // Fallback to equal distribution
       const pattern = ['euclidean', 'scale', 'random'][Math.floor(Math.random() * 3)]
@@ -184,16 +189,16 @@ export function useMelodicGenerator(notesMatrix) {
     const rand = Math.random() * total
     let cumulative = 0
 
-    if ((cumulative += probs.euclidean) > rand) {
-      melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},scale:${probs.scale.toFixed(2)},random:${probs.random.toFixed(2)}} -> euclidean`)
+    if ((cumulative += eu) > rand) {
+      melLog(`selectPatternType loop=${loopId} probs={euclidean:${eu},scale:${sc},random:${rnd}} -> euclidean`)
       return 'euclidean'
     }
-    if ((cumulative += probs.scale) > rand) {
-      melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},scale:${probs.scale.toFixed(2)},random:${probs.random.toFixed(2)}} -> scale`)
+    if ((cumulative += sc) > rand) {
+      melLog(`selectPatternType loop=${loopId} probs={euclidean:${eu},scale:${sc},random:${rnd}} -> scale`)
       return 'scale'
     }
 
-    melLog(`selectPatternType loop=${loopId} probs={euclidean:${probs.euclidean.toFixed(2)},scale:${probs.scale.toFixed(2)},random:${probs.random.toFixed(2)}} -> random`)
+    melLog(`selectPatternType loop=${loopId} probs={euclidean:${eu},scale:${sc},random:${rnd}} -> random`)
     return 'random'
   }
 
