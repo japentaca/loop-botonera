@@ -49,14 +49,9 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     notes: true         // evolucionar notas/melodías
   })
 
-  // Probabilidades de diferentes tipos de mutación
-  const mutationProbabilities = ref({
-    addNote: 0.3,       // probabilidad de añadir una nota
-    removeNote: 0.25,   // probabilidad de quitar una nota
-    shiftPattern: 0.2,  // probabilidad de desplazar el patrón
-    changeNote: 0.15,   // probabilidad de cambiar una nota existente
-    changePattern: 0.1, // probabilidad de cambiar el tipo de patrón (regenerar melódicamente)
-  })
+  // NOTE: Delegation-only mode: evolution orchestration delegates
+  // responsibility for pattern/note regeneration to `melodicGenerator`.
+  // Mutation probabilities have been removed to keep single responsibility.
 
 
   const pickScaleIntervals = (loop, globalScaleIntervals) => {
@@ -66,7 +61,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   }
 
-  
+
 
   const ensureLoopHasNotes = (loopId, globalScaleIntervals) => {
     const density = notesMatrix.getLoopNoteDensity(loopId)
@@ -84,69 +79,17 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     const rawNote = baseNote + interval + (octave * 12)
     const note = clampToNoteRange(rawNote, rangeMin, rangeMax)
     notesMatrix.setLoopNote(loopId, 0, note)
+    console.log(`[Evolution] ensureLoopHasNotes: loop=${loopId} set note=${note}`)
   }
 
   const mutateLoopRhythm = (loop, globalScaleIntervals, intensity = evolutionIntensity.value) => {
-    const loopNotes = notesMatrix.getLoopNotes(loop.id)
-    if (loopNotes.length === 0) return false
-
-    const changeCount = Math.max(1, Math.floor(loopNotes.length * intensity * 0.5))
-    let mutated = false
-
-    // Get positions of existing notes and empty positions
-    const activePositions = []
-    const emptyPositions = []
-    loopNotes.forEach((note, idx) => {
-      if (note === null || note === undefined) {
-        emptyPositions.push(idx)
-      } else {
-        activePositions.push(idx)
-      }
-    })
-
-    // Shuffle empty positions for better distribution
-    for (let i = emptyPositions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-        ;[emptyPositions[i], emptyPositions[j]] = [emptyPositions[j], emptyPositions[i]]
-    }
-
-    for (let i = 0; i < changeCount; i++) {
-      const action = Math.random()
-
-      if (action < mutationProbabilities.value.addNote && emptyPositions.length > 0) {
-        // Add note to a distributed empty position
-        const stepIndex = emptyPositions.shift()
-        const intervals = pickScaleIntervals(loop, globalScaleIntervals)
-        const meta = notesMatrix.loopMetadata[loop.id] || {}
-        const baseNote = meta.baseNote
-        const octaveRange = meta.octaveRange
-        const rangeMin = meta.noteRangeMin ?? 24
-        const rangeMax = meta.noteRangeMax ?? 96
-        const interval = intervals[Math.floor(Math.random() * intervals.length)]
-        const octave = Math.floor(Math.random() * octaveRange)
-        const rawNote = baseNote + interval + (octave * 12)
-        const newNote = clampToNoteRange(rawNote, rangeMin, rangeMax)
-        notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
-        mutated = true
-      } else if (action < mutationProbabilities.value.addNote + mutationProbabilities.value.removeNote && activePositions.length > 1) {
-        // Remove note from random active position (keep at least 1)
-        const randomIdx = Math.floor(Math.random() * activePositions.length)
-        const stepIndex = activePositions.splice(randomIdx, 1)[0]
-        notesMatrix.clearLoopNote(loop.id, stepIndex)
-        emptyPositions.push(stepIndex)
-        mutated = true
-      } else if (action < mutationProbabilities.value.addNote + mutationProbabilities.value.removeNote + mutationProbabilities.value.changePattern && melodicGenerator) {
-        // Change pattern by regenerating with melodic generation (only if not locked)
-        const meta = notesMatrix.loopMetadata[loop.id]
-        if (meta && meta.generationMode !== 'locked') {
-          melodicGenerator.regenerateLoop(loop.id)
-          mutated = true
-        }
-      }
-    }
-
+    // Delegated rhythm mutation: let melodicGenerator handle any changes.
+    if (!melodicGenerator) return false
+    console.log(`[Evolution] mutateLoopRhythm: delegating regenerateLoop for loop=${loop.id} intensity=${intensity}`)
+    melodicGenerator.regenerateLoop(loop.id, { intensity })
+    // ensure at least one note exists
     ensureLoopHasNotes(loop.id, globalScaleIntervals)
-    return mutated
+    return true
   }
 
   const adjustLoopDensity = (loop, targetDensity, globalScaleIntervals) => {
@@ -173,6 +116,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
       const removalIndex = Math.floor(Math.random() * activeIndices.length)
       const stepIndex = activeIndices.splice(removalIndex, 1)[0]
       notesMatrix.clearLoopNote(loop.id, stepIndex)
+      console.log(`[Evolution] adjustLoopDensity: loop=${loop.id} removed note at step=${stepIndex}`)
     }
 
     // Add notes to distributed inactive positions
@@ -190,6 +134,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
       const newNote = clampToNoteRange(rawNote, rangeMin, rangeMax)
       notesMatrix.setLoopNote(loop.id, stepIndex, newNote)
       activeIndices.push(stepIndex)
+      console.log(`[Evolution] adjustLoopDensity: loop=${loop.id} added note=${newNote} at step=${stepIndex}`)
     }
 
     ensureLoopHasNotes(loop.id, globalScaleIntervals)
@@ -199,48 +144,17 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   // Generar variación de notas/melodía
   const evolveNotes = (loopId, currentNotes, scaleIntervals, intensity = evolutionIntensity.value) => {
-    const meta = notesMatrix.loopMetadata?.[loopId] || {}
-    const rangeMin = meta.noteRangeMin ?? 24
-    const rangeMax = meta.noteRangeMax ?? 96
-    const newNotes = [...currentNotes]
-    const changeCount = Math.floor(newNotes.length * intensity * 0.4)
-
-    for (let i = 0; i < changeCount; i++) {
-      const randomIndex = Math.floor(Math.random() * newNotes.length)
-      const currentNote = newNotes[randomIndex]
-
-      if (currentNote === null) continue // Skip silent notes
-
-      if (Math.random() < mutationProbabilities.value.changeNote) {
-        // Get the base note from the first octave of the current note
-        const noteInFirstOctave = currentNote % 12
-        const octave = Math.floor(currentNote / 12)
-
-        // Find current position in scale
-        let closestIntervalIndex = 0
-        let minDistance = Math.abs(noteInFirstOctave - scaleIntervals[0])
-
-        scaleIntervals.forEach((interval, idx) => {
-          const distance = Math.abs(noteInFirstOctave - interval)
-          if (distance < minDistance) {
-            minDistance = distance
-            closestIntervalIndex = idx
-          }
-        })
-
-        // Move to adjacent scale degree
-        const direction = Math.random() < 0.5 ? -1 : 1
-        const steps = Math.floor(Math.random() * 2) + 1 // 1-2 steps
-        const newDegree = wrapScaleDegree(closestIntervalIndex + (direction * steps), scaleIntervals.length)
-
-        const newInterval = scaleIntervals[newDegree]
-        const newNote = clampToNoteRange((octave * 12) + newInterval, rangeMin, rangeMax)
-
-        newNotes[randomIndex] = newNote
-      }
+    // Delegated note evolution: prefer melodicGenerator to produce coherent melodies.
+    // If melodicGenerator cannot handle this, return the unchanged notes.
+    if (melodicGenerator && typeof melodicGenerator.regenerateLoop === 'function') {
+      console.log(`[Evolution] evolveNotes: delegating regenerateLoop for loop=${loopId} intensity=${intensity}`)
+      melodicGenerator.regenerateLoop(loopId, { intensity })
+      // After regeneration, read notes back from matrix if available
+      const updated = notesMatrix.getLoopNotes(loopId) || currentNotes
+      console.log(`[Evolution] evolveNotes: loop=${loopId} returned ${updated ? updated.length : 0} notes`)
+      return updated
     }
-
-    return newNotes
+    return currentNotes
   }
 
 
@@ -259,6 +173,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     if (Math.random() < 0.15 && notesMatrix) {
       const currentDensity = notesMatrix.getLoopNoteDensity(loop.id)
       const targetDensity = currentDensity < 0.3 ? 0.6 : 0.2
+      console.log(`[Evolution] applyCreativeEvolution: loop=${loop.id} changing density ${currentDensity}->${targetDensity}`)
       adjustLoopDensity(loop, targetDensity, globalScaleIntervals)
     }
 
@@ -273,41 +188,29 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     // Si el loop NO está bloqueado, regenerar patrón y NO aplicar evolución
     if (meta && meta.generationMode !== 'locked') {
       if (melodicGenerator) {
+        console.log(`[Evolution] evolveLoop: loop=${loop.id} not locked -> regenerateLoop`)
         melodicGenerator.regenerateLoop(loop.id)
+      } else {
+        console.log(`[Evolution] evolveLoop: loop=${loop.id} not locked but no melodicGenerator present`)
       }
       // No aplicar evolución (patrón, notas ni creativo) en loops no bloqueados
       return loop
     }
 
-    // Loop bloqueado: aplicar funciones de evolución
-    let evolvedLoop = { ...loop }
-
-    // Evolución de patrón a través de la matriz centralizada
-    if (evolutionTypes.value.pattern) {
-      mutateLoopRhythm(loop, globalScaleIntervals)
+    // Loop bloqueado: delegate full regeneration to melodicGenerator when available
+    if (melodicGenerator && typeof melodicGenerator.regenerateLoop === 'function') {
+      console.log(`[Evolution] evolveLoop: loop=${loop.id} locked -> delegate regenerateLoop intensity=${evolutionIntensity.value}`)
+      melodicGenerator.regenerateLoop(loop.id, { intensity: evolutionIntensity.value, types: evolutionTypes.value, options })
+      // melodicGenerator is expected to update notesMatrix and loop state
+      if (creativeModeEnabled.value && typeof melodicGenerator.applyCreativeEvolution === 'function') {
+        console.log(`[Evolution] evolveLoop: loop=${loop.id} applying creative evolution via melodicGenerator`)
+        melodicGenerator.applyCreativeEvolution(loop.id)
+      }
+      return loop
     }
 
-    // Evolución de notas usando la matriz centralizada
-    if (evolutionTypes.value.notes) {
-      // Obtener notas desde la matriz centralizada
-      const currentNotes = notesMatrix.getLoopNotes(loop.id)
-
-      // Evolucionar notas using global scale intervals
-      const evolvedNotes = evolveNotes(loop.id, currentNotes, globalScaleIntervals)
-
-      // Guardar en la matriz centralizada
-      notesMatrix.setLoopNotes(loop.id, evolvedNotes)
-    }
-
-    // Los efectos (delay y reverb) no se evolucionan automáticamente
-    // Se mantienen estables para preservar la configuración del usuario
-
-    // Aplicar evolución creativa si está habilitada
-    if (creativeModeEnabled.value) {
-      evolvedLoop = applyCreativeEvolution(evolvedLoop, null, globalScaleIntervals)
-    }
-
-    return evolvedLoop
+    // Fallback: if melodicGenerator not provided, keep original loop unchanged
+    return loop
   }
 
   // Evolucionar múltiples loops de forma coordinada
@@ -327,8 +230,10 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
         .sort(() => Math.random() - 0.5)
         .slice(0, loopsToEvolve)
 
+      console.log(`[Evolution] evolveMultipleLoops: selected ${selectedLoops.length}/${activeLoops.length} loops for evolution`)
       const result = loops.map(loop => {
         if (selectedLoops.includes(loop)) {
+          console.log(`[Evolution] evolveMultipleLoops: evolving loop=${loop.id}`)
           return evolveLoop(loop, globalScaleIntervals, options)
         }
         return loop
@@ -348,12 +253,15 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     if (!autoEvolutionEnabled.value) return false
 
     const now = Date.now()
-    return (now - lastEvolutionTime.value) >= evolutionInterval.value
+    const ready = (now - lastEvolutionTime.value) >= evolutionInterval.value
+    if (ready) console.log('[Evolution] shouldEvolve: true')
+    return ready
   }
 
   // Marcar que se realizó una evolución
   const markEvolution = () => {
     lastEvolutionTime.value = Date.now()
+    console.log('[Evolution] markEvolution: evolution marked at', lastEvolutionTime.value)
   }
 
   // Configuración de evolución
@@ -379,7 +287,8 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   // Configurar probabilidades de mutación
   const updateMutationProbabilities = (probabilities) => {
-    mutationProbabilities.value = { ...mutationProbabilities.value, ...probabilities }
+    console.warn('updateMutationProbabilities is deprecated when evolution system delegates to melodicGenerator')
+    return false
   }
 
   // Obtener estadísticas de evolución
@@ -433,57 +342,21 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   // Nuevas funciones para trabajar con la matriz de notas
   const evolveMatrixLoop = (loopId, notesMatrix, intensity = evolutionIntensity.value) => {
+    // Delegated matrix evolution: let melodicGenerator or notesMatrix handle mutations.
     if (!evolutionTypes.value.notes) return false
-
-    const loopNotes = notesMatrix.getLoopNotes(loopId)
-    if (!loopNotes || loopNotes.length === 0) return false
-
-    const changeCount = Math.floor(loopNotes.length * intensity * 0.4)
-    let hasChanges = false
-
-    // Get scale information - ensure we resolve scale name to intervals
-    const meta = notesMatrix.loopMetadata?.[loopId]
-    const scaleName = typeof meta.scale === 'string' ? meta.scale : null
-    if (!scaleName) {
-      console.error('No scale found in loop metadata')
-      throw new Error('Scale must be explicitly set in loop metadata')
-    }
-    const baseNote = meta?.baseNote || 60
-    const rangeMin = meta?.noteRangeMin ?? 24
-    const rangeMax = meta?.noteRangeMax ?? 96
-    const { getScale } = useScales()
-    const scaleIntervals = getScale(scaleName)
-    const { quantizeToScale } = useNoteUtils()
-
-    for (let i = 0; i < changeCount; i++) {
-      const randomStep = Math.floor(Math.random() * loopNotes.length)
-
-      if (Math.random() < mutationProbabilities.value.changeNote) {
-        const currentNote = loopNotes[randomStep]
-
-        if (currentNote !== null) {
-          // Transponer la nota existente respetando la escala
-          const transposition = Math.floor(Math.random() * 7) - 3 // -3 a +3 semitonos
-          const transposedNote = currentNote + transposition
-          // Quantize to scale
-          const quantizedNote = quantizeToScale(transposedNote, scaleIntervals, baseNote)
-          notesMatrix.setLoopNote(loopId, randomStep, clampToNoteRange(quantizedNote, rangeMin, rangeMax))
-          hasChanges = true
-        } else if (Math.random() < mutationProbabilities.value.addNote) {
-          // Agregar una nueva nota dentro de la escala
-          const scaleIndex = Math.floor(Math.random() * scaleIntervals.length)
-          const octave = Math.floor(Math.random() * 3) // 0-2 octavas adicionales
-          const newNote = clampToNoteRange(baseNote + scaleIntervals[scaleIndex] + (octave * 12), rangeMin, rangeMax)
-          notesMatrix.setLoopNote(loopId, randomStep, newNote)
-          hasChanges = true
-        }
-      } else if (Math.random() < mutationProbabilities.value.removeNote && loopNotes[randomStep] !== null) {
-        notesMatrix.clearLoopNote(loopId, randomStep)
-        hasChanges = true
-      }
+    if (melodicGenerator && typeof melodicGenerator.regenerateLoop === 'function') {
+      console.log(`[Evolution] evolveMatrixLoop: delegating regenerateLoop for loop=${loopId} intensity=${intensity}`)
+      melodicGenerator.regenerateLoop(loopId, { intensity })
+      return true
     }
 
-    return hasChanges
+    // Fallback: if notesMatrix exposes a mutateLoop API, call that deterministically.
+    if (notesMatrix && typeof notesMatrix.mutateLoop === 'function') {
+      console.log(`[Evolution] evolveMatrixLoop: falling back to notesMatrix.mutateLoop for loop=${loopId} probability=${intensity}`)
+      return notesMatrix.mutateLoop(loopId, { probability: intensity })
+    }
+
+    return false
   }
 
   const evolveMultipleMatrixLoops = (loopIds, notesMatrix, intensity = evolutionIntensity.value) => {
@@ -563,7 +436,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     evolutionIntensity,
     creativeModeEnabled,
     evolutionTypes,
-    mutationProbabilities,
+
 
     // Funciones de evolución tradicionales
     evolveLoop,
