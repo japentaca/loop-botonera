@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, markRaw } from 'vue'
+import { ref, computed } from 'vue'
 import { useScales, useMusic } from '../composables/useMusic'
 import { useNotesMatrix } from '../composables/useNotesMatrix'
 import { useMelodicGenerator } from '../composables/useMelodicGenerator'
