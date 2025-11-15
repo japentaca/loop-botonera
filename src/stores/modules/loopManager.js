@@ -119,6 +119,15 @@ export const useLoopManager = (notesMatrix = null) => {
           nearest = allowedNotes[i]
         }
       }
+      debugLog('response-map', {
+        responderId: responderLoop.id,
+        src: note,
+        transformed,
+        quantized,
+        nearest,
+        minRange,
+        maxRange
+      })
       return nearest
     }
 

@@ -63,6 +63,14 @@ export function useMelodicGenerator(notesMatrix) {
     const scale = getScale(scaleName)
     const patternType = selectPatternType(loopId)
     const patternOptions = buildPatternOptions(meta, options)
+    melLog('options', {
+      loopId,
+      patternType,
+      baseNote: patternOptions.baseNote,
+      length: patternOptions.length,
+      range: { min: meta.noteRangeMin, max: meta.noteRangeMax },
+      density: patternOptions.density
+    })
     const notes = generateBasePattern(patternType, patternOptions)
 
     // Apply counterpoint only if enabled and there are active loops
@@ -77,7 +85,10 @@ export function useMelodicGenerator(notesMatrix) {
     }
 
     const elapsed = performance.now() - startTime
-    melLog(`generateLoopMelody loop=${loopId} pattern=${patternType} length=${notes.length} time=${elapsed.toFixed(1)}ms`)
+    const minRange = typeof meta.noteRangeMin === 'number' ? meta.noteRangeMin : 24
+    const maxRange = typeof meta.noteRangeMax === 'number' ? meta.noteRangeMax : 96
+    const outOfRange = notes.filter(n => typeof n === 'number' && (n < minRange || n > maxRange)).length
+    melLog(`generateLoopMelody loop=${loopId} pattern=${patternType} length=${notes.length} oob=${outOfRange} time=${elapsed.toFixed(1)}ms`)
 
     return notes
   }
