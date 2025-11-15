@@ -1,150 +1,150 @@
-# REFACTORIZACIÓN PARA AGENTE IA - MÚSICA MODULAR
+# REFACTORING FOR AI AGENT - MODULAR MUSIC
 
-## CRÍTICO: REGLAS DE EJECUCIÓN PARA AGENTE
+## CRITICAL: EXECUTION RULES FOR THE AGENT
 
-### RESTRICCIONES ABSOLUTAS (VIOLAR = FALLAR)
-1. **NUNCA RENOMBRAR ARCHIVOS EXISTENTES**
-   - Mantener nombres originales siempre
-   - Archivos nuevos: usar nombres descriptivos pero no cambiar existentes
-   - Archivos deprecados: mover a `src/deprecated/` sin tocar originales
+### ABSOLUTE RESTRICTIONS (VIOLATION = FAILURE)
+1. **NEVER RENAME EXISTING FILES**
+   - Always keep original names
+   - New files: use descriptive names but do not change existing ones
+   - Deprecated files: move to `src/deprecated/` without touching originals
 
-2. **SIN AUTOMATIZACIÓN DE TESTS**
-   - No usar vitest, jest, ni ningún framework
-   - Pruebas = usuario prueba manual con Chrome DevTools MCP
-   - Verificar funcionalidad en navegador real
+2. **NO TEST AUTOMATION**
+   - Do not use vitest, jest, or any framework
+   - Testing = user performs manual tests with Chrome DevTools MCP
+   - Verify functionality in a real browser
 
-3. **VERIFICACIONES OBLIGATORIAS**
-   - Después de CADA cambio: `npm run dev` debe funcionar
-   - Después de CADA import: verificar que archivo existe realmente
-   - Después de CADA función: revisar exports/imports coincidan
+3. **MANDATORY VERIFICATIONS**
+   - After EACH change: `npm run dev` must work
+   - After EACH import: verify the file actually exists
+   - After EACH function: check exports/imports match
 
-4. **MÁXIMO UN ARCHIVO POR SESIÓN**
-   - No intentar refactorizar múltiples archivos
-   - Completar y verificar uno antes de siguiente
-   - Priorizar estabilidad sobre velocidad
+4. **MAXIMUM ONE FILE PER SESSION**
+   - Do not attempt to refactor multiple files
+   - Complete and verify one before the next
+   - Prioritize stability over speed
 
-## ANÁLISIS RÁPIDO - PROBLEMAS CRÍTICOS
+## QUICK ANALYSIS - CRITICAL PROBLEMS
 
-### Archivo: `src/composables/useMusic.js`
-**Problemas identificados:**
-- ❌ Define escalas + genera patrones + melodías + acordes + cuantización
-- ❌ Funciones mezcladas sin cohesión
-- ❌ 300+ líneas sin separación de responsabilidades
+### File: `src/composables/useMusic.js`
+**Identified issues:**
+- ❌ Defines scales + generates patterns + melodies + chords + quantization
+- ❌ Mixed functions with no cohesion
+- ❌ 300+ lines without separation of responsibilities
 
-**Funciones a extraer (en orden de prioridad):**
-1. `getScaleNotes()` - teoría musical pura
-2. `quantizeToScale()` - utilidad de cuantización  
-3. `generateChordProgression()` - generación de acordes
-4. `getPatternLengths()` - constantes de patrones
+**Functions to extract (in priority order):**
+1. `getScaleNotes()` - pure music theory
+2. `quantizeToScale()` - quantization utility
+3. `generateChordProgression()` - chord generation
+4. `getPatternLengths()` - pattern constants
 
-### Archivo: `src/composables/useMelodicGenerator.js`
-**Problemas identificados:**
-- ❌ Genera melodías + maneja contrapunto + selecciona patrones + regenera loops
-- ❌ Acoplado a `notesMatrix` global
-- ❌ Lógica de selección mezclada con generación
+### File: `src/composables/useMelodicGenerator.js`
+**Identified issues:**
+- ❌ Generates melodies + handles counterpoint + selects patterns + regenerates loops
+- ❌ Coupled to global `notesMatrix`
+- ❌ Selection logic mixed with generation
 
-## PROTOCOLO DE EXTRACCIÓN
+## EXTRACTION PROTOCOL
 
-### Paso 1: Crear archivo auxiliar (misma carpeta)
+### Step 1: Create auxiliary file (same folder)
 ```javascript
 // src/composables/musicTheory.js
-// EXTRAER: Solo funciones de teoría musical
+// EXTRACT: Only music theory functions
 
-export const SCALES = { /* constantes */ };
-export const getScaleNotes = (scaleName) => { /* lógica */ };
-export const getChordNotes = (chordType) => { /* lógica */ };
+export const SCALES = { /* constants */ };
+export const getScaleNotes = (scaleName) => { /* logic */ };
+export const getChordNotes = (chordType) => { /* logic */ };
 ```
 
-### Paso 2: Actualizar original (conservar imports)
+### Step 2: Update original (preserve imports)
 ```javascript
 // src/composables/useMusic.js
 import { SCALES, getScaleNotes, getChordNotes } from './musicTheory.js'
 
-// MANTENER: Exportar funciones para compatibilidad
+// KEEP: Export functions for compatibility
 export { SCALES, getScaleNotes, getChordNotes }
 ```
 
-### Paso 3: Verificar (CRÍTICO)
-1. Chrome DevTools: ¿app carga sin errores?
-2. ¿Generación musical funciona igual?
-3. ¿Sin errores en consola?
+### Step 3: Verify (CRITICAL)
+1. Chrome DevTools: does the app load without errors?
+2. Does musical generation work the same?
+3. No errors in console?
 
-## CHECKLIST DE VERIFICACIÓN
+## VERIFICATION CHECKLIST
 
-### Antes de cambiar código:
-- [ ] Leer archivo completo actual
-- [ ] Identificar funciones a extraer
-- [ ] Verificar que archivo nuevo no existe
+### Before changing code:
+- [ ] Read the complete current file
+- [ ] Identify functions to extract
+- [ ] Verify the new file does not exist
 
-### Durante extracción:
-- [ ] Copiar funciones exactamente (sin cambiar)
-- [ ] Mantener exports originales en archivo viejo
-- [ ] Verificar imports coinciden con archivos reales
-- [ ] NOTA: Vite HMR actualiza automáticamente, no reiniciar servidor
+### During extraction:
+- [ ] Copy functions exactly (without changing)
+- [ ] Keep original exports in the old file
+- [ ] Verify imports match actual files
+- [ ] NOTE: Vite HMR updates automatically, do not restart the server
 
-### Después de extracción:
-- [ ] Verificar HMR actualiza automáticamente (Vite no necesita reinicio)
-- [ ] Chrome DevTools: sin errores de importación
-- [ ] Funcionalidad musical: probar generación
-- [ ] Consola: sin errores undefined/imports
+### After extraction:
+- [ ] Verify HMR updates automatically (Vite does not need restart)
+- [ ] Chrome DevTools: no import errors
+- [ ] Musical functionality: test generation
+- [ ] Console: no undefined/import errors
 
-## SECUENCIA PROPUESTA
+## PROPOSED SEQUENCE
 
-### Sesión 1: Extraer teoría musical de useMusic.js
-1. Crear `src/composables/musicTheory.js`
-2. Mover solo funciones de escalas/acordes
-3. Verificar funcionamiento completo
+### Session 1: Extract music theory from useMusic.js
+1. Create `src/composables/musicTheory.js`
+2. Move only scale/chord functions
+3. Verify full functionality
 
-### Sesión 2: Extraer utilidades de useMusic.js  
-1. Crear `src/composables/musicUtils.js`
-2. Mover cuantización y validaciones
-3. Verificar funcionamiento completo
+### Session 2: Extract utilities from useMusic.js  
+1. Create `src/composables/musicUtils.js`
+2. Move quantization and validations
+3. Verify full functionality
 
-### Sesión 3: Mejorar useMelodicGenerator.js
-1. Extraer lógica de selección de patrones
-2. Separar generación de orquestación
-3. Verificar generación de loops musical
+### Session 3: Improve useMelodicGenerator.js
+1. Extract pattern selection logic
+2. Separate generation from orchestration
+3. Verify musical loop generation
 
-## MENSAJES DE ERROR COMUNES
+## COMMON ERROR MESSAGES
 
 ### "Cannot find module"
-- ERROR: Import apunta a archivo inexistente
-- SOLUCIÓN: Verificar ruta exacta, mayúsculas, .js
+- ERROR: Import points to a non-existent file
+- SOLUTION: Verify exact path, capitalization, `.js`
 
 ### "export not found"
-- ERROR: Función no exportada del archivo
-- SOLUCIÓN: Agregar a exports del archivo origen
+- ERROR: Function not exported from the file
+- SOLUTION: Add it to the file’s exports
 
 ### "undefined is not a function"
-- ERROR: Importación circular o incorrecta
-- SOLUCIÓN: Verificar exports/imports coinciden exacto
+- ERROR: Circular or incorrect import
+- SOLUTION: Verify exports/imports match exactly
 
-## NOTAS TÉCNICAS IMPORTANTES
+## IMPORTANT TECHNICAL NOTES
 
 ### VITE HMR (Hot Module Replacement)
-- **NO REINICIAR** el servidor durante desarrollo
-- Los cambios se aplican automáticamente al guardar
-- Si hay errores, corregir y guardar de nuevo
-- Solo reiniciar si el error persiste después de 10 segundos
+- **DO NOT RESTART** the server during development
+- Changes apply automatically on save
+- If errors occur, fix and save again
+- Only restart if the error persists after 10 seconds
 
-### VERIFICACIÓN RÁPIDA CON HMR
-1. Guardar cambios en archivo
-2. Esperar 2-3 segundos
-3. Verificar en Chrome DevTools: Network tab
-4. Buscar "hmr" requests exitosos
-5. Si hay fallo HMR: corregir error y guardar
+### QUICK VERIFICATION WITH HMR
+1. Save changes in the file
+2. Wait 2–3 seconds
+3. Check in Chrome DevTools: Network tab
+4. Look for successful "hmr" requests
+5. If HMR fails: correct the error and save
 
-## RECORDATORIO FINAL
+## FINAL REMINDER
 
-**SIMPLE > PERFECTO**: Mejor un cambio pequeño que funcione que un gran plan que falle.
+**SIMPLE > PERFECT**: Better a small change that works than a big plan that fails.
 
-**VERIFICAR > SUPONER**: Si no puedes verificar, no hagas el cambio.
+**VERIFY > ASSUME**: If you cannot verify, do not make the change.
 
-**FUNCIONANDO > REFACTORIZADO**: Código funcionando siempre mejor que código roto.
+**WORKING > REFACTORED**: Working code is always better than broken code.
 
-**HMR > REINICIO**: Vite actualiza solo, no interrumpas el flujo de desarrollo.
+**HMR > RESTART**: Vite updates automatically; do not interrupt the development flow.
 
 ---
 
-**ESTADO**: Listo para ejecutar Sesión 1
-**PRÓXIMO PASO**: Extraer teoría musical de useMusic.js → musicTheory.js
+**STATUS**: Ready to execute Session 1
+**NEXT STEP**: Extract music theory from useMusic.js → musicTheory.js
