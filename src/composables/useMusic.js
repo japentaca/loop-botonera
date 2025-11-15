@@ -1,12 +1,9 @@
 import { useScales, useChords } from './musicTheory.js'
-import { clampToMidiRange, quantizeToScale as _quantizeSingle } from './musicUtils.js'
+import { quantizeToScale as _quantizeSingle } from './musicUtils.js'
 
 export { useScales, useChords }
-export { clampToMidiRange } from './musicUtils.js'
 
-// clampToMidiRange now provided by musicUtils.js
-
-
+ 
 
 export function useNoteUtils() {
   // Convertir número MIDI a nombre de nota
