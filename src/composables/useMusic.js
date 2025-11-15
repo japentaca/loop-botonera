@@ -8,88 +8,6 @@ export { clampToMidiRange } from './musicUtils.js'
 // clampToMidiRange now provided by musicUtils.js
 
 
-export function usePatterns() {
-  // Generar patrón rítmico
-  const generateRhythmPattern = (length = 16, density = 0.35) => {
-    const pattern = new Array(length).fill(false)
-
-    // Aplicar densidad
-    for (let i = 0; i < length; i++) {
-      if (Math.random() < density) {
-        pattern[i] = true
-      }
-    }
-
-    // Asegurar al menos una nota activa
-    if (!pattern.some(Boolean)) {
-      pattern[0] = true
-    }
-
-    return pattern
-  }
-
-  // Generar patrón melódico
-  const generateMelodyPattern = (scale, baseNote, length = 16) => {
-    const notes = []
-
-    for (let i = 0; i < length; i++) {
-      const scaleIndex = Math.floor(Math.random() * scale.length)
-      const octave = Math.floor(Math.random() * 3) // 0-2 octavas adicionales
-      const note = baseNote + scale[scaleIndex] + (octave * 12)
-      notes.push(note)
-    }
-
-    return notes
-  }
-
-  // Generar patrón euclidiano
-  const generateEuclideanPattern = (steps, pulses) => {
-    if (pulses >= steps) {
-      return new Array(steps).fill(true)
-    }
-
-    const pattern = new Array(steps).fill(false)
-    const interval = steps / pulses
-
-    for (let i = 0; i < pulses; i++) {
-      const index = Math.round(i * interval) % steps
-      pattern[index] = true
-    }
-
-    return pattern
-  }
-
-  // Generar patrón con swing
-  const generateSwingPattern = (length = 16, swingAmount = 0.1) => {
-    const pattern = generateRhythmPattern(length)
-    const swingPattern = []
-
-    for (let i = 0; i < pattern.length; i++) {
-      if (pattern[i]) {
-        // Aplicar swing en beats off (impares)
-        const timing = i % 2 === 1 ? swingAmount : 0
-        swingPattern.push({
-          active: true,
-          timing: timing
-        })
-      } else {
-        swingPattern.push({
-          active: false,
-          timing: 0
-        })
-      }
-    }
-
-    return swingPattern
-  }
-
-  return {
-    generateRhythmPattern,
-    generateMelodyPattern,
-    generateEuclideanPattern,
-    generateSwingPattern
-  }
-}
 
 export function useNoteUtils() {
   // Convertir número MIDI a nombre de nota
@@ -135,7 +53,6 @@ export function useNoteUtils() {
 
 export function useMusic() {
   const { scales, getRandomScale, getScale, generateScaleNotes } = useScales()
-  const { generateRhythmPattern, generateMelodyPattern, generateEuclideanPattern, generateSwingPattern } = usePatterns()
   const { midiToNoteName, noteNameToMidi } = useNoteUtils()
 
   // Funciones para escalas consonantes y disonantes

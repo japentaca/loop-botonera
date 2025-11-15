@@ -518,7 +518,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (caller) {
       responseNotes = loopManager.generateResponseFromCall(caller, responder, scale, responder.baseNote)
     } else {
-      responseNotes = loopManager.generateNotesInRange(scale, responder.baseNote, responder.length, 2)
+      responseNotes = loopManager.generateLoopMelodyFor(responder.id, {})
     }
 
     // Guardar las notas en la matriz centralizada
