@@ -25,7 +25,7 @@
         <div class="mini-control">
           <span class="mini-label">Tamaño</span>
           <Slider :modelValue="sizeIndex"
-            @update:modelValue="audioStore.updateLoopParam(loop.id, 'length', allowedSizes[$event])" :min="0" :max="9"
+            @update:modelValue="audioStore.updateLoopParam(loop.id, 'length', allowedSizes[$event])" :min="0" :max="allowedSizes.length - 1"
             :step="1" class="mini-slider" :disabled="!audioStore.audioInitialized" />
           <span class="mini-value">{{ loop.length }}</span>
         </div>
@@ -113,7 +113,7 @@
 
   // onBeforeUpdate and onUpdated removed to prevent spam during playback
   // These fire constantly because currentPulse updates every 16th note  // Tamaños permitidos para el loop
-  const allowedSizes = [4, 8, 12, 16, 32, 48, 64, 128, 256, 512]
+  const allowedSizes = [4, 8, 12, 16, 32, 48, 64, 96, 128, 256, 512]
 
   // Índice del tamaño actual basado en la lista permitida
   const sizeIndex = computed(() => {

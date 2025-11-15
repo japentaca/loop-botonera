@@ -31,6 +31,13 @@
           <span class="value-compact">{{ tempMasterVolume }}%</span>
         </div>
 
+        <div class="control-group-compact">
+          <label class="control-label-compact">Densidad</label>
+          <Slider v-model="tempGlobalDensityBias" :min="0" :max="100" @change="onGlobalDensityBiasInput(tempGlobalDensityBias)"
+            class="range-compact" :disabled="!audioStore.audioInitialized" />
+          <span class="value-compact">{{ tempGlobalDensityBias }}%</span>
+        </div>
+
         <Button @click="audioStore.applySparseDistribution" class="sparse-button" label="Sparse" size="small"
           severity="secondary" title="Distribuir canales activos en el panorama estéreo"
           :disabled="!audioStore.audioInitialized" />
@@ -162,6 +169,9 @@
   const tempMasterVolume = ref(audioStore.masterVolume || 70)
   let volumeTimer = null
 
+  const tempGlobalDensityBias = ref(Math.round((audioStore.globalDensityBias || 0.5) * 100))
+  let densityTimer = null
+
   const nextEvolveInBeats = computed(() => {
     if (!audioStore.autoEvolve) return 0
     const remainingPulses = audioStore.nextEvolveMeasure - audioStore.currentPulse
@@ -194,6 +204,15 @@
     }, 150) // Debounce más corto para volumen para mejor respuesta
   }
 
+  const onGlobalDensityBiasInput = (value) => {
+    const v = Math.max(0, Math.min(100, Number(value)))
+    tempGlobalDensityBias.value = v
+    if (densityTimer) clearTimeout(densityTimer)
+    densityTimer = setTimeout(() => {
+      audioStore.updateGlobalDensityBias(v / 100)
+    }, 250)
+  }
+
   // Mantener sincronizado tempTempo con cambios externos
   watch(() => audioStore.tempo, (newTempo) => {
     tempTempo.value = newTempo
@@ -202,6 +221,10 @@
   // Mantener sincronizado tempMasterVolume con cambios externos
   watch(() => audioStore.masterVolume, (newVolume) => {
     tempMasterVolume.value = newVolume
+  })
+
+  watch(() => audioStore.globalDensityBias, (newBias) => {
+    tempGlobalDensityBias.value = Math.round((newBias || 0) * 100)
   })
 
   // Métodos

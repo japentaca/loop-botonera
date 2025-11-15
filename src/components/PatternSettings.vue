@@ -45,6 +45,27 @@
       </div>
     </div>
 
+    <div class="density-controls">
+      <div class="density-mode-toggle">
+        <label class="toggle-label">
+          <input type="checkbox" :checked="densityMode === 'auto'" @change="toggleDensityMode" />
+          <span class="toggle-slider"></span>
+          <span>{{ densityMode === 'auto' ? 'Densidad Auto' : 'Densidad Manual' }}</span>
+        </label>
+      </div>
+
+      <div v-if="densityMode === 'manual'" class="density-slider">
+        <span class="control-label">Densidad</span>
+        <Slider :modelValue="manualDensityPercent" @update:modelValue="onManualDensityChange($event)" :min="0" :max="100" :step="1" class="probability-slider" />
+        <span class="probability-value">{{ manualDensityPercent }}%</span>
+      </div>
+
+      <div class="effective-density">
+        <span class="control-label">Densidad efectiva</span>
+        <span class="probability-value">{{ effectiveDensityPercent }}%</span>
+      </div>
+    </div>
+
     <div class="current-pattern-display" v-if="lastPattern">
       <span class="pattern-label">Last Pattern:</span>
       <span class="pattern-type" :class="`pattern-${lastPattern}`">{{ lastPattern }}</span>
@@ -97,7 +118,16 @@
   const generationMode = computed(() => metadata.value?.generationMode ?? 'auto')
   const lastPattern = computed(() => metadata.value?.lastPattern ?? null)
 
-  const isLocked = computed(() => generationMode.value === 'locked')  // Methods
+  const isLocked = computed(() => generationMode.value === 'locked')
+
+  const densityMode = computed(() => metadata.value?.densityMode ?? 'auto')
+  const manualDensityPercent = computed(() => Math.round(((metadata.value?.manualDensity ?? 0.3) * 100)))
+  const effectiveDensityPercent = computed(() => {
+    const mode = metadata.value?.densityMode === 'manual' ? 'manual' : 'auto'
+    const val = mode === 'manual' ? (metadata.value?.manualDensity ?? 0.3) : (metadata.value?.autoDensity ?? 0.3)
+    const n = typeof val === 'number' && isFinite(val) ? Math.max(0, Math.min(1, val)) : 0.3
+    return Math.round(n * 100)
+  })
   const updateProbability = (patternType, value) => {
     const newProbabilities = { ...localProbabilities.value }
     newProbabilities[patternType] = value
@@ -127,6 +157,16 @@
       loopId: props.loopId,
       updates: { generationMode: newMode }
     })
+  }
+
+  const toggleDensityMode = () => {
+    const newMode = densityMode.value === 'auto' ? 'manual' : 'auto'
+    emit('update-metadata', { loopId: props.loopId, updates: { densityMode: newMode } })
+  }
+
+  const onManualDensityChange = (value) => {
+    const v = Math.max(0, Math.min(100, Number(value)))
+    emit('update-metadata', { loopId: props.loopId, updates: { manualDensity: v / 100 } })
   }
 
   const midiToNoteName = (midiNote) => {
@@ -167,6 +207,31 @@
     color: var(--text-color);
     font-size: 1.2rem;
     font-weight: 700;
+  }
+
+  .density-controls {
+    margin-top: 1rem;
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .density-mode-toggle {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  .density-slider {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .effective-density {
+    display: grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .lock-toggle {

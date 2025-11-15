@@ -122,14 +122,17 @@ export const useEnergyManager = (notesMatrix = null) => {
 
   const lerp = (a, b, t) => (a * (1 - t)) + (b * t)
 
-  const computeDynamicDensity = (loops = []) => {
-    if (!energyManagementEnabled.value) return 0.3
+  const computeDynamicDensity = (loops = [], bias = 0.5) => {
+    if (!energyManagementEnabled.value) return Math.max(MIN_DYNAMIC_DENSITY, Math.min(MAX_DYNAMIC_DENSITY, Number(bias) || 0.3))
 
     const activeCount = Math.max(1, loops.filter(l => l.isActive).length)
     const effectiveNumLoops = Math.max(1, NUM_LOOPS || loops.length || 1)
     const t = (activeCount - 1) / Math.max(1, (effectiveNumLoops - 1))
 
     let baseDensity = lerp(MAX_DYNAMIC_DENSITY, MIN_DYNAMIC_DENSITY, t)
+
+    const preferred = Math.max(MIN_DYNAMIC_DENSITY, Math.min(MAX_DYNAMIC_DENSITY, Number(bias)))
+    baseDensity = lerp(baseDensity, preferred, 0.5)
 
     const currentEnergy = calculateSonicEnergy(loops)
     if (currentEnergy > maxSonicEnergy.value) {

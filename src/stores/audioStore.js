@@ -91,7 +91,7 @@ export const useAudioStore = defineStore('audio', () => {
   const applyDynamicDensities = debounce(() => {
     try {
       const loops = loopManager.loops.value
-      const density = energyManager.computeDynamicDensity(loops)
+      const density = energyManager.computeDynamicDensity(loops, globalDensityBias.value)
 
       // Update each active, unlocked loop
       for (let i = 0; i < loops.length; i++) {
@@ -100,10 +100,11 @@ export const useAudioStore = defineStore('audio', () => {
 
         const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loop.id]
         if (meta && meta.generationMode === 'locked') continue
+        if (meta && meta.densityMode === 'manual') continue
 
         // Persist density in metadata only (no regeneration here)
         if (notesMatrix.updateLoopMetadata) {
-          notesMatrix.updateLoopMetadata(loop.id, { density })
+          notesMatrix.updateLoopMetadata(loop.id, { autoDensity: density, density })
         }
       }
     } catch (err) {
@@ -113,6 +114,15 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Estado específico del store principal (coordinación entre módulos)
   const currentScale = ref('major') // Default scale - must be set before loop initialization
+
+  // Control global de densidad
+  const globalDensityBias = ref(0.5)
+  const updateGlobalDensityBias = (value) => {
+    const v = Math.max(0, Math.min(1, Number(value)))
+    globalDensityBias.value = v
+    applyDynamicDensities()
+    notifyPresetChanges()
+  }
 
   // Estado de evolución automática (coordinación entre módulos)
   const autoEvolve = ref(false)
@@ -796,6 +806,8 @@ export const useAudioStore = defineStore('audio', () => {
     momentumEnabled,
     callResponseEnabled,
     tensionReleaseMode,
+    // Densidad global
+    globalDensityBias,
 
     // Estado de gestión de energía
     energyManagementEnabled: energyManager.energyManagementEnabled,
@@ -820,6 +832,7 @@ export const useAudioStore = defineStore('audio', () => {
     updateMasterVolume,
     updateScale,
     updateDelayDivision,
+    updateGlobalDensityBias,
     // Sincronización
     resetLoopCounters,
 

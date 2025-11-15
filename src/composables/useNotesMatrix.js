@@ -41,6 +41,9 @@ const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => reactive({
   length: 16,
   octaveRange: 2,
   density: 0,
+  densityMode: 'auto',
+  manualDensity: 0.3,
+  autoDensity: 0.3,
   // Timing: optional explicit start offset (pulse index). If null, generator chooses.
   startOffset: null,
   lastModified: Date.now(),
@@ -152,6 +155,16 @@ function computeLoopDensityMetrics(loopId) {
   return metrics
 }
 
+// Resolver de densidad efectiva por loop
+function getEffectiveDensity(loopId) {
+  if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return 0.3
+  const meta = loopMetadata[loopId]
+  const mode = meta.densityMode === 'manual' ? 'manual' : 'auto'
+  const val = mode === 'manual' ? meta.manualDensity : meta.autoDensity
+  const n = typeof val === 'number' && !isNaN(val) ? val : 0.3
+  return Math.max(0, Math.min(1, n))
+}
+
 export function useNotesMatrix() {
   // Initialize music utilities
   // Performance optimization: Efficient loop initialization
@@ -167,6 +180,9 @@ export function useNotesMatrix() {
         length: options.length || matrixState.value.stepCount,
         octaveRange: options.octaveRange || 2,
         density: 0,
+        densityMode: options.densityMode || 'auto',
+        manualDensity: typeof options.manualDensity === 'number' ? Math.max(0, Math.min(1, options.manualDensity)) : 0.3,
+        autoDensity: typeof options.autoDensity === 'number' ? Math.max(0, Math.min(1, options.autoDensity)) : 0.3,
         startOffset: typeof options.startOffset === 'number' ? Math.max(0, Math.min((options.length || matrixState.value.stepCount) - 1, Math.floor(options.startOffset))) : null,
         lastModified: Date.now(),
         // Melodic generation fields
@@ -219,6 +235,16 @@ export function useNotesMatrix() {
       // Validate density if provided
       if (metadata.density !== undefined) {
         metadata.density = typeof metadata.density === 'number' && !isNaN(metadata.density) ? Math.max(0, Math.min(1, metadata.density)) : 0.3
+      }
+      if (metadata.manualDensity !== undefined) {
+        metadata.manualDensity = typeof metadata.manualDensity === 'number' && !isNaN(metadata.manualDensity) ? Math.max(0, Math.min(1, metadata.manualDensity)) : 0.3
+      }
+      if (metadata.autoDensity !== undefined) {
+        metadata.autoDensity = typeof metadata.autoDensity === 'number' && !isNaN(metadata.autoDensity) ? Math.max(0, Math.min(1, metadata.autoDensity)) : 0.3
+      }
+      if (metadata.densityMode !== undefined) {
+        const mode = metadata.densityMode === 'manual' ? 'manual' : 'auto'
+        metadata.densityMode = mode
       }
       // Clamp startOffset to valid range if provided
       if (metadata.startOffset !== undefined) {
@@ -316,6 +342,10 @@ export function useNotesMatrix() {
       options = density
       density = (options.density !== undefined) ? options.density : 0.3
     }
+    // If no explicit density provided, use effective density from metadata
+    if (options.density === undefined) {
+      density = getEffectiveDensity(loopId)
+    }
     density = Number(density) || 0
     density = Math.max(0, Math.min(1, density))
     const meta = loopMetadata[loopId]
@@ -333,7 +363,8 @@ export function useNotesMatrix() {
     const notes = generator.generateLoopMelody(loopId, { density })
     if (Array.isArray(notes)) {
       setLoopNotes(loopId, notes)
-      updateLoopMetadata(loopId, { density })
+      const effective = Math.max(0, Math.min(1, Number(density) || 0))
+      updateLoopMetadata(loopId, { density: effective })
     }
   }
 
@@ -837,7 +868,18 @@ export function useNotesMatrix() {
     clearMatrix,
     exportMatrix,
     importMatrix,
-    logNotesMatrix
+    logNotesMatrix,
+    // Densidad por loop
+    setLoopDensityMode: (loopId, mode) => {
+      updateLoopMetadata(loopId, { densityMode: mode })
+    },
+    setManualDensity: (loopId, value) => {
+      updateLoopMetadata(loopId, { manualDensity: value, density: value })
+    },
+    setAutoDensity: (loopId, value) => {
+      updateLoopMetadata(loopId, { autoDensity: value, density: value })
+    },
+    getEffectiveDensity: (loopId) => getEffectiveDensity(loopId)
   }
 }
 

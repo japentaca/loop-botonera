@@ -20,12 +20,14 @@ export function useMelodicGenerator(notesMatrix) {
    * @returns {Array<number|null>} Generated melody notes
    */
   const buildPatternOptions = (meta, options = {}) => {
+    const providedDensity = (options && typeof options.density === 'number') ? options.density : undefined
+    const fallbackDensity = (typeof meta.density === 'number') ? meta.density : 0.3
     return {
       length: meta.length,
       scale: getScale(audioStore.currentScale),
       baseNote: meta.baseNote,
       noteRange: { min: meta.noteRangeMin, max: meta.noteRangeMax },
-      density: meta.density,
+      density: providedDensity !== undefined ? providedDensity : fallbackDensity,
       densityTiming: meta.densityTiming ?? 'random',
       positionMapping: meta.positionMapping ?? 'sequential',
       startOffset: meta.startOffset ?? 0,
