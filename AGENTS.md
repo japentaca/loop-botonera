@@ -7,4 +7,4 @@
  - if the agent has questions, ask them one-by-one to the user
  - always prefer pure vanilla JavaScript for implementation of new modules and utilities
  - avoid use of Vue reactivity inside modules where possible (wrap reactivity at store/UI boundaries only)
- - Frontend tests can be made using Chrome devtools MCP 
+ - Frontend tests can be made using Chrome devtools MCP by opening  http://localhost:5173/
