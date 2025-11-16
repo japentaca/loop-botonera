@@ -53,7 +53,7 @@ export const useAudioStore = defineStore('audio', () => {
     energyManager.updateNumLoops(loopManager.NUM_LOOPS)
   }
 
-  
+
 
   const evolutionSystem = useEvolutionSystem(notesMatrix)
 
@@ -311,6 +311,35 @@ export const useAudioStore = defineStore('audio', () => {
     loopManager.regenerateLoop(id, scale, currentScale.value, adaptiveVolume, audioEngine.currentPulse.value)
   }
 
+  // Unified pattern generation API: read metadata from notesMatrix and generate accordingly
+  const generateLoopPattern = (loopId) => {
+    try {
+      // Validate loop id
+      if (typeof loopId !== 'number' || loopId >= loopManager.NUM_LOOPS) return
+
+      // Prefer melodic generation if the metadata explicitly requests it (optional)
+      const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loopId]
+      const preferMelodic = meta && meta.generationMode === 'melodic'
+
+      const currentPulse = audioEngine.currentPulse.value
+      const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, loopId)
+
+      if (preferMelodic && typeof melodicGenerator?.regenerateLoop === 'function') {
+        // melodic generator can accept optional currentPulse; call centrally so UI/evolver never pass args
+        // Silent mode avoids metadata changes
+        melodicGenerator.regenerateLoop(loopId, currentPulse, { silent: true })
+        return
+      }
+
+      // Default: matrix-based generator - use silent mode to prevent metadata updates
+      if (typeof notesMatrix.generateLoopNotes === 'function') {
+        notesMatrix.generateLoopNotes(loopId, { silent: true })
+      }
+    } catch (err) {
+      console.error('[generateLoopPattern] error', err)
+    }
+  }
+
   // Regenerar todos los loops
   const regenerateAllLoops = () => {
 
@@ -344,6 +373,12 @@ export const useAudioStore = defineStore('audio', () => {
 
     console.log('[regenerateAllMelodies] Starting regeneration of all active loops')
     melodicGenerator.regenerateAllLoops(audioEngine.currentPulse.value)
+  }
+
+  // Generate patterns for all active loops via unified API
+  const generateAllPatterns = () => {
+    const activeIds = loopManager.loops.value.filter(l => l && l.isActive).map(l => l.id)
+    activeIds.forEach(i => generateLoopPattern(i))
   }
 
   const logNotesMatrix = () => {
@@ -408,7 +443,7 @@ export const useAudioStore = defineStore('audio', () => {
       setMeta: (id, updates) => notesMatrix.updateLoopMetadata(id, updates),
       loops: loopManager.loops,
       selectPatternType: (id) => notesMatrix.selectPatternType ? notesMatrix.selectPatternType(id) : null,
-      regenerate: (id) => notesMatrix.generateLoopNotes(id),
+      regenerate: (id) => generateLoopPattern(id),
       setGenParams: (params) => { window.__DBG.__genParams = { ...params } },
       clearGenParams: () => { delete window.__DBG.__genParams },
       getGenParams: () => window.__DBG.__genParams || null
@@ -521,24 +556,16 @@ export const useAudioStore = defineStore('audio', () => {
       throw new Error(`Invalid current scale: "${currentScale.value}"`)
     }
 
-    // Fijar base del respondedor cercana a la del caller si existe, con pequeña variación de octava
-    const baseNotes = [36, 48, 60, 72]
-    const baseFromCaller = (caller?.baseNote ?? null)
-    const octaveShift = Math.random() < 0.5 ? 0 : (Math.random() < 0.5 ? 12 : -12)
-    const chosenBase = baseFromCaller ? (baseFromCaller + octaveShift)
-      : baseNotes[Math.floor(Math.random() * baseNotes.length)]
-    responder.baseNote = chosenBase
-
-    // Generar respuesta derivada del caller si existe; en su defecto, generar notas en rango
-    let responseNotes
-    if (caller) {
-      responseNotes = loopManager.generateResponseFromCall(caller, responder, scale, responder.baseNote)
-    } else {
-      responseNotes = loopManager.generateLoopMelodyFor(responder.id, {})
-    }
-
-    // Guardar las notas en la matriz centralizada
-    notesMatrix.setLoopNotes(responder.id, responseNotes)
+    // For evolver usage (call/response mode), do not run special response mapping
+    // generation (which can change the musical behavior). Instead, use the central
+    // generation API so evolution and UI behave the same.
+    loopsToReharmonize.forEach(loop => {
+      try {
+        generateLoopPattern(loop.id)
+      } catch (err) {
+        console.error('[CallResponse] generateLoopPattern failed', err)
+      }
+    })
 
     return loopsToReharmonize
   }
@@ -598,36 +625,68 @@ export const useAudioStore = defineStore('audio', () => {
       const activeLoopsCount = loopManager.loops.value.filter(l => l.isActive).length
       const regenIntents = intents.filter(i => i.type === 'regenerate')
       const doGlobalRegeneration = regenIntents.length > Math.floor(activeLoopsCount / 2)
-      const metadataUpdatesByLoop = {}
-      intents.forEach(i => {
-        if (i.type === 'metadataUpdate') {
-          const k = i.loopId
-          const prev = metadataUpdatesByLoop[k] || {}
-          metadataUpdatesByLoop[k] = { ...prev, ...i.updates }
-        }
-      })
+      // We intentionally DO NOT apply metadata updates from evolution intents here.
+      // Evolver must never modify loop metadata - metadata changes must be explicit
+      // user or preset actions. The intents array may contain regenerate/quantize
+      // or mutation intents only.
 
       const start = performance.now()
       if (doGlobalRegeneration) {
         for (let loopId = 0; loopId < notesMatrix.MAX_LOOPS; loopId++) {
           const meta = notesMatrix.loopMetadata[loopId]
           if (meta && meta.isActive) {
-            notesMatrix.generateLoopNotes(loopId)
+            // Use unified API to generate loop patterns (no args, no metadata modifications)
+            generateLoopPattern(loopId)
           }
         }
       } else {
         regenIntents.forEach(i => {
-          notesMatrix.generateLoopNotes(i.loopId)
+          // Use unified API for regeneration
+          generateLoopPattern(i.loopId)
         })
       }
 
-      Object.keys(metadataUpdatesByLoop).forEach(loopId => {
-        notesMatrix.updateLoopMetadata(Number(loopId), metadataUpdatesByLoop[loopId])
+      // Apply mutation intents (if any) produced by the evolution system.
+      intents.filter(i => i.type === 'mutate').forEach(i => {
+        try {
+          // If it's a matrix mutation, prefer evolution system utility
+          if (evolutionSystem && typeof evolutionSystem.applyMatrixMutation === 'function') {
+            // mutation object defines the type and params
+            const m = i.mutation || {}
+            const loopId = i.loopId
+            const mutationType = m.mutationType || m.type
+            evolutionSystem.applyMatrixMutation(loopId, notesMatrix, mutationType, m.params || {})
+          } else {
+            // Fallback: attempt to apply known mutations directly
+            const m = i.mutation || {}
+            const mutationType = m.mutationType || m.type
+            switch (mutationType) {
+              case 'transpose':
+                notesMatrix.transposeLoop(i.loopId, m.params?.semitones || 0)
+                break
+              case 'rotate':
+                notesMatrix.rotateLoop(i.loopId, m.params?.steps || 1)
+                break
+              case 'inverse':
+                notesMatrix.inverseLoop(i.loopId, m.params?.centerNote || 60)
+                break
+              case 'mutate':
+                if (notesMatrix && typeof notesMatrix.mutateLoop === 'function') {
+                  notesMatrix.mutateLoop(i.loopId, { probability: m.params?.probability || 0.3 })
+                }
+                break
+              default:
+                console.warn('[Evolve] Unknown mutation type', mutationType)
+            }
+          }
+        } catch (err) {
+          console.error('[Evolve] apply mutation failed', err)
+        }
       })
 
-      intents.filter(i => i.type === 'quantize').forEach(i => {
-        notesMatrix.quantizeLoop(i.loopId, currentScale.value)
-      })
+      // No metadata application step here to ensure evolver cannot alter metadata.
+
+      // Quantize intents are ignored for evolution to avoid modifying metadata.
 
       if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
         const loopsToReharmonize = selectRandomLoops(Math.ceil(evolutionSystem.evolutionIntensity.value * 5))
@@ -839,9 +898,11 @@ export const useAudioStore = defineStore('audio', () => {
     updateLoopParam,
     updateLoopSynth,
     regenerateLoop,
+    generateLoopPattern,
     regenerateAllLoops,
     regenerateLoopMelody,
     regenerateAllMelodies,
+    generateAllPatterns,
     logNotesMatrix,
     applySparseDistribution,
     updateTempo,

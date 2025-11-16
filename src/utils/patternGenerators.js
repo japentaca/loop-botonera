@@ -64,7 +64,7 @@ export function generateEuclideanPattern(loopId, options = {}) {
 }
 
 /**
- * Generate scale pattern (formerly called "arpeggio" / broken chord progression)
+
  *
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */

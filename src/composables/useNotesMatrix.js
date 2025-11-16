@@ -343,7 +343,7 @@ export function useNotesMatrix() {
   function generateLoopNotes(loopId, options = {}) {
     if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
     const meta = loopMetadata[loopId]
-    if (meta && meta.generationMode === 'locked') return
+    const silent = options && options.silent === true
     const density = getEffectiveDensity(loopId)
     const scaleName = meta.scale || 'major'
     const scaleIntervals = getScaleIntervalsCached(scaleName)
@@ -421,7 +421,9 @@ export function useNotesMatrix() {
     }
 
     setLoopNotes(loopId, out)
-    updateLoopMetadata(loopId, { density, lastPattern: patternType })
+    if (!silent) {
+      updateLoopMetadata(loopId, { density, lastPattern: patternType })
+    }
     const metrics = computeLoopDensityMetrics(loopId)
   }
 

@@ -83,13 +83,13 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
   }
 
   const createRegenerateIntent = (loopId, options = {}) => ({ type: 'regenerate', loopId, options })
-  const createMetadataUpdateIntent = (loopId, updates = {}) => ({ type: 'metadataUpdate', loopId, updates })
-  const createQuantizeIntent = (loopId) => ({ type: 'quantize', loopId })
+  const createMutateIntent = (loopId, mutation = {}) => ({ type: 'mutate', loopId, mutation })
+  // Quantization intents are no longer created by the evolver to avoid metadata changes
 
   const mutateLoopRhythm = (loop, globalScaleIntervals, intensity = evolutionIntensity.value) => {
     const intents = []
-    intents.push(createRegenerateIntent(loop.id, { intensity }))
-    intents.push(createMetadataUpdateIntent(loop.id, { ensureNotes: true, globalScaleIntervals }))
+    // Mutate rhythm: prefer mutation over full regenerate when possible. Use generic 'mutate' mutation
+    intents.push(createMutateIntent(loop.id, { type: 'mutate', mutationType: 'rhythm', params: { intensity } }))
     return intents
   }
 
@@ -146,8 +146,8 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
   // Generar variación de notas/melodía
   const evolveNotes = (loopId, currentNotes, scaleIntervals, intensity = evolutionIntensity.value) => {
     const intents = []
-    intents.push(createRegenerateIntent(loopId, { intensity }))
-    intents.push(createQuantizeIntent(loopId))
+    // Evolve notes by producing mutate intent; fallback to regenerate if intense.
+    intents.push(createMutateIntent(loopId, { type: 'mutate', mutationType: 'mutateNotes', params: { intensity } }))
     return intents
   }
 
@@ -178,16 +178,18 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
   const evolveLoop = (loop, globalScaleIntervals, options = {}) => {
     const intents = []
     const meta = notesMatrix.loopMetadata?.[loop.id]
-    if (meta && meta.generationMode !== 'locked') {
+    if (meta && meta.generationMode === 'locked') {
+      // Pattern is locked; we may regenerate using the locked pattern generator but should not
+      // apply mutations that would change metadata/state.
       intents.push(createRegenerateIntent(loop.id, { intensity: evolutionIntensity.value, types: evolutionTypes.value, options }))
-      intents.push(createMetadataUpdateIntent(loop.id, { ensureNotes: true, globalScaleIntervals }))
       return intents
     }
+    // For unlocked loops, we can propose both regenerate and mutation intents. Mutations
+    // affect notes only (rhythm, transpose, rotate, mutate) and never update metadata.
     intents.push(createRegenerateIntent(loop.id, { intensity: evolutionIntensity.value, types: evolutionTypes.value, options }))
-    intents.push(createQuantizeIntent(loop.id))
-    if (creativeModeEnabled.value) {
-      intents.push(createMetadataUpdateIntent(loop.id, { creative: true }))
-    }
+    // Add a default mutate notes intent for melodic evolution
+    intents.push(createMutateIntent(loop.id, { type: 'mutate', mutationType: 'mutateNotes', params: { intensity: evolutionIntensity.value } }))
+    // creativeMode no longer issues metadata updates
     return intents
   }
 
@@ -304,7 +306,14 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     // Delegated matrix evolution: let melodicGenerator or notesMatrix handle mutations.
     if (!evolutionTypes.value.notes) return false
     if (notesMatrix && typeof notesMatrix.generateLoopNotes === 'function') {
-      console.log(`[Evolution] evolveMatrixLoop: regenerating via notesMatrix for loop=${loopId} intensity=${intensity}`)
+      console.log(`[Evolution] evolveMatrixLoop: regenerating via unified API for loop=${loopId} intensity=${intensity}`)
+      // Use the centralized audioStore API when available to ensure generation is consistent
+      const audioStore = useAudioStore()
+      if (audioStore && typeof audioStore.generateLoopPattern === 'function') {
+        audioStore.generateLoopPattern(loopId)
+        return true
+      }
+      // Fallback to raw generator
       notesMatrix.generateLoopNotes(loopId)
       return true
     }
@@ -329,7 +338,9 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
   }
 
   const applyMatrixMutation = (loopId, notesMatrix, mutationType, params = {}) => {
-    switch (mutationType) {
+    // Normalize some alias mutation types used by the evolver
+    const normalized = mutationType === 'mutateNotes' ? 'mutate' : (mutationType === 'rhythm' ? 'mutate' : mutationType)
+    switch (normalized) {
       case 'transpose':
         return notesMatrix.transposeLoop(loopId, params.semitones || 0)
       case 'rotate':

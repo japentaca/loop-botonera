@@ -10,7 +10,7 @@
           {{ audioStore.isPlaying ? '⏸️' : '▶️' }}
         </Button>
 
-        <Button @click="regenerateAllLoops" class="regen-button-compact" icon="pi pi-refresh" label="Regenerar"
+        <Button @click="generateAllPatterns" class="regen-button-compact" icon="pi pi-refresh" label="Regenerar"
           size="small" />
 
         <Button @click="resetSync" class="sync-button-compact" icon="pi pi-sync" label="Sincronizar"
@@ -251,8 +251,8 @@
     audioStore.updateMasterVolume()
   }
 
-  const regenerateAllLoops = () => {
-    audioStore.regenerateAllLoops()
+  const generateAllPatterns = () => {
+    audioStore.generateAllPatterns()
   }
 
   const resetSync = () => {

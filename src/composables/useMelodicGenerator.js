@@ -97,7 +97,7 @@ export function useMelodicGenerator(notesMatrix) {
     }
 
     // Update metadata via notesMatrix to avoid readonly mutation warnings
-    if (typeof notesMatrix.updateLoopMetadata === 'function') {
+    if (!(options && options.silent === true) && typeof notesMatrix.updateLoopMetadata === 'function') {
       notesMatrix.updateLoopMetadata(loopId, { lastPattern: patternType, lastModified: Date.now() })
     }
 
@@ -116,7 +116,7 @@ export function useMelodicGenerator(notesMatrix) {
    * @param {number} loopId - The loop ID to regenerate
    * @param {number} currentPulse - Current global pulse for step reset (optional)
    */
-  const regenerateLoop = (loopId, currentPulse = null) => {
+  const regenerateLoop = (loopId, currentPulse = null, options = {}) => {
     if (loopId >= notesMatrix.MAX_LOOPS || !notesMatrix.loopMetadata[loopId]) {
       melLog(`regenerateLoop invalid loopId=${loopId}`)
       return
@@ -141,8 +141,9 @@ export function useMelodicGenerator(notesMatrix) {
       }
     }
 
+    const silent = options && options.silent === true
     // Reset step counter if currentPulse is provided
-    if (currentPulse !== null && notesMatrix.updateLoopMetadata) {
+    if (currentPulse !== null && notesMatrix.updateLoopMetadata && !silent) {
       notesMatrix.updateLoopMetadata(loopId, {
         lastResetPulse: currentPulse,
         currentStep: 0
