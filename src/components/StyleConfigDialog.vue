@@ -3,16 +3,7 @@
     :closable="true" :closeOnEscape="true" :dismissableMask="true" @update:visible="onVisibilityChange"
     @hide="closeDialog" class="style-config-dialog">
     <div class="dialog-body">
-      <!-- Estilos Creativos -->
-      <div class="config-section">
-        <h4>Estilos</h4>
-        <div class="styles-grid">
-          <div class="field">
-            <p>Se ha simplificado el sistema de evolución para que solo invoque generación de patrones cada N compases.
-              Las opciones creativas como Momentum, Call & Response, y Tension/Release han sido deshabilitadas.</p>
-          </div>
-        </div>
-      </div>
+      <!-- Estilos Creativos removed -->
 
       <!-- Parámetros de Evolución -->
       <div class="config-section">
@@ -178,7 +169,7 @@
     audioStore.updateEnergyManagement(true)
     audioStore.updateMaxSonicEnergy(2.5)
     audioStore.updateEnergyReductionFactor(0.6)
-    onEvolutionTypesChange([])
+    // Evolution types removed; no extra reset required
   }
 
   const onVisibilityChange = (visible) => {
