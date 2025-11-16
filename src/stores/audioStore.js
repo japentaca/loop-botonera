@@ -86,21 +86,70 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Dynamic density application (debounced to avoid thrash)
   const DENSITY_DEBOUNCE_MS = 250
+  // Apply the global density bias as a master setting, evenly split among all active auto-mode loops.
+  // The bias is always applied regardless of the energy manager "enabled" flag. However, the
+  // distribution will be scaled if predicted sonic energy (manual + auto) exceeds maxSonicEnergy.
   const applyDynamicDensities = debounce(() => {
     try {
       const loops = loopManager.loops.value
-      const density = energyManager.computeDynamicDensity(loops, globalDensityBias.value)
+      if (!Array.isArray(loops) || loops.length === 0) return
 
-      // Update each active, unlocked loop
-      for (let i = 0; i < loops.length; i++) {
-        const loop = loops[i]
-        if (!loop || !loop.isActive) continue
+      // Determine active loops and whether they accept auto density
+      const activeLoops = loops.filter(l => l && l.isActive)
+      const autoTargets = activeLoops.filter(l => {
+        const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[l.id]
+        return meta && meta.densityMode !== 'manual'
+      })
+      const manualTargets = activeLoops.filter(l => {
+        const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[l.id]
+        return meta && meta.densityMode === 'manual'
+      })
 
+      // Inactive or no auto-targets -> nothing to do
+      if (autoTargets.length === 0) return
+
+      // Base per-loop density from global bias (even split)
+      const basePerLoopDensity = Math.max(0, Math.min(1, Number(globalDensityBias.value || 0))) / autoTargets.length
+
+      // Compute predicted energies (manual loops use their manualDensity) so we can scale auto densities
+      const REFERENCE_LENGTH = 16
+      // manual energy sum
+      let manualEnergySum = 0
+      for (const loop of manualTargets) {
         const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loop.id]
-        if (meta && meta.densityMode === 'manual') continue
+        if (!meta) continue
+        const val = typeof meta.manualDensity === 'number' ? meta.manualDensity : (typeof meta.density === 'number' ? meta.density : 0)
+        const lengthFactor = REFERENCE_LENGTH / (loop.length || REFERENCE_LENGTH)
+        const volumeContrib = (typeof loop.volume === 'number' ? loop.volume : 0)
+        manualEnergySum += val * volumeContrib * lengthFactor
+      }
 
-        if (notesMatrix.updateLoopMetadata) {
-          notesMatrix.updateLoopMetadata(loop.id, { autoDensity: density, density })
+      // predicted auto energy based on basePerLoopDensity
+      let predictedAutoEnergySum = 0
+      for (const loop of autoTargets) {
+        const lengthFactor = REFERENCE_LENGTH / (loop.length || REFERENCE_LENGTH)
+        const volumeContrib = (typeof loop.volume === 'number' ? loop.volume : 0)
+        predictedAutoEnergySum += basePerLoopDensity * volumeContrib * lengthFactor
+      }
+
+      // If manual loops already exceed maxSonicEnergy, set auto densities to zero
+      const availableEnergy = Math.max(0, (energyManager.maxSonicEnergy && typeof energyManager.maxSonicEnergy.value === 'number') ? energyManager.maxSonicEnergy.value - manualEnergySum : Infinity)
+
+      let scaleFactor = 1
+      if (!isFinite(availableEnergy) && predictedAutoEnergySum <= 0) {
+        scaleFactor = 1
+      } else if (predictedAutoEnergySum <= 0) {
+        scaleFactor = 0
+      } else if (predictedAutoEnergySum > availableEnergy) {
+        scaleFactor = availableEnergy / predictedAutoEnergySum
+      }
+
+      // Apply computed auto densities to auto-targets; keep manual ones untouched
+      for (const loop of autoTargets) {
+        const computedDensity = Math.max(0, Math.min(1, basePerLoopDensity * scaleFactor))
+        const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loop.id]
+        if (meta && notesMatrix.updateLoopMetadata) {
+          notesMatrix.updateLoopMetadata(loop.id, { autoDensity: computedDensity, density: computedDensity })
         }
       }
     } catch (err) {
@@ -196,6 +245,9 @@ export const useAudioStore = defineStore('audio', () => {
 
     // Initialize active loops cache
     updateActiveLoopsCache()
+
+    // Apply global bias allocation to newly initialized active loops
+    applyDynamicDensities()
   }
 
   // Control de reproducción
@@ -278,6 +330,13 @@ export const useAudioStore = defineStore('audio', () => {
     // OPTIMIZED: Reduced threshold to 1% for smoother response but still batched
     if (param === 'volume' && oldValue !== undefined && Math.abs(oldValue - value) > 0.01) {
       debouncedEnergyCheck(loopManager.loops.value)
+      // Recompute auto densities when volume changes because sonic energy changes
+      applyDynamicDensities()
+    }
+
+    // Re-evaluate auto density when a loop's length changes (affects energy per loop)
+    if (param === 'length') {
+      applyDynamicDensities()
     }
 
     // Disparar notificación de cambios para activar auto-guardado en el preset
@@ -295,6 +354,8 @@ export const useAudioStore = defineStore('audio', () => {
   // Actualizar metadata del loop (patrones, rangos de notas, etc.)
   const updateLoopMetadata = (loopId, metadata) => {
     notesMatrix.updateLoopMetadata(loopId, metadata)
+    // Recompute auto densities whenever metadata changes (e.g., manual/auto mode toggles)
+    applyDynamicDensities()
 
     // Disparar notificación de cambios para activar auto-guardado en el preset
     notifyPresetChanges()
