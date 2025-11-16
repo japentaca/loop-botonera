@@ -17,17 +17,17 @@
           size="small" title="Resetear contador para re-sincronizar los loops"
           :disabled="!audioStore.audioInitialized" />
 
-        <div class="control-group-compact">
+        <div class="control-group-compact control-group-compact--slider">
           <label class="control-label-compact">Tempo</label>
-          <Slider v-model="tempTempo" :min="10" :max="180" @change="onTempoInput(tempTempo)" class="range-compact"
+          <Slider v-model="tempTempo" :min="10" :max="180" @change="onTempoInput(tempTempo)" class="range-compact range-compact--large"
             :disabled="!audioStore.audioInitialized" />
           <span class="value-compact">{{ tempTempo }}</span>
         </div>
 
-        <div class="control-group-compact">
+        <div class="control-group-compact control-group-compact--slider">
           <label class="control-label-compact">Vol</label>
           <Slider v-model="tempMasterVolume" :min="0" :max="100" @change="onMasterVolumeInput(tempMasterVolume)"
-            class="range-compact" :disabled="!audioStore.audioInitialized" />
+            class="range-compact range-compact--large" :disabled="!audioStore.audioInitialized" />
           <span class="value-compact">{{ tempMasterVolume }}%</span>
         </div>
 

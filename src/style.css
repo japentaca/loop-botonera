@@ -62,12 +62,19 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   white-space: nowrap;
+  flex: 0 1 auto; /* allow shrink but don't grow unnecessarily */
+  min-width: 0; /* allow to shrink below content width if needed */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .main-controls {
   display: flex;
   gap: 15px;
   align-items: center;
+  flex: 1 1 auto; /* let controls grow and shrink as needed */
+  flex-wrap: wrap; /* allow wrapping when space is limited */
+  min-width: 0; /* allow children to shrink for ellipsis/truncation */
 }
 
 .music-controls {
@@ -145,6 +152,13 @@ body {
   align-items: center;
   gap: 6px;
   min-width: auto;
+}
+
+/* Slider special control (for tempo / master volume) */
+.control-group-compact--slider {
+  align-items: center;
+  gap: 8px;
+  min-width: 160px; /* default base width so the label and value fit */
 }
 
 .control-label-compact {
@@ -1708,6 +1722,12 @@ input[type="range"]::-moz-range-thumb,
     min-width: 140px;
   }
 
+  /* Make slider groups take full width on mobile */
+  .control-group-compact--slider {
+    min-width: 100% !important;
+    width: 100% !important;
+  }
+
   .control-label-compact {
     font-size: 11px;
     margin-bottom: 4px;
@@ -1717,6 +1737,11 @@ input[type="range"]::-moz-range-thumb,
   .select-compact {
     width: 100%;
     min-width: 100px !important;
+  }
+
+  .range-compact--large {
+    width: 100% !important;
+    min-width: 100% !important;
   }
 
   .value-compact {
@@ -2023,4 +2048,20 @@ input[type="range"]::-moz-range-thumb,
     width: 24px;
     height: 24px;
   }
+}
+
+/* Larger slider variant used for tempo and master volume in header */
+.range-compact--large {
+  /* Responsive width: minimum 120px, preferred 10vw, maximum 320px */
+  width: clamp(120px, 10vw, 320px);
+}
+
+.range-compact--large::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+}
+
+.range-compact--large::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
 }
