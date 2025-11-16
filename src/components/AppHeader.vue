@@ -2,20 +2,34 @@
   <div class="header-compact">
     <!-- Fila superior: Título y controles principales -->
     <div class="header-row-main">
-      <div class="title-compact">🎹 LOOP SYNTH MACHINE 🎹</div>
+        <div class="main-controls-left">
+          <!-- Playback and general controls -->
+          <Button @click="togglePlay" :class="['play-button-compact', 'header-btn-compact', { playing: audioStore.isPlaying }]" size="small"
+            :title="audioStore.isPlaying ? 'Pausa' : 'Play'" :disabled="!audioStore.audioInitialized">
+            {{ audioStore.isPlaying ? '⏸️' : '▶️' }}
+          </Button>
 
-      <div class="main-controls">
-        <Button @click="togglePlay" :class="['play-button-compact', { playing: audioStore.isPlaying }]" size="small"
-          :title="audioStore.isPlaying ? 'Pausa' : 'Play'" :disabled="!audioStore.audioInitialized">
-          {{ audioStore.isPlaying ? '⏸️' : '▶️' }}
-        </Button>
+          <Button @click="generateAllPatterns" class="regen-button-compact header-btn-compact" icon="pi pi-refresh" label="Regenerar"
+            size="small" />
 
-        <Button @click="generateAllPatterns" class="regen-button-compact" icon="pi pi-refresh" label="Regenerar"
-          size="small" />
+          <Button @click="resetSync" class="sync-button-compact header-btn-compact" icon="pi pi-sync" label="Sincronizar"
+            size="small" title="Resetear contador para re-sincronizar los loops"
+            :disabled="!audioStore.audioInitialized" />
 
-        <Button @click="resetSync" class="sync-button-compact" icon="pi pi-sync" label="Sincronizar"
-          size="small" title="Resetear contador para re-sincronizar los loops"
-          :disabled="!audioStore.audioInitialized" />
+          <Button @click="audioStore.applySparseDistribution" class="sparse-button header-btn-compact" label="Sparse" size="small"
+            severity="secondary" title="Distribuir canales activos en el panorama estéreo"
+            :disabled="!audioStore.audioInitialized" />
+
+          <Button @click="logNotesMatrix" class="debug-button header-btn-compact" icon="pi pi-list" size="small" severity="help"
+            title="Log notes matrix to console" :disabled="!audioStore.audioInitialized" />
+        </div>
+
+        <div class="title-compact">🎹 LOOP SYNTH MACHINE 🎹</div>
+
+        <div class="main-controls-right">
+        <!-- main-controls-right only contains the sliders and presets/pulse -->
+
+        <!-- the sliders are above; duplicates removed -->
 
         <div class="control-group-compact control-group-compact--slider">
           <label class="control-label-compact">Tempo</label>
@@ -38,23 +52,16 @@
           <span class="value-compact">{{ tempGlobalDensityBias }}%</span>
         </div>
 
-        <Button @click="audioStore.applySparseDistribution" class="sparse-button" label="Sparse" size="small"
-          severity="secondary" title="Distribuir canales activos en el panorama estéreo"
-          :disabled="!audioStore.audioInitialized" />
-
-        <Button @click="logNotesMatrix" class="debug-button" icon="pi pi-list" size="small" severity="help"
-          title="Log notes matrix to console" :disabled="!audioStore.audioInitialized" />
-
         <div class="preset-control-group">
-          <Button @click="openPresetDialog" class="preset-button-compact" icon="pi pi-save" label="Presets" size="small"
+          <Button @click="openPresetDialog" class="preset-button-compact header-btn-compact" icon="pi pi-save" label="Presets" size="small"
             title="Gestionar presets" :disabled="!audioStore.audioInitialized" />
           <span class="preset-name-label">{{ presetStore.currentPreset?.name || 'Sin preset' }}</span>
         </div>
-      </div>
 
-      <!-- Visualizador de pulsos integrado -->
-      <div class="pulse-viz-compact">
+        <!-- Visualizador de pulsos integrado (moved to right section) -->
+        <div class="pulse-viz-compact">
         <div :class="['pulse-light', { flash: audioStore.beatFlash }]"></div>
+        </div>
       </div>
     </div>
 

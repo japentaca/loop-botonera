@@ -76,6 +76,8 @@ export const usePresetStore = defineStore('preset', () => {
       tempo: audioStore.tempo,
       masterVol: audioStore.masterVol,
       currentScale: audioStore.currentScale,
+      // Global density bias - normalized 0..1
+      globalDensityBias: audioStore.globalDensityBias,
       delayDivision: audioStore.delayDivision,
 
       // Configuración de evolución automática
@@ -281,6 +283,10 @@ export const usePresetStore = defineStore('preset', () => {
     }
     if (audioStore.updateScale && globalConfig.currentScale !== undefined) {
       audioStore.updateScale(globalConfig.currentScale)
+    }
+    // Apply global density bias if present
+    if (globalConfig.globalDensityBias !== undefined && audioStore.updateGlobalDensityBias) {
+      audioStore.updateGlobalDensityBias(globalConfig.globalDensityBias)
     }
     if (audioStore.updateDelayDivision && globalConfig.delayDivision !== undefined) {
       audioStore.updateDelayDivision(globalConfig.delayDivision)

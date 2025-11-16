@@ -36,15 +36,17 @@ body {
   border-radius: 12px;
   padding: 12px 20px;
   margin-bottom: 15px;
-  box-shadow: 0 8px 32px #000000 !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6) !important;
   /* Performance optimization */
   contain: layout style;
 }
 
 .header-row-main {
-  display: flex;
-  justify-content: space-between;
+  /* Desktop: 3-column layout: left controls, title, right controls */
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
+  gap: 16px;
   margin-bottom: 8px;
 }
 
@@ -55,6 +57,7 @@ body {
   gap: 20px;
 }
 
+
 .title-compact {
   font-size: 20px;
   font-weight: bold;
@@ -62,19 +65,33 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   white-space: nowrap;
-  flex: 0 1 auto; /* allow shrink but don't grow unnecessarily */
-  min-width: 0; /* allow to shrink below content width if needed */
+  flex: 0 1 auto;
+  /* allow shrink but don't grow unnecessarily */
+  min-width: 0;
+  /* allow to shrink below content width if needed */
   overflow: hidden;
   text-overflow: ellipsis;
+  justify-self: center;
+  /* center inside the grid */
 }
 
 .main-controls {
   display: flex;
   gap: 15px;
   align-items: center;
-  flex: 1 1 auto; /* let controls grow and shrink as needed */
-  flex-wrap: wrap; /* allow wrapping when space is limited */
-  min-width: 0; /* allow children to shrink for ellipsis/truncation */
+  flex: 1 1 auto;
+  /* let controls grow and shrink as needed */
+  flex-wrap: wrap;
+  /* allow wrapping when space is limited */
+  min-width: 0;
+  /* allow children to shrink for ellipsis/truncation */
+}
+
+/* Desktop divider for left controls */
+.main-controls-left {
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  padding-right: 12px;
+  margin-right: 8px;
 }
 
 .music-controls {
@@ -158,7 +175,8 @@ body {
 .control-group-compact--slider {
   align-items: center;
   gap: 8px;
-  min-width: 160px; /* default base width so the label and value fit */
+  min-width: 160px;
+  /* default base width so the label and value fit */
 }
 
 .control-label-compact {
@@ -325,6 +343,41 @@ body {
   background: linear-gradient(135deg, #ff0080, #ff8c00);
 }
 
+/* Shared header button layout to make buttons consistent */
+.header-btn-compact {
+  padding: 6px 10px !important;
+  min-height: 36px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  justify-content: center !important;
+}
+
+.header-btn-compact .p-button-icon {
+  font-size: 16px !important;
+}
+
+/* Tonal neutral base for header buttons so the page looks less noisy */
+.header-btn-compact {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+  color: #bfefff !important;
+  box-shadow: none !important;
+}
+
+.header-btn-compact:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+  transform: translateY(-1px);
+}
+
+/* Keep a distinct look for the play button */
+.play-button-compact {
+  background: linear-gradient(135deg, #00d9ff, #7b2ff7) !important;
+  color: white !important;
+}
+
 .regen-button-compact {
   padding: 6px 12px;
   border: 1px solid #7b2ff7;
@@ -337,7 +390,7 @@ body {
 }
 
 .regen-button-compact:hover {
-  box-shadow: 0 4px 12px rgba(123, 47, 247, 0.4);
+  box-shadow: 0 2px 6px rgba(123, 47, 247, 0.25);
 }
 
 .evolve-button-compact {
@@ -885,7 +938,7 @@ input[type="range"]::-moz-range-thumb,
 .sparse-button:hover {
   background: linear-gradient(135deg, #00d9ff, #7b2ff7);
   color: white;
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.4);
+  box-shadow: 0 2px 6px rgba(0, 217, 255, 0.25);
 }
 
 .sparse-button:active {
@@ -912,7 +965,7 @@ input[type="range"]::-moz-range-thumb,
 .preset-button-compact:hover {
   background: linear-gradient(135deg, #9c88ff, #7b2ff7);
   color: white;
-  box-shadow: 0 4px 12px rgba(156, 136, 255, 0.4);
+  box-shadow: 0 2px 6px rgba(156, 136, 255, 0.25);
 }
 
 .preset-button-compact:active {
@@ -925,7 +978,7 @@ input[type="range"]::-moz-range-thumb,
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 8px;
+  margin-left: 16px;
 }
 
 /* Estilos para la etiqueta del nombre del preset actual */
@@ -1665,6 +1718,8 @@ input[type="range"]::-moz-range-thumb,
   }
 
   .header-row-main {
+    /* revert to stacked layout on mobile */
+    display: flex;
     flex-direction: column;
     gap: 10px;
     margin-bottom: 10px;
@@ -1700,6 +1755,13 @@ input[type="range"]::-moz-range-thumb,
     justify-content: center;
     gap: 8px;
     width: 100%;
+  }
+
+  .main-controls-left,
+  .main-controls-right {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
   }
 
   /* Make buttons touch-friendly */
@@ -1923,6 +1985,13 @@ input[type="range"]::-moz-range-thumb,
     flex: 1;
     min-width: 100px;
   }
+
+  /* Remove the desktop divider on mobile */
+  .main-controls-left {
+    border-right: none;
+    padding-right: 0;
+    margin-right: 0;
+  }
 }
 
 /* Small mobile devices (up to 480px) */
@@ -1940,14 +2009,27 @@ input[type="range"]::-moz-range-thumb,
     padding: 8px;
   }
 
-  .main-controls,
-  .music-controls,
-  .evolution-controls-compact {
-    gap: 6px;
+  .main-controls-left,
+  .main-controls-right {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
-  .control-group-compact {
-    min-width: 120px;
+  .main-controls-left {
+    justify-content: flex-start;
+  }
+
+  .main-controls-right {
+    justify-content: flex-end;
+    min-width: 200px;
+  }
+
+  .main-controls-right .control-group-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .loop-grid {
@@ -2064,4 +2146,11 @@ input[type="range"]::-moz-range-thumb,
 .range-compact--large::-moz-range-thumb {
   width: 14px;
   height: 14px;
+}
+
+.main-controls-left,
+.main-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
