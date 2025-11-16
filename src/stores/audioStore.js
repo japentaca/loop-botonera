@@ -179,15 +179,11 @@ export const useAudioStore = defineStore('audio', () => {
   const lastResponderId = ref(null)
   const lastCallerId = ref(null)
   const evolveStartTime = ref(0)
-  const momentumLevel = ref(0)
-  const momentumMaxLevel = ref(5)
+  // momentum removed - keep evolveStartTime as a timestamp used only for potential metrics
   let evolveIntervalId = null
 
   // Configuración de modos creativos
-  const evolveMode = ref('classic')
-  const momentumEnabled = ref(false)
-  const callResponseEnabled = ref(false)
-  const tensionReleaseMode = ref(false)
+  // Removed creative modes: momentum, call/response, tension/release. Evolution scheduling is based on measures only.
 
   // Computed properties que combinan datos de múltiples módulos
   const scales = computed(() => {
@@ -553,83 +549,13 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   // Aplicar momentum usando el sistema de evolución
-  const applyMomentum = () => {
-    if (!momentumEnabled.value) return
-    const elapsedSec = (Date.now() - evolveStartTime.value) / 1000
-    const targetLevel = (evolutionSystem.evolutionIntensity.value * 10) < Math.floor(elapsedSec / 10) ? evolutionSystem.evolutionIntensity.value * 10 : Math.floor(elapsedSec / 10)
-    if (targetLevel > momentumLevel.value) {
-      momentumLevel.value = targetLevel
-      // Eliminado: modificación automática del intervalo de evolución
-      // Eliminado: modificación automática de la intensidad de evolución
-      // El momentum solo debe actualizar su propio nivel, no los parámetros de evolución
-    }
-  }
+  // applyMomentum removed; momentum is not used anymore
 
   // Tensión/Release usando el sistema de evolución
-  const applyTensionRelease = () => {
-    const { getConsonantScale, getDissonantScale } = useMusic()
-    isTensionPhase.value = !isTensionPhase.value
-    const recent = [...recentScales.value]
-    if (isTensionPhase.value) {
-      return getDissonantScale(currentScale.value, recent)
-    } else {
-      return getConsonantScale(currentScale.value, recent)
-    }
-  }
+  // applyTensionRelease removed - tension/release modes disabled
 
   // Call & Response usando el sistema de evolución
-  const applyCallResponse = (loopsToReharmonize) => {
-    if (!Array.isArray(loopsToReharmonize) || loopsToReharmonize.length === 0) return loopsToReharmonize
-
-    // Elegir respondedor distinto al anterior
-    const candidates = loopsToReharmonize.filter(l => l.id !== lastResponderId.value)
-    const responder = (candidates.length ? candidates : loopsToReharmonize)[0]
-    lastResponderId.value = responder?.id ?? null
-
-    // Elegir caller entre loops activos distintos del respondedor y del último caller
-    const activeLoops = loopManager.loops.value.filter(loop => loop.isActive && loop.id !== responder?.id)
-    const callerCandidates = activeLoops.filter(l => l.id !== lastCallerId.value)
-    const pickCaller = (list) => {
-      if (!list.length) return null
-
-      const densityForLoop = (loop) => {
-        if (!loop) return 0
-        try {
-          return notesMatrix.getLoopNoteDensity(loop.id) || 0
-        } catch (error) {
-          console.warn('No se pudo obtener densidad del loop', loop.id, error)
-          return 0
-        }
-      }
-
-      return list.reduce((best, loop) => {
-        const candidateDensity = densityForLoop(loop)
-        const bestDensity = densityForLoop(best)
-        return candidateDensity > bestDensity ? loop : best
-      }, null) || list[0]
-    }
-    const caller = pickCaller(callerCandidates.length ? callerCandidates : activeLoops)
-    lastCallerId.value = caller?.id ?? null
-
-    const scale = useScales().getScale(currentScale.value)
-    if (!scale) {
-      console.error(`No scale found for currentScale: "${currentScale.value}"`)
-      throw new Error(`Invalid current scale: "${currentScale.value}"`)
-    }
-
-    // For evolver usage (call/response mode), do not run special response mapping
-    // generation (which can change the musical behavior). Instead, use the central
-    // generation API so evolution and UI behave the same.
-    loopsToReharmonize.forEach(loop => {
-      try {
-        generateLoopPattern(loop.id)
-      } catch (err) {
-        console.error('[CallResponse] generateLoopPattern failed', err)
-      }
-    })
-
-    return loopsToReharmonize
-  }
+  // applyCallResponse removed - call & response disabled
 
   // Evolución musical principal
   const evolveMusic = async () => {
@@ -642,45 +568,10 @@ export const useAudioStore = defineStore('audio', () => {
     }
 
     try {
-      // Aplicar momentum si está activado
-      applyMomentum()
-
-      let newScale = currentScale.value
-      let oldScale = currentScale.value
-
-      // Seleccionar nueva escala según el modo solo si no está bloqueada
-      if (!scaleLocked.value) {
-        switch (evolveMode.value) {
-          case 'momentum':
-            newScale = getRandomScale(currentScale.value)
-            break
-          case 'callResponse':
-            newScale = getRelatedScale(currentScale.value)
-            break
-          case 'tensionRelease':
-            const tensionScale = applyTensionRelease()
-            newScale = tensionScale || getRandomScale(currentScale.value)
-            break
-          default: // classic
-            // Si Call & Response está activado, usar una escala relacionada para mantener coherencia
-            newScale = callResponseEnabled.value
-              ? getRelatedScale(currentScale.value)
-              : getRandomScale(currentScale.value)
-        }
-
-        // Actualizar historial de escalas solo si cambió
-        if (newScale !== oldScale) {
-          recentScales.value.push(newScale)
-          if (recentScales.value.length > 3) {
-            recentScales.value.shift()
-          }
-          updateScale(newScale)
-        }
-      }
+      // No automated scale changes as part of evolution; evolution triggers pattern generation only
 
       const currentScaleIntervals = useScales().getScale(currentScale.value)
-      const isStyleChange = momentumEnabled.value || callResponseEnabled.value || tensionReleaseMode.value
-      const evolutionOptions = isStyleChange ? { excludeReverb: true, excludeDelay: true } : {}
+      const evolutionOptions = {}
       const intents = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, currentScaleIntervals, evolutionOptions)
 
       const activeLoopsCount = loopManager.loops.value.filter(l => l.isActive).length
@@ -749,10 +640,7 @@ export const useAudioStore = defineStore('audio', () => {
 
       // Quantize intents are ignored for evolution to avoid modifying metadata.
 
-      if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
-        const loopsToReharmonize = selectRandomLoops(Math.ceil(evolutionSystem.evolutionIntensity.value * 5))
-        applyCallResponse(loopsToReharmonize)
-      }
+      // Call & Response, Tension/Release, momentum modes are disabled: evolution only regenerates/mutates loops
 
       // Aplicar gestión de energía después de la evolución
       energyManager.checkAndBalanceEnergy(loopManager.loops.value)
@@ -761,8 +649,8 @@ export const useAudioStore = defineStore('audio', () => {
       measuresSinceEvolve.value = 0
       nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value * 16)
 
-      const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
-      const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
+      const modeInfo = ''
+      const tensionInfo = ''
       const elapsed = performance.now() - start
       console.log(`Regeneration plan applied intents=${intents.length} regen=${doGlobalRegeneration ? 'global' : regenIntents.length} time=${elapsed.toFixed(1)}ms${modeInfo}${tensionInfo}`)
     } finally {
@@ -802,7 +690,7 @@ export const useAudioStore = defineStore('audio', () => {
     nextEvolveMeasure.value = audioEngine.currentPulse.value + (evolutionSystem.evolutionInterval.value * 16)
 
     evolveStartTime.value = Date.now()
-    momentumLevel.value = 0
+    // momentum removed
 
     evolveIntervalId = null
   }
@@ -843,45 +731,16 @@ export const useAudioStore = defineStore('audio', () => {
     notifyPresetChanges()
   }
 
-  const updateMomentumMaxLevel = (level) => {
-    //console.log('🔄 updateMomentumMaxLevel called:', level)
-    momentumMaxLevel.value = Number(level)
-    notifyPresetChanges()
-  }
+  // updateMomentumMaxLevel removed; momentum no longer supported
 
   // Control de modos creativos
-  const setEvolveMode = (mode) => {
-    const validModes = ['classic', 'momentum', 'callResponse', 'tensionRelease']
-    if (validModes.includes(mode)) {
-      evolveMode.value = mode
-    }
-  }
+  // setEvolveMode removed; no evolve modes supported
 
-  const setMomentumEnabled = (enabled) => {
-    momentumEnabled.value = Boolean(enabled)
-    if (enabled) {
-      evolveStartTime.value = Date.now()
-      momentumLevel.value = 0
-    }
-    notifyPresetChanges()
-  }
+  // setMomentumEnabled removed; momentum no longer supported
 
-  const setCallResponseEnabled = (enabled) => {
-    callResponseEnabled.value = Boolean(enabled)
-    if (!enabled) {
-      lastResponderId.value = null
-      lastCallerId.value = null
-    }
-    notifyPresetChanges()
-  }
+  // setCallResponseEnabled removed; call/response no longer supported
 
-  const setTensionReleaseMode = (enabled) => {
-    tensionReleaseMode.value = Boolean(enabled)
-    if (enabled) {
-      isTensionPhase.value = false
-    }
-    notifyPresetChanges()
-  }
+  // setTensionReleaseMode removed; tension/release no longer supported
 
   const toggleScaleLock = () => {
     scaleLocked.value = !scaleLocked.value
@@ -938,10 +797,6 @@ export const useAudioStore = defineStore('audio', () => {
     measuresSinceEvolve,
     nextEvolveMeasure,
     scaleLocked,
-    momentumMaxLevel,
-    momentumEnabled,
-    callResponseEnabled,
-    tensionReleaseMode,
     // Densidad global
     globalDensityBias,
 
@@ -979,7 +834,7 @@ export const useAudioStore = defineStore('audio', () => {
     stopAutoEvolve,
     updateEvolveInterval,
     updateEvolveIntensity,
-    updateMomentumMaxLevel,
+    // updateMomentumMaxLevel removed
     evolveMusic,
 
     // Funciones de evolución con matriz
@@ -988,11 +843,7 @@ export const useAudioStore = defineStore('audio', () => {
     applyMatrixMutation: evolutionSystem.applyMatrixMutation,
     evolveMatrixWithStrategy: evolutionSystem.evolveMatrixWithStrategy,
 
-    // Funciones auxiliares para modos creativos
-    setEvolveMode,
-    setMomentumEnabled,
-    setCallResponseEnabled,
-    setTensionReleaseMode,
+    // No creative modes provided — momentum/callResponse/tensionRelease removed
     toggleScaleLock,
 
     // Funciones de gestión de energía sonora

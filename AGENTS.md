@@ -1,9 +1,10 @@
 - don´t start development server, it uses HRM
 - don't run eslint or else, just check if  changes are ok
 - don't run deffensive code, I prefer an error and try to fix the root cause.
- - ask permission before installing NPM packages
+ - ask permission before taking the decision of installing NPM packages
  - maintain repository documentation in sync after making changes (update docs, not separate reports)
  - do NOT write reports for changes made; just update the related docs and the code
  - if the agent has questions, ask them one-by-one to the user
  - always prefer pure vanilla JavaScript for implementation of new modules and utilities
  - avoid use of Vue reactivity inside modules where possible (wrap reactivity at store/UI boundaries only)
+ - Frontend tests can be made using Chrome devtools MCP 

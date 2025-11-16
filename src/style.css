@@ -900,11 +900,7 @@ input[type="range"]::-moz-range-thumb,
   transition: all 0.3s ease;
 }
 
-.status-indicator.momentum {
-  background: rgba(76, 175, 80, 0.1);
-  border-color: rgba(76, 175, 80, 0.3);
-  color: #4CAF50;
-}
+/* .status-indicator.momentum removed — momentum feature disabled */
 
 .status-indicator.tension {
   background: rgba(255, 152, 0, 0.1);

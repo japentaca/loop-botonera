@@ -84,13 +84,11 @@ export const usePresetStore = defineStore('preset', () => {
       autoEvolve: audioStore.autoEvolve,
       evolveInterval: audioStore.evolveInterval,
       evolveIntensity: audioStore.evolveIntensity,
-      momentumMaxLevel: audioStore.momentumMaxLevel,
+      // momentumMaxLevel removed
       scaleLocked: audioStore.scaleLocked,
 
       // Tipos de evolución
-      momentumEnabled: audioStore.momentumEnabled,
-      callResponseEnabled: audioStore.callResponseEnabled,
-      tensionReleaseMode: audioStore.tensionReleaseMode,
+      // momentum/callResponse/tensionRelease modes removed from audioStore
 
       // Gestión de energía sonora
       energyManagementEnabled: audioStore.energyManagementEnabled,
@@ -162,13 +160,11 @@ export const usePresetStore = defineStore('preset', () => {
       if (globalConfig.evolveInterval !== undefined) audioStore.updateEvolveInterval(globalConfig.evolveInterval)
       if (globalConfig.evolveIntensity !== undefined) audioStore.updateEvolveIntensity(globalConfig.evolveIntensity)
     }
-    if (globalConfig.momentumMaxLevel !== undefined) audioStore.updateMomentumMaxLevel(globalConfig.momentumMaxLevel)
+    // momentum max level is no longer supported
     if (globalConfig.scaleLocked !== undefined) audioStore.scaleLocked = globalConfig.scaleLocked
 
     // Evolution types
-    if (globalConfig.momentumEnabled !== undefined) audioStore.setMomentumEnabled(globalConfig.momentumEnabled)
-    if (globalConfig.callResponseEnabled !== undefined) audioStore.setCallResponseEnabled(globalConfig.callResponseEnabled)
-    if (globalConfig.tensionReleaseMode !== undefined) audioStore.setTensionReleaseMode(globalConfig.tensionReleaseMode)
+    // momentum/callResponse/tensionRelease removed - ignore legacy fields
 
     // Energy management
     if (globalConfig.energyManagementEnabled !== undefined) audioStore.energyManagementEnabled = globalConfig.energyManagementEnabled

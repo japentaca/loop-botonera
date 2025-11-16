@@ -39,8 +39,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
   const autoEvolutionEnabled = ref(false)
   const evolutionInterval = ref(8) // intervalo en compases (4/4)
   const evolutionIntensity = ref(0.1) // intensidad de los cambios (0-1), valor por defecto 1 en interfaz
-  const creativeModeEnabled = ref(false)
-  const lastEvolutionTime = ref(0)
+  // Creative modes and timing via Date are removed; scheduling is handled by audioStore
   const audioStore = useAudioStore()
 
   // Configuración de tipos de evolución
@@ -154,25 +153,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
 
   // Aplicar evolución creativa más experimental
-  const applyCreativeEvolution = (loop, availableScales, globalScaleIntervals) => {
-    if (!creativeModeEnabled.value) return loop
-
-    const evolvedLoop = { ...loop }
-
-    // Cambio de escala ocasional en modo creativo - DISABLED
-    // Scale changes should only happen at the global level via audioStore
-    // Individual loops no longer have their own scales
-
-    // Cambios de densidad más dramáticos
-    if (Math.random() < 0.15 && notesMatrix) {
-      const currentDensity = notesMatrix.getLoopNoteDensity(loop.id)
-      const targetDensity = currentDensity < 0.3 ? 0.6 : 0.2
-      console.log(`[Evolution] applyCreativeEvolution: loop=${loop.id} changing density ${currentDensity}->${targetDensity}`)
-      adjustLoopDensity(loop, targetDensity, globalScaleIntervals)
-    }
-
-    return evolvedLoop
-  }
+  // No creative evolution modes are applied by default (kept for future extension)
 
   // Evolucionar un loop específico
   const evolveLoop = (loop, globalScaleIntervals, options = {}) => {
@@ -209,21 +190,8 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     return intents
   }
 
-  // Verificar si es tiempo de evolucionar
-  const shouldEvolve = () => {
-    if (!autoEvolutionEnabled.value) return false
-
-    const now = Date.now()
-    const ready = (now - lastEvolutionTime.value) >= evolutionInterval.value
-    if (ready) console.log('[Evolution] shouldEvolve: true')
-    return ready
-  }
-
-  // Marcar que se realizó una evolución
-  const markEvolution = () => {
-    lastEvolutionTime.value = Date.now()
-    console.log('[Evolution] markEvolution: evolution marked at', lastEvolutionTime.value)
-  }
+  // Scheduling based on real-time measures is handled by audioStore; we don't
+  // use Date.now here in the evolver.
 
   // Configuración de evolución
   const updateEvolutionSettings = (settings) => {
@@ -236,8 +204,9 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     if (settings.intensity !== undefined) {
       evolutionIntensity.value = settings.intensity
     }
+    // creativeMode option removed and ignored
     if (settings.creativeMode !== undefined) {
-      creativeModeEnabled.value = settings.creativeMode
+      console.warn('[Evolution] creativeMode option ignored (feature removed)')
     }
   }
 
@@ -254,8 +223,8 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   // Obtener estadísticas de evolución
   const getEvolutionStats = () => {
-    const timeSinceLastEvolution = Date.now() - lastEvolutionTime.value
-    const timeUntilNextEvolution = Math.max(0, evolutionInterval.value - timeSinceLastEvolution)
+    const timeSinceLastEvolution = null
+    const timeUntilNextEvolution = null
 
     return {
       enabled: autoEvolutionEnabled.value,
@@ -263,7 +232,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
       interval: evolutionInterval.value,
       timeSinceLastEvolution,
       timeUntilNextEvolution,
-      creativeMode: creativeModeEnabled.value,
+      creativeMode: false,
       activeTypes: Object.entries(evolutionTypes.value)
         .filter(([_, enabled]) => enabled)
         .map(([type, _]) => type)
@@ -273,7 +242,6 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
   // Forzar evolución inmediata
   const forceEvolution = (loops, globalScaleIntervals, options = {}) => {
     const evolvedLoops = evolveMultipleLoops(loops, globalScaleIntervals, options)
-    markEvolution()
     return evolvedLoops
   }
 
@@ -404,7 +372,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     autoEvolutionEnabled,
     evolutionInterval,
     evolutionIntensity,
-    creativeModeEnabled,
+    // creativeModeEnabled removed
     evolutionTypes,
 
 
@@ -420,9 +388,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     applyMatrixMutation,
     evolveMatrixWithStrategy,
 
-    // Control de tiempo
-    shouldEvolve,
-    markEvolution,
+    // Control de tiempo handled by audioStore
 
     // Configuración
     updateEvolutionSettings,

@@ -108,6 +108,7 @@ Note: For programmatic changes that should be persisted in presets, call these s
 ### 6.6 evolutionSystem (module)
 - Methods: evolveMatrixLoop(loopId, notesMatrix, intensity), evolveMultipleMatrixLoops(loopIds, notesMatrix, intensity), evolveMultipleLoops(loops, globalScaleIntervals, options), applyMatrixMutation(loopId, notesMatrix, mutationType, params), updateEvolutionSettings(settings)
 - Important: evolutionSystem should not mutate metadata of loops (scale, density mode, etc). It should produce intents and apply them through audioStore or notesMatrix API.
+ - Note: Momentum / Call & Response / Tension-Release creative modes have been removed from the core system. The evolution system now only provides intents for regeneration/mutation; scheduling is handled by `audioStore` and the only automated action is to invoke pattern generation per the configured `evolutionInterval`.
 
 ### 6.7 presetStore (Pinia store)
 - Methods: initialize(), loadPresets(), createPreset(name), createDefaultPreset(), loadPreset(id), saveCurrentPreset(), deletePreset(), duplicatePreset(), applyPresetToState(preset, options), captureCurrentState(), startBatchMode(), endBatchMode()

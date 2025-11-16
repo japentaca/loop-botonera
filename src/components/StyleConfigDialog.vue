@@ -5,13 +5,11 @@
     <div class="dialog-body">
       <!-- Estilos Creativos -->
       <div class="config-section">
-        <h4>Estilos Creativos</h4>
+        <h4>Estilos</h4>
         <div class="styles-grid">
           <div class="field">
-            <label for="evolution-types" class="field-label">Tipos de Evolución</label>
-            <MultiSelect id="evolution-types" v-model="selectedEvolutionTypes" :options="evolutionOptions"
-              optionLabel="label" optionValue="value" placeholder="Seleccionar estilos..." :maxSelectedLabels="3"
-              :selectionLimit="3" class="w-full" @update:modelValue="onEvolutionTypesChange" />
+            <p>Se ha simplificado el sistema de evolución para que solo invoque generación de patrones cada N compases.
+              Las opciones creativas como Momentum, Call & Response, y Tension/Release han sido deshabilitadas.</p>
           </div>
         </div>
       </div>
@@ -42,16 +40,7 @@
             <small class="control-description">Número de loops afectados por evolución</small>
           </div>
 
-          <!-- Nivel Máximo de Momentum -->
-          <div class="control-group">
-            <label class="control-label">Momentum Máximo</label>
-            <div class="slider-container">
-              <Slider :min="1" :max="10" :step="1" :modelValue="audioStore.momentumMaxLevel"
-                @update:modelValue="onMomentumMaxLevelChange" class="range-slider" />
-              <span class="value-display">{{ audioStore.momentumMaxLevel }}</span>
-            </div>
-            <small class="control-description">Nivel máximo que puede alcanzar el momentum</small>
-          </div>
+          <!-- Momentum removed from UI -->
         </div>
       </div>
 
@@ -127,8 +116,7 @@
   import Dialog from 'primevue/dialog'
   import Button from 'primevue/button'
   import Slider from 'primevue/slider'
-  import Checkbox from 'primevue/checkbox'
-  import MultiSelect from 'primevue/multiselect'
+  // No Checkbox component used; native checkbox inputs used in template
 
   const props = defineProps({
     isOpen: {
@@ -141,43 +129,7 @@
 
   const audioStore = useAudioStore()
 
-  // Configuración del multiselector de evolución
-  const selectedEvolutionTypes = computed({
-    get: () => {
-      const types = []
-      if (audioStore.momentumEnabled) types.push('momentum')
-      if (audioStore.callResponseEnabled) types.push('callResponse')
-      if (audioStore.tensionReleaseMode) types.push('tensionRelease')
-      if (types.length === 0) types.push('classic')
-      return types
-    },
-    set: (value) => {
-      onEvolutionTypesChange(value)
-    }
-  })
-
-  const evolutionOptions = [
-    {
-      value: 'momentum',
-      label: 'Momentum',
-      description: 'Intensidad progresiva que aumenta con el tiempo'
-    },
-    {
-      value: 'callResponse',
-      label: 'Call & Response',
-      description: 'Patrones de pregunta y respuesta entre loops'
-    },
-    {
-      value: 'tensionRelease',
-      label: 'Tensión/Release',
-      description: 'Alternancia entre fases de tensión y relajación'
-    },
-    {
-      value: 'classic',
-      label: 'Clásico',
-      description: 'Cambios aleatorios tradicionales'
-    }
-  ]
+  // Simplified evolution options — momentum & other creative modes removed
 
   // Métodos de manejo de eventos
   const onEvolveIntervalChange = (value) => {
@@ -188,9 +140,7 @@
     audioStore.updateEvolveIntensity(Number(value))
   }
 
-  const onMomentumMaxLevelChange = (value) => {
-    audioStore.updateMomentumMaxLevel(Number(value))
-  }
+  // momentum settings removed
 
   const onMaxSonicEnergyChange = (value) => {
     audioStore.updateMaxSonicEnergy(Number(value))
@@ -218,26 +168,13 @@
     }
   })
 
-  // Manejar cambios en el multiselector de evolución
-  const onEvolutionTypesChange = (selectedTypes) => {
-    // Si se selecciona clásico, desactivar todos los modos especiales
-    if (selectedTypes.includes('classic')) {
-      audioStore.setMomentumEnabled(false)
-      audioStore.setCallResponseEnabled(false)
-      audioStore.setTensionReleaseMode(false)
-    } else {
-      // Si no se selecciona clásico, actualizar los estados basándose en las selecciones
-      audioStore.setMomentumEnabled(selectedTypes.includes('momentum'))
-      audioStore.setCallResponseEnabled(selectedTypes.includes('callResponse'))
-      audioStore.setTensionReleaseMode(selectedTypes.includes('tensionRelease'))
-    }
-  }
+  // Evolution selection removed — simplified behavior
 
   const resetToDefaults = () => {
     // Restaurar valores por defecto
     audioStore.updateEvolveInterval(8)
     audioStore.updateEvolveIntensity(2)
-    audioStore.updateMomentumMaxLevel(5)
+    // Momentum removed; restore default evolution parameters
     audioStore.updateEnergyManagement(true)
     audioStore.updateMaxSonicEnergy(2.5)
     audioStore.updateEnergyReductionFactor(0.6)

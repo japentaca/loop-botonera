@@ -2,39 +2,40 @@
   <div class="header-compact">
     <!-- Fila superior: Título y controles principales -->
     <div class="header-row-main">
-        <div class="main-controls-left">
-          <!-- Playback and general controls -->
-          <Button @click="togglePlay" :class="['play-button-compact', 'header-btn-compact', { playing: audioStore.isPlaying }]" size="small"
-            :title="audioStore.isPlaying ? 'Pausa' : 'Play'" :disabled="!audioStore.audioInitialized">
-            {{ audioStore.isPlaying ? '⏸️' : '▶️' }}
-          </Button>
+      <div class="main-controls-left">
+        <!-- Playback and general controls -->
+        <Button @click="togglePlay"
+          :class="['play-button-compact', 'header-btn-compact', { playing: audioStore.isPlaying }]" size="small"
+          :title="audioStore.isPlaying ? 'Pausa' : 'Play'" :disabled="!audioStore.audioInitialized">
+          {{ audioStore.isPlaying ? '⏸️' : '▶️' }}
+        </Button>
 
-          <Button @click="generateAllPatterns" class="regen-button-compact header-btn-compact" icon="pi pi-refresh" label="Regenerar"
-            size="small" />
+        <Button @click="generateAllPatterns" class="regen-button-compact header-btn-compact" icon="pi pi-refresh"
+          label="Regenerar" size="small" />
 
-          <Button @click="resetSync" class="sync-button-compact header-btn-compact" icon="pi pi-sync" label="Sincronizar"
-            size="small" title="Resetear contador para re-sincronizar los loops"
-            :disabled="!audioStore.audioInitialized" />
+        <Button @click="resetSync" class="sync-button-compact header-btn-compact" icon="pi pi-sync" label="Sincronizar"
+          size="small" title="Resetear contador para re-sincronizar los loops"
+          :disabled="!audioStore.audioInitialized" />
 
-          <Button @click="audioStore.applySparseDistribution" class="sparse-button header-btn-compact" label="Sparse" size="small"
-            severity="secondary" title="Distribuir canales activos en el panorama estéreo"
-            :disabled="!audioStore.audioInitialized" />
+        <Button @click="audioStore.applySparseDistribution" class="sparse-button header-btn-compact" label="Sparse"
+          size="small" severity="secondary" title="Distribuir canales activos en el panorama estéreo"
+          :disabled="!audioStore.audioInitialized" />
 
-          <Button @click="logNotesMatrix" class="debug-button header-btn-compact" icon="pi pi-list" size="small" severity="help"
-            title="Log notes matrix to console" :disabled="!audioStore.audioInitialized" />
-        </div>
+        <Button @click="logNotesMatrix" class="debug-button header-btn-compact" icon="pi pi-list" size="small"
+          severity="help" title="Log notes matrix to console" :disabled="!audioStore.audioInitialized" />
+      </div>
 
-        <div class="title-compact">🎹 LOOP SYNTH MACHINE 🎹</div>
 
-        <div class="main-controls-right">
+
+      <div class="main-controls-right">
         <!-- main-controls-right only contains the sliders and presets/pulse -->
 
         <!-- the sliders are above; duplicates removed -->
 
         <div class="control-group-compact control-group-compact--slider">
           <label class="control-label-compact">Tempo</label>
-          <Slider v-model="tempTempo" :min="10" :max="180" @change="onTempoInput(tempTempo)" class="range-compact range-compact--large"
-            :disabled="!audioStore.audioInitialized" />
+          <Slider v-model="tempTempo" :min="10" :max="180" @change="onTempoInput(tempTempo)"
+            class="range-compact range-compact--large" :disabled="!audioStore.audioInitialized" />
           <span class="value-compact">{{ tempTempo }}</span>
         </div>
 
@@ -47,20 +48,21 @@
 
         <div class="control-group-compact">
           <label class="control-label-compact">Densidad</label>
-          <Slider v-model="tempGlobalDensityBias" :min="0" :max="100" @change="onGlobalDensityBiasInput(tempGlobalDensityBias)"
-            class="range-compact" :disabled="!audioStore.audioInitialized" />
+          <Slider v-model="tempGlobalDensityBias" :min="0" :max="100"
+            @change="onGlobalDensityBiasInput(tempGlobalDensityBias)" class="range-compact"
+            :disabled="!audioStore.audioInitialized" />
           <span class="value-compact">{{ tempGlobalDensityBias }}%</span>
         </div>
 
         <div class="preset-control-group">
-          <Button @click="openPresetDialog" class="preset-button-compact header-btn-compact" icon="pi pi-save" label="Presets" size="small"
-            title="Gestionar presets" :disabled="!audioStore.audioInitialized" />
+          <Button @click="openPresetDialog" class="preset-button-compact header-btn-compact" icon="pi pi-save"
+            label="Presets" size="small" title="Gestionar presets" :disabled="!audioStore.audioInitialized" />
           <span class="preset-name-label">{{ presetStore.currentPreset?.name || 'Sin preset' }}</span>
         </div>
 
         <!-- Visualizador de pulsos integrado (moved to right section) -->
         <div class="pulse-viz-compact">
-        <div :class="['pulse-light', { flash: audioStore.beatFlash }]"></div>
+          <div :class="['pulse-light', { flash: audioStore.beatFlash }]"></div>
         </div>
       </div>
     </div>
@@ -143,30 +145,7 @@
   const isStyleDialogOpen = ref(false)
 
   // Configuración del multiselector de evolución
-  const selectedEvolutionTypes = ref([])
-
-  const evolutionOptions = [
-    {
-      value: 'momentum',
-      label: 'Momentum',
-      description: 'Intensidad progresiva que aumenta con el tiempo'
-    },
-    {
-      value: 'callResponse',
-      label: 'Call & Response',
-      description: 'Patrones de pregunta y respuesta entre loops'
-    },
-    {
-      value: 'tensionRelease',
-      label: 'Tensión/Release',
-      description: 'Alternancia entre fases de tensión y relajación'
-    },
-    {
-      value: 'classic',
-      label: 'Clásico',
-      description: 'Cambios aleatorios tradicionales'
-    }
-  ]
+  // Evolution types simplified: momentum, call/response, and tension/release disabled
 
   // Estado temporal para el tempo
   const tempTempo = ref(audioStore.tempo)
@@ -240,19 +219,7 @@
   }
 
   // Manejar cambios en el multiselector de evolución
-  const onEvolutionTypesChange = (selectedTypes) => {
-    // Actualizar los estados en el store basándose en las selecciones
-    audioStore.setMomentumEnabled(selectedTypes.includes('momentum'))
-    audioStore.setCallResponseEnabled(selectedTypes.includes('callResponse'))
-    audioStore.setTensionReleaseMode(selectedTypes.includes('tensionRelease'))
-
-    // Si se selecciona clásico, desactivar todos los modos especiales
-    if (selectedTypes.includes('classic')) {
-      audioStore.setMomentumEnabled(false)
-      audioStore.setCallResponseEnabled(false)
-      audioStore.setTensionReleaseMode(false)
-    }
-  }
+  // Evolution options removed - no extra handling required
 
   const updateMasterVolume = () => {
     audioStore.updateMasterVolume()
