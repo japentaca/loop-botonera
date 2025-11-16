@@ -40,11 +40,12 @@ export function generateEuclideanPattern(loopId, options = {}) {
   // No pulse-dependent offsets: generators only return arrays of notes.
   const startOffset = typeof options.startOffset === 'number' ? options.startOffset : 0
   const sel1 = chooseTimingAndJitter(loopId, length, density, options)
-  const timing = sel1.timingMode ?? 'even'
+  // For the Euclidean generator, force the algorithm to use euclidean mode
+  const timing = 'euclidean'
   const jitter = sel1.jitter ?? 0
   const seed1 = stableHash(String(loopId) + ':' + String(length) + ':' + String(Math.floor(performance.now())))
 
-  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true, jitter, seed: seed1 })
+  const positions = computePositions({ length, density, mode: 'euclidean', startOffset, allowZero: true, jitter, seed: seed1 })
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange, { tag: 'PatternGen' })
   const pattern = new Array(length).fill(null)
 
@@ -212,7 +213,7 @@ function euclideanRhythm(pulses, steps) {
   }
 
   // Simple working implementation
-  const positions = [];
+  let positions = [];
   for (let i = 0; i < steps; i++) {
     // Use modulo to distribute pulses evenly
     if ((i * pulses) % steps < pulses) {
@@ -225,10 +226,13 @@ function euclideanRhythm(pulses, steps) {
 /**
  * Compute positions (indices) for note placement based on mode and density
  * mode: 'euclidean' | 'even' | 'random' | 'fillAll'
+ * Jitter: when `jitter` is > 0, some modes (even/euclidean/default) apply
+ * small position perturbations to avoid deterministic spacing. Jitter is
+ * seeded by `seed` to produce deterministic randomness when needed.
  * allowZero: when true, density==0 yields zero positions instead of forcing 1
  */
 function computePositions({ length, density, mode = 'even', startOffset = 0, allowZero = false, jitter = 0, seed }) {
-  const positions = [];
+  let positions = [];
   const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0));
   const rng = createRng(seed);
 
@@ -261,7 +265,19 @@ function computePositions({ length, density, mode = 'even', startOffset = 0, all
     for (let i = 0; i < count; i++) {
       positions.push(Math.floor((i * length) / count));
     }
+    if (jitter && jitter > 0) {
+      positions = applyJitterToPositions(positions, jitter, rng, length)
+    }
     return positions.map(p => (p + startOffset) % length);
+  }
+
+  if (mode === 'euclidean') {
+    // Use pulses based on density
+    const pulses = Math.round(length * d);
+    if (pulses <= 0) return [];
+    let epos = euclideanRhythm(pulses, length);
+    if (jitter && jitter > 0) epos = applyJitterToPositions(epos, jitter, rng, length);
+    return epos.map(p => (p + startOffset) % length);
   }
 
   if (mode === 'random') {
@@ -346,12 +362,7 @@ function computePositions({ length, density, mode = 'even', startOffset = 0, all
     raw.push(Math.floor((i * length) / count));
   }
   if (jitter && jitter > 0) {
-    const j = Math.floor(jitter);
-    for (let i = 0; i < raw.length; i++) {
-      const r = (raw[i] + (Math.floor(((rng() || Math.random()) * (2 * j + 1)) - j))) % length;
-      const rp = r < 0 ? r + length : r;
-      positions.push(rp);
-    }
+    positions = applyJitterToPositions(raw, jitter, rng, length)
     return positions.map(p => (p + startOffset) % length);
   }
   return raw.map(p => (p + startOffset) % length);
@@ -361,6 +372,48 @@ function* timingIterator({ length, density, mode, startOffset, allowZero, jitter
   const pos = computePositions({ length, density, mode, startOffset, allowZero, jitter, seed })
   for (let i = 0; i < pos.length; i++) yield pos[i]
 }
+
+/**
+ * Apply jitter to a set of integer positions (0..length-1). Ensures unique positions
+ * by attempting random jittered candidate picks and falling back to closest available
+ * indices when collisions persist.
+ */
+function applyJitterToPositions(positions, jitter, rng, length) {
+  if (!Array.isArray(positions) || positions.length === 0) return [];
+  const maxJ = Math.max(0, Math.floor(Math.min(jitter, Math.floor(length / 2))));
+  if (maxJ <= 0) return positions.slice();
+  const out = [];
+  const used = new Set();
+  for (let p of positions) {
+    let candidate = p;
+    let tries = 0;
+    const maxTries = 12;
+    while (tries < maxTries) {
+      const offset = Math.floor(((rng() || Math.random()) * (2 * maxJ + 1)) - maxJ);
+      let r = p + offset;
+      if (r < 0) r = 0;
+      if (r >= length) r = length - 1;
+      if (!used.has(r)) { candidate = r; break; }
+      tries++;
+    }
+    if (used.has(candidate)) {
+      // fallback: pick nearest free slot scanning outwards
+      let found = -1;
+      for (let d = 1; d < length; d++) {
+        const c1 = candidate - d;
+        const c2 = candidate + d;
+        if (c1 >= 0 && !used.has(c1)) { found = c1; break; }
+        if (c2 < length && !used.has(c2)) { found = c2; break; }
+      }
+      if (found >= 0) candidate = found; else candidate = candidate; // keep original if nowhere else
+    }
+    used.add(candidate);
+    out.push(candidate);
+  }
+  // Keep original order but dedup and sort
+  return out.sort((a, b) => a - b);
+}
+
 
 function createRng(seed) {
   if (typeof seed !== 'number' || !isFinite(seed)) return () => Math.random()
@@ -390,7 +443,11 @@ function chooseTimingAndJitter(loopId, length, density, options) {
     mode = modes[Math.floor(Math.random() * modes.length)]
   }
   if (typeof j !== 'number' || isNaN(j)) {
-    const maxJ = Math.max(0, Math.floor(length / 6))
+    // Make jitter scale with the length and inversely with density; sparse patterns
+    // get slightly more jitter to avoid sounding too robotic.
+    const baseMax = Math.max(0, Math.floor(length / 6))
+    const densityScale = typeof density === 'number' && !isNaN(density) ? (1 + (1 - Math.max(0, Math.min(1, density))) * 0.6) : 1
+    const maxJ = Math.max(0, Math.floor(baseMax * densityScale))
     j = maxJ > 0 ? Math.floor(Math.random() * (maxJ + 1)) : 0
   }
   return { timingMode: mode, jitter: j }

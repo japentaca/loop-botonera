@@ -255,7 +255,7 @@ export function useMelodicGenerator(notesMatrix) {
       const loopId = loop.id
       const loopNotes = []
       for (let i = 0; i < notesMatrix.MAX_STEPS; i++) {
-        loopNotes.push(notesMatrix.notesMatrix[loopId][i])
+        let positions = []
       }
       return loopNotes
     })
@@ -334,8 +334,8 @@ function euclideanRhythm(pulses, steps) {
   return positions
 }
 
-function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false }) {
-  const positions = []
+function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false, jitter = 0, seed }) {
+  let positions = []
   const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0))
   if (mode === 'fillAll') {
     let pos = startOffset % length
@@ -362,6 +362,7 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     for (let i = 0; i < count; i++) {
       positions.push(Math.floor((i * length) / count))
     }
+    if (jitter && jitter > 0) positions = applyJitterToPositions(positions, jitter, length)
     return positions.map(p => (p + startOffset) % length)
   }
   if (mode === 'random') {
@@ -369,12 +370,55 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     while (set.size < count) set.add(Math.floor(Math.random() * length))
     return Array.from(set).map(p => (p + startOffset) % length)
   }
-  const raw = euclideanRhythm(count, length)
+  let raw = euclideanRhythm(count, length)
+  if (jitter && jitter > 0) raw = applyJitterToPositions(raw, jitter, length)
   return raw.map(p => (p + startOffset) % length)
 }
 
+function applyJitterToPositions(positions, jitter, length) {
+  if (!Array.isArray(positions) || positions.length === 0) return [];
+  const maxJ = Math.max(0, Math.floor(Math.min(jitter, Math.floor(length / 2))));
+  if (maxJ <= 0) return positions.slice();
+  const out = [];
+  const used = new Set();
+  for (let p of positions) {
+    let candidate = p;
+    let tries = 0;
+    const maxTries = 12;
+    while (tries < maxTries) {
+      const offset = Math.floor((Math.random() * (2 * maxJ + 1)) - maxJ);
+      let r = p + offset;
+      if (r < 0) r = 0;
+      if (r >= length) r = length - 1;
+      if (!used.has(r)) { candidate = r; break; }
+      tries++;
+    }
+    if (used.has(candidate)) {
+      let found = -1;
+      for (let d = 1; d < length; d++) {
+        const c1 = candidate - d;
+        const c2 = candidate + d;
+        if (c1 >= 0 && !used.has(c1)) { found = c1; break; }
+        if (c2 < length && !used.has(c2)) { found = c2; break; }
+      }
+      if (found >= 0) candidate = found; else candidate = candidate;
+    }
+    used.add(candidate);
+    out.push(candidate);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+function chooseJitter(len, dens) {
+  const baseMax = Math.max(0, Math.floor(len / 6))
+  const densityScale = typeof dens === 'number' && !isNaN(dens) ? (1 + (1 - Math.max(0, Math.min(1, dens))) * 0.6) : 1
+  const maxJ = Math.max(0, Math.floor(baseMax * densityScale))
+  return maxJ > 0 ? Math.floor(Math.random() * (maxJ + 1)) : 0
+}
+
 function euclidFromOptions({ length, scale, baseNote, noteRange, density, timing = 'euclidean', startOffset = 0 }) {
-  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true })
+  const j = chooseJitter(length, density)
+  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true, jitter: j })
   const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange, { tag: 'MelGen' })
   const pattern = new Array(length).fill(null)
   if (possibleNotes.length > 0 && positions.length > 0) {
@@ -393,7 +437,8 @@ function scaleFromOptions({ length, scale, baseNote, noteRange, density, density
     return new Array(length).fill(null)
   }
   const sortedNotes = [...possibleNotes]
-  const positions = computePositions({ length, density, mode: densityTiming, startOffset, allowZero: true })
+  const j2 = chooseJitter(length, density)
+  const positions = computePositions({ length, density, mode: densityTiming, startOffset, allowZero: true, jitter: j2 })
   const placements = positions.length
   if (placements === 0) return new Array(length).fill(null)
   const pattern = new Array(length).fill(null)
@@ -419,7 +464,8 @@ function randomFromOptions({ length, scale, baseNote, noteRange, density, timing
   if (possibleNotes.length === 0) {
     return new Array(length).fill(null)
   }
-  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true })
+  const j3 = chooseJitter(length, density)
+  const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true, jitter: j3 })
   const noteCount = positions.length
   const sortedNotes = [...possibleNotes]
   const notesToPlace = []

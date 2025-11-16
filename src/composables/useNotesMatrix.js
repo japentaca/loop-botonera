@@ -353,7 +353,11 @@ export function useNotesMatrix() {
     const patternType = selectPatternType(loopId)
     const timingMode = meta.densityTiming || (patternType === 'euclidean' ? 'even' : (patternType === 'scale' ? 'even' : 'random'))
 
-    const positions = computePositions({ length: meta.length, density, mode: timingMode, startOffset, allowZero: true })
+    const baseMax = Math.max(0, Math.floor(meta.length / 6))
+    const densityScale = typeof density === 'number' && !isNaN(density) ? (1 + (1 - Math.max(0, Math.min(1, density))) * 0.6) : 1
+    const maxJ = Math.max(0, Math.floor(baseMax * densityScale))
+    const jitter = maxJ > 0 ? Math.floor(Math.random() * (maxJ + 1)) : 0
+    const positions = computePositions({ length: meta.length, density, mode: timingMode, startOffset, allowZero: true, jitter })
     const possibleNotes = generatePossibleNotes(scaleIntervals, baseNote, noteRange, { tag: 'NotesMatrix' })
 
     const out = new Array(meta.length).fill(null)
@@ -971,15 +975,15 @@ export function useNotesMatrix() {
 function euclideanRhythm(pulses, steps) {
   if (pulses <= 0) return []
   if (pulses >= steps) return Array.from({ length: steps }, (_, i) => i)
-  const positions = []
+  let positions = []
   for (let i = 0; i < steps; i++) {
     if ((i * pulses) % steps < pulses) positions.push(i)
   }
   return positions
 }
 
-function computePositions({ length, density, mode = 'even', startOffset = 0, allowZero = false }) {
-  const positions = []
+function computePositions({ length, density, mode = 'even', startOffset = 0, allowZero = false, jitter = 0, seed }) {
+  let positions = []
   const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0))
   if (mode === 'fillAll') {
     let pos = startOffset % length
@@ -1004,6 +1008,7 @@ function computePositions({ length, density, mode = 'even', startOffset = 0, all
   if (count <= 0) return []
   if (mode === 'even') {
     for (let i = 0; i < count; i++) positions.push(Math.floor((i * length) / count))
+    if (jitter && jitter > 0) positions = applyJitterToPositions(positions, jitter, length)
     return positions.map(p => (p + startOffset) % length)
   }
   if (mode === 'random') {
@@ -1011,9 +1016,51 @@ function computePositions({ length, density, mode = 'even', startOffset = 0, all
     while (set.size < count) set.add(Math.floor(Math.random() * length))
     return Array.from(set).map(p => (p + startOffset) % length)
   }
-  const raw = []
+  if (mode === 'euclidean') {
+    const pulses = Math.round(length * d)
+    if (pulses <= 0) return []
+    let epos = euclideanRhythm(pulses, length)
+    if (jitter && jitter > 0) epos = applyJitterToPositions(epos, jitter, length)
+    return epos.map(p => (p + startOffset) % length)
+  }
+  let raw = []
   for (let i = 0; i < count; i++) raw.push(Math.floor((i * length) / count))
+  if (jitter && jitter > 0) raw = applyJitterToPositions(raw, jitter, length)
   return raw.map(p => (p + startOffset) % length)
+}
+
+function applyJitterToPositions(positions, jitter, length) {
+  if (!Array.isArray(positions) || positions.length === 0) return [];
+  const maxJ = Math.max(0, Math.floor(Math.min(jitter, Math.floor(length / 2))));
+  if (maxJ <= 0) return positions.slice();
+  const out = [];
+  const used = new Set();
+  for (let p of positions) {
+    let candidate = p;
+    let tries = 0;
+    const maxTries = 12;
+    while (tries < maxTries) {
+      const offset = Math.floor((Math.random() * (2 * maxJ + 1)) - maxJ);
+      let r = p + offset;
+      if (r < 0) r = 0;
+      if (r >= length) r = length - 1;
+      if (!used.has(r)) { candidate = r; break; }
+      tries++;
+    }
+    if (used.has(candidate)) {
+      let found = -1;
+      for (let d = 1; d < length; d++) {
+        const c1 = candidate - d;
+        const c2 = candidate + d;
+        if (c1 >= 0 && !used.has(c1)) { found = c1; break; }
+        if (c2 < length && !used.has(c2)) { found = c2; break; }
+      }
+      if (found >= 0) candidate = found; else candidate = candidate;
+    }
+    used.add(candidate);
+    out.push(candidate);
+  }
+  return out.sort((a, b) => a - b);
 }
 
 // NOTE: generatePossibleNotes is now centralized in src/utils/noteUtils.js
