@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAudioStore } from './audioStore'
+import { useNotesMatrix } from '../composables/useNotesMatrix'
 import { useSynthStore } from './synthStore'
 import {
   createPreset as createPresetService,
@@ -52,7 +53,9 @@ export const usePresetStore = defineStore('preset', () => {
   // Crear preset por defecto
   const createDefaultPreset = async () => {
     const audioStore = useAudioStore()
-    const currentState = captureCurrentState(audioStore)
+    // Read metadata/density directly from the notes matrix composable instead of via audioStore
+    const notesMatrix = useNotesMatrix()
+    const currentState = captureCurrentState(audioStore, notesMatrix)
 
     const defaultPreset = await createPresetService({
       name: 'Preset por Defecto',
@@ -67,7 +70,7 @@ export const usePresetStore = defineStore('preset', () => {
   }
 
   // Capturar estado actual de la aplicación
-  const captureCurrentState = (audioStore) => {
+  const captureCurrentState = (audioStore, notesMatrix = null) => {
     // Capturar configuración global
     const globalConfig = {
       tempo: audioStore.tempo,
@@ -111,7 +114,18 @@ export const usePresetStore = defineStore('preset', () => {
         envelope: { ...loop.envelope },
         harmonicity: loop.harmonicity,
         modulationIndex: loop.modulationIndex,
-        synthConfig: loop.synthConfig
+        synthConfig: loop.synthConfig,
+        // Melodic generation fields - read from loopMetadata
+        // Prefer metadata from the central notesMatrix composable if available
+        noteRangeMin: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.noteRangeMin : audioStore.loopMetadata[loop.id]?.noteRangeMin) ?? 24,
+        noteRangeMax: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.noteRangeMax : audioStore.loopMetadata[loop.id]?.noteRangeMax) ?? 96,
+        patternProbabilities: { ...((notesMatrix ? notesMatrix.loopMetadata[loop.id]?.patternProbabilities : audioStore.loopMetadata[loop.id]?.patternProbabilities) || { euclidean: 0.3, scale: 0.3, random: 0.4 }) },
+        generationMode: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.generationMode : audioStore.loopMetadata[loop.id]?.generationMode) ?? 'auto',
+        lastPattern: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.lastPattern : audioStore.loopMetadata[loop.id]?.lastPattern) ?? null,
+        // Density configuration (single source of truth in notesMatrix)
+        densityMode: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.densityMode : audioStore.loopMetadata[loop.id]?.densityMode) ?? 'auto',
+        manualDensity: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.manualDensity : audioStore.loopMetadata[loop.id]?.manualDensity) ?? 0.3,
+        autoDensity: (notesMatrix ? notesMatrix.loopMetadata[loop.id]?.autoDensity : audioStore.loopMetadata[loop.id]?.autoDensity) ?? 0.3
       }
     })
 
@@ -159,9 +173,24 @@ export const usePresetStore = defineStore('preset', () => {
     if (globalConfig.maxSonicEnergy !== undefined) audioStore.maxSonicEnergy = globalConfig.maxSonicEnergy
     if (globalConfig.energyReductionFactor !== undefined) audioStore.energyReductionFactor = globalConfig.energyReductionFactor
 
+    // Ensure loops are initialized before applying configuration
+    if (!audioStore.loops || audioStore.loops.length === 0) {
+      console.warn('Loops not initialized, skipping loop configuration')
+      // Restaurar auto-guardado después de que todos los watchers hayan procesado los cambios
+      isLoadingPreset.value = false
+      // Esperar a que se completen los watchers antes de reactivar autosave
+      await nextTick()
+      autoSaveEnabled.value = wasAutoSaveEnabled
+      return
+    }
+
     // Apply loop configuration directly "as is"
     presetLoops.forEach((presetLoop, index) => {
       const loop = audioStore.loops[index]
+      if (!loop) {
+        console.warn(`Loop ${index} not found, skipping configuration`)
+        return
+      }
 
       // Apply loop properties directly without validation
       // Set active state
@@ -199,6 +228,27 @@ export const usePresetStore = defineStore('preset', () => {
       if (presetLoop.harmonicity !== undefined) loop.harmonicity = presetLoop.harmonicity
       if (presetLoop.modulationIndex !== undefined) loop.modulationIndex = presetLoop.modulationIndex
       if (presetLoop.synthConfig) loop.synthConfig = presetLoop.synthConfig
+
+      // Melodic generation fields - update loopMetadata
+      if (presetLoop.noteRangeMin !== undefined ||
+        presetLoop.noteRangeMax !== undefined ||
+        presetLoop.patternProbabilities ||
+        presetLoop.generationMode !== undefined ||
+        presetLoop.densityMode !== undefined ||
+        presetLoop.manualDensity !== undefined ||
+        presetLoop.autoDensity !== undefined) {
+        const metadataUpdates = {}
+        if (presetLoop.noteRangeMin !== undefined) metadataUpdates.noteRangeMin = presetLoop.noteRangeMin
+        if (presetLoop.noteRangeMax !== undefined) metadataUpdates.noteRangeMax = presetLoop.noteRangeMax
+        if (presetLoop.patternProbabilities) metadataUpdates.patternProbabilities = { ...presetLoop.patternProbabilities }
+        if (presetLoop.generationMode !== undefined) metadataUpdates.generationMode = presetLoop.generationMode
+        if (presetLoop.lastPattern !== undefined) metadataUpdates.lastPattern = presetLoop.lastPattern
+        if (presetLoop.densityMode !== undefined) metadataUpdates.densityMode = presetLoop.densityMode
+        if (presetLoop.manualDensity !== undefined) metadataUpdates.manualDensity = presetLoop.manualDensity
+        if (presetLoop.autoDensity !== undefined) metadataUpdates.autoDensity = presetLoop.autoDensity
+
+        audioStore.updateLoopMetadata(index, metadataUpdates)
+      }
       // Update synth with direct config application
       if (audioStore.updateLoopSynth) {
         const synthConfig = {
@@ -257,21 +307,28 @@ export const usePresetStore = defineStore('preset', () => {
 
         // Calculate density from existing notes in matrix if available, otherwise use default
         let density = 0.4
-        if (audioStore.notesMatrix && audioStore.notesMatrix.getLoopNoteDensity) {
-          const calculatedDensity = audioStore.notesMatrix.getLoopNoteDensity(index)
+        // Prefer direct access to notesMatrix composable for density calculation
+        const notesMatrix = useNotesMatrix()
+        if (notesMatrix && notesMatrix.getLoopNoteDensity) {
+          const calculatedDensity = notesMatrix.getLoopNoteDensity(index)
           if (calculatedDensity > 0) {
             density = calculatedDensity
           }
         }
 
         // Use global scale for all loops
-        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, density, null)
+        audioStore.loopManager.regenerateLoop(index, globalScale, globalScaleName, null)
       })
     }
 
     // Force reactivity update for loops (they use shallowRef)
     if (audioStore.loopManager && audioStore.loopManager.triggerLoopsUpdate) {
       audioStore.loopManager.triggerLoopsUpdate()
+    }
+
+    // CRITICAL: Update active loops cache after preset load
+    if (audioStore.updateActiveLoopsCache) {
+      audioStore.updateActiveLoopsCache()
     }
 
     // Restaurar auto-guardado después de que todos los watchers hayan procesado los cambios
@@ -302,20 +359,27 @@ export const usePresetStore = defineStore('preset', () => {
   // Cargar preset
   const loadPreset = async (presetId) => {
     isLoading.value = true
-    const preset = await getPresetById(presetId)
 
-    if (!preset) {
-      console.error('Error loading preset - preset not found, aborting')
-      throw new Error('Preset not found')
+    try {
+      const preset = await getPresetById(presetId)
+
+      if (!preset) {
+        console.error('Error loading preset - preset not found, aborting')
+        throw new Error('Preset not found')
+      }
+
+      await applyPresetToState(preset)
+      currentPresetId.value = presetId
+      hasUnsavedChanges.value = false
+      lastSaveTime.value = new Date()
+
+      isLoading.value = false
+      return preset
+    } catch (error) {
+      console.error('Error loading preset:', error)
+      isLoading.value = false
+      throw error
     }
-
-    await applyPresetToState(preset)
-    currentPresetId.value = presetId
-    hasUnsavedChanges.value = false
-    lastSaveTime.value = new Date()
-
-    isLoading.value = false
-    return preset
   }
 
   // Guardar preset actual
@@ -525,6 +589,18 @@ export const usePresetStore = defineStore('preset', () => {
     isDialogOpen.value = false
   }
 
+  // Retry loading preset after loops are initialized
+  const retryLoadCurrentPreset = async () => {
+    if (currentPresetId.value && !isLoadingPreset.value) {
+      console.log('[PresetStore] Retrying to load current preset after loops initialization')
+      try {
+        await loadPreset(currentPresetId.value)
+      } catch (error) {
+        console.warn('[PresetStore] Failed to retry loading preset:', error)
+      }
+    }
+  }
+
   // Inicialización
   let presetStoreInitializing = false
   const initialize = async () => {
@@ -597,6 +673,7 @@ export const usePresetStore = defineStore('preset', () => {
     createAutoPreset,
     openDialog,
     closeDialog,
+    retryLoadCurrentPreset,
 
     // Utilidades
     captureCurrentState,

@@ -52,6 +52,14 @@ export const useAudioEngine = () => {
     }
   }
 
+  // Reset internal counters to re-sync loop positions without stopping playback
+  const resetCounters = () => {
+    if (!audioInitialized.value) return
+    _internalPulse = 0
+    currentPulse.value = 0
+    // Keep transport running; just realign step calculation
+  }
+
   // Inicializar el motor de audio
   const initAudio = async () => {
 
@@ -172,6 +180,7 @@ export const useAudioEngine = () => {
       delayAmount = 0.2,
       reverbAmount = 0.3,
       pan = 0,
+      volume = 0.5,
       synthType = 'PolySynth'
     } = effectsConfig
 
@@ -197,6 +206,9 @@ export const useAudioEngine = () => {
         synth = markRaw(new Tone.PolySynth(Tone.Synth, synthConfig))
         break
     }
+
+    // Set initial synth volume
+    synth.volume.value = Tone.gainToDb(volume)
 
     // Crear efectos individuales
     const panner = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Panner(pan))
@@ -231,6 +243,11 @@ export const useAudioEngine = () => {
   // Reproducir una nota individual
   const playNote = (audioChain, midiNote, duration = '16n', velocity = 1, time = undefined) => {
     const { synth } = audioChain
+
+    if (!synth) {
+      console.error('❌ audioEngine.playNote: No synth in audioChain!')
+      return
+    }
 
     // Calcular frecuencia
     const freq = Tone.Frequency(midiNote, 'midi').toFrequency()
@@ -269,6 +286,9 @@ export const useAudioEngine = () => {
     getAudioObjects,
     createAudioChain,
     playNote,
+
+    // Reset counters for sync
+    resetCounters,
 
     // Efectos
     softResetDelayFeedback,

@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import * as Tone from 'tone'
 
 // Performance optimization: cache energy calculations to avoid redundant computations
 let energyCache = new Map() // loopId -> last calculated energy
@@ -28,7 +29,7 @@ export const useEnergyManager = (notesMatrix = null) => {
   const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
   const debugLog = (label, payload = {}) => {
     if (isDebugEnabled()) {
-      // console.log(`[EnergyManager] ${label}`, payload)
+      //console.log(`[EnergyManager] ${label}`, payload)
     }
   }
 
@@ -112,6 +113,37 @@ export const useEnergyManager = (notesMatrix = null) => {
     return density
   }
 
+  // New: computeDynamicDensity - deterministic mapping based on active loop count
+  // NUM_LOOPS is configurable at runtime (audioStore will set it from loopManager.NUM_LOOPS)
+  let NUM_LOOPS = 8
+  const MIN_DYNAMIC_DENSITY = 0.0
+  const MAX_DYNAMIC_DENSITY = 1.0
+  const DENSITY_REDUCTION_FACTOR_ON_ENERGY = 0.7
+
+  const lerp = (a, b, t) => (a * (1 - t)) + (b * t)
+
+  const computeDynamicDensity = (loops = [], bias = 0.5) => {
+    if (!energyManagementEnabled.value) return Math.max(MIN_DYNAMIC_DENSITY, Math.min(MAX_DYNAMIC_DENSITY, Number(bias) || 0.3))
+
+    const activeCount = Math.max(1, loops.filter(l => l.isActive).length)
+
+    let baseDensity = 1 / activeCount
+
+    const currentEnergy = calculateSonicEnergy(loops)
+    if (currentEnergy > maxSonicEnergy.value) {
+      baseDensity *= DENSITY_REDUCTION_FACTOR_ON_ENERGY
+    }
+
+    const finalDensity = Math.max(MIN_DYNAMIC_DENSITY, Math.min(MAX_DYNAMIC_DENSITY, baseDensity))
+    debugLog('computeDynamicDensity', { activeCount, currentEnergy: Number(currentEnergy.toFixed(3)), density: finalDensity })
+    return finalDensity
+  }
+
+  const updateNumLoops = (n) => {
+    const parsed = Number(n) || 0
+    if (parsed > 0) NUM_LOOPS = parsed
+  }
+
   // Obtener volumen adaptivo para un loop específico
   const getAdaptiveVolume = (loops, loopId) => {
     // Si la gestión de energía está deshabilitada, usar volumen fijo
@@ -155,6 +187,10 @@ export const useEnergyManager = (notesMatrix = null) => {
         // Solo ajustar si la diferencia es significativa para evitar cambios constantes
         if (Math.abs(loop.volume - newVolume) > 0.1) {
           loop.volume = newVolume
+          // Update synth volume immediately for real-time compensation
+          if (loop.synth) {
+            loop.synth.volume.value = Tone.gainToDb(newVolume)
+          }
         }
       }
     })
@@ -262,6 +298,7 @@ export const useEnergyManager = (notesMatrix = null) => {
     // Funciones de cálculo
     calculateSonicEnergy,
     getAdaptiveDensity,
+    computeDynamicDensity,
     getAdaptiveVolume,
 
     // Funciones de balance
@@ -272,6 +309,7 @@ export const useEnergyManager = (notesMatrix = null) => {
     updateEnergyManagement,
     updateMaxSonicEnergy,
     updateEnergyReductionFactor,
+    updateNumLoops,
 
     // Utilidades
     getEnergyMetrics,

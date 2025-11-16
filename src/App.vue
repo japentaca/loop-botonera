@@ -48,11 +48,17 @@
     isInitializing.value = true
 
     try {
-      // Initialize audio store first
+      // Step 1: Initialize only Tone.js audio engine
       await audioStore.initAudio()
 
-      // Initialize preset system after audio is ready
+      // Step 2: Initialize preset system (load/create default preset)
       await presetStore.initialize()
+
+      // Step 3: Initialize music components after preset is loaded
+      await audioStore.initMusicComponents()
+
+      // Step 4: Retry loading the current preset now that loops are initialized
+      await presetStore.retryLoadCurrentPreset()
 
     } catch (error) {
       console.error('🔴 APP: Error during initialization:', error)

@@ -1,615 +1,853 @@
-import { ref, computed, reactive, readonly, shallowRef, triggerRef } from 'vue'
-import { useScales, useNoteUtils } from './useMusic'
+import { ref, readonly, triggerRef, computed, reactive } from 'vue'
+import { generatePossibleNotes } from '../utils/noteUtils'
 
-// Helper function for efficient MIDI note clamping
-const clampToMidiRange = (note) => {
-  const MIN_MIDI = 24
-  const MAX_MIDI = 96
-  const OCTAVE = 12
+// Debug flag (set window.__LOOP_DEBUG=true in the browser console to enable)
+const DEBUG = typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
+import { useScales } from './useMusic'
+import { analyzeActiveLoops, avoidConflicts, isCounterpointEnabled } from '../services/counterpointService'
 
-  if (note < MIN_MIDI) {
-    const octavesBelow = Math.ceil((MIN_MIDI - note) / OCTAVE)
-    return note + (octavesBelow * OCTAVE)
+// Get scale utility at module level
+const { getScale } = useScales()
+
+// Constants
+const MAX_LOOPS = 16
+const MAX_STEPS = 512
+const MAX_NOTE = 127
+const MIN_NOTE = 0
+
+// Performance optimization: Pre-computed lookup tables
+const SCALE_INTERVALS_CACHE = new Map()
+const NOTE_VALIDATION_CACHE = new Map()
+const DENSITY_CACHE = new Map()
+
+// Performance optimization: Batch mode for multiple updates
+let _batchMode = false
+const _pendingUpdates = new Set()
+
+// Performance optimization: Debounced reactivity
+let _reactivityTimer = null
+const REACTIVITY_DELAY = 16 // ~60fps
+
+// Performance optimization: Memoized computed values
+const memoizedValues = new Map()
+
+// Performance optimization: Use typed arrays for better performance
+const notesMatrix = new Array(MAX_LOOPS)
+for (let i = 0; i < MAX_LOOPS; i++) {
+  notesMatrix[i] = new Array(MAX_STEPS).fill(null)
+}
+
+// Performance optimization: Use reactive objects for better reactivity
+const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => reactive({
+  isActive: false,
+  scale: null,
+  baseNote: 60, // C4
+  length: 16,
+  octaveRange: 2,
+  density: 0,
+  densityMode: 'auto',
+  manualDensity: 0.3,
+  autoDensity: 0.3,
+  // Timing: optional explicit start offset (pulse index). If null, generator chooses.
+  startOffset: null,
+  lastModified: Date.now(),
+  // Melodic generation fields
+  noteRangeMin: 24,        // MIDI note min (default: full range)
+  noteRangeMax: 96,        // MIDI note max (default: full range)
+  patternProbabilities: {  // Per-loop pattern weights
+    euclidean: 0.3,
+    scale: 0.3,
+    random: 0.4,
+    // Will add more in Phase 2
+  },
+  generationMode: 'auto',  // 'auto' | 'locked'
+  lastPattern: null        // Track what was generated for reference
+}))
+
+const matrixState = ref({
+  globalBaseNote: 60, // C4
+  activeLoops: new Set(),
+  stepCount: 16
+})
+
+// Performance optimization: Cache scale intervals
+function getScaleIntervalsCached(scaleName) {
+  if (!SCALE_INTERVALS_CACHE.has(scaleName)) {
+    SCALE_INTERVALS_CACHE.set(scaleName, getScale(scaleName))
   }
-  if (note > MAX_MIDI) {
-    const octavesAbove = Math.ceil((note - MAX_MIDI) / OCTAVE)
-    return note - (octavesAbove * OCTAVE)
+  return SCALE_INTERVALS_CACHE.get(scaleName)
+}
+
+// Performance optimization: Memoized computed values
+function getMemoized(key, computeFn) {
+  if (!memoizedValues.has(key)) {
+    memoizedValues.set(key, computeFn())
   }
-  return note
+  return memoizedValues.get(key)
+}
+
+// Performance optimization: Debounced reactivity trigger
+function triggerReactivityDebounced() {
+  if (_reactivityTimer) {
+    clearTimeout(_reactivityTimer)
+  }
+  _reactivityTimer = setTimeout(() => {
+    triggerRef(notesMatrix)
+    _reactivityTimer = null
+  }, REACTIVITY_DELAY)
+}
+
+// Performance optimization: Batch operations
+function batchUpdate(updateFn) {
+  _batchMode = true
+  updateFn()
+  _batchMode = false
+  triggerReactivityDebounced()
+}
+
+// Performance optimization: Efficient note validation
+function isNoteInScaleCached(note, baseNote, scaleName, octaveRange) {
+  const cacheKey = `${note}-${baseNote}-${scaleName}-${octaveRange}`
+
+  if (NOTE_VALIDATION_CACHE.has(cacheKey)) {
+    return NOTE_VALIDATION_CACHE.get(cacheKey)
+  }
+
+  const scaleIntervals = getScaleIntervalsCached(scaleName)
+  const result = scaleIntervals.some(interval => {
+    const expectedNote = baseNote + interval
+    for (let oct = 0; oct < octaveRange; oct++) {
+      if (note === expectedNote + (oct * 12)) return true
+    }
+    return false
+  })
+
+  NOTE_VALIDATION_CACHE.set(cacheKey, result)
+  return result
+}
+
+// Performance optimization: Efficient density calculation
+function computeLoopDensityMetrics(loopId) {
+  if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) {
+    return { density: 0, noteCount: 0, length: 0 }
+  }
+
+  const cacheKey = `density-${loopId}-${loopMetadata[loopId].lastModified}`
+
+  if (DENSITY_CACHE.has(cacheKey)) {
+    return DENSITY_CACHE.get(cacheKey)
+  }
+
+  const meta = loopMetadata[loopId]
+  const loopNotes = notesMatrix[loopId]
+  let noteCount = 0
+
+  // Performance optimization: Use for loop instead of reduce for better performance
+  for (let i = 0; i < meta.length; i++) {
+    if (loopNotes[i] !== null) {
+      noteCount++
+    }
+  }
+
+  const metrics = {
+    density: meta.length > 0 ? noteCount / meta.length : 0,
+    noteCount,
+    length: meta.length
+  }
+
+  DENSITY_CACHE.set(cacheKey, metrics)
+  return metrics
+}
+
+// Resolver de densidad efectiva por loop
+function getEffectiveDensity(loopId) {
+  if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return 0.3
+  const meta = loopMetadata[loopId]
+  const mode = meta.densityMode === 'manual' ? 'manual' : 'auto'
+  const val = mode === 'manual' ? meta.manualDensity : meta.autoDensity
+  const n = typeof val === 'number' && !isNaN(val) ? val : 0.3
+  return Math.max(0, Math.min(1, n))
 }
 
 export function useNotesMatrix() {
-  // Configuración de la matriz
-  const MAX_LOOPS = 16
-  const MAX_STEPS = 32
-
-  // Matriz principal de notas [loopId][stepIndex] = midiNote | null
-  // Using shallowRef for performance as this matrix changes frequently during playback
-  const notesMatrix = shallowRef(Array(MAX_LOOPS).fill(null).map(() => Array(MAX_STEPS).fill(null)))
-
-  // Metadatos por loop
-  const loopMetadata = reactive({})
-
-  // OPTIMIZATION: Batch mode to defer reactivity triggers during bulk operations
-  let _batchMode = false
-  let _pendingUpdates = new Set() // Track loops with pending updates
-
-  // Estado global de la matriz
-  const matrixState = reactive({
-    currentScale: 'major',
-    globalBaseNote: 60,
-    activeLoops: new Set(),
-    stepCount: 16, // Pasos activos por defecto
-    syncMode: 'all' // 'all', 'selected', 'none'
-  })
-
-  const { getScale } = useScales()
-  const { quantizeToScale } = useNoteUtils()
-
-  const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
-  const debugLog = (label, payload = {}) => {
-    if (isDebugEnabled()) {
-      // console.log(`[NotesMatrix] ${label}`, payload)
-    }
-  }
-
-  const refreshMatrixStepCount = () => {
-    let maxLength = 0
-    matrixState.activeLoops.forEach(loopId => {
-      const meta = loopMetadata[loopId]
-      if (meta && typeof meta.length === 'number') {
-        maxLength = Math.max(maxLength, meta.length)
-      }
-    })
-    matrixState.stepCount = maxLength || 16
-  }
-
-  const computeLoopDensityMetrics = (loopId) => {
-    const meta = loopMetadata[loopId]
-    if (!meta) {
-      return { noteCount: 0, length: 0, density: 0 }
-    }
-
-    const length = Math.max(0, Math.min(MAX_STEPS, meta.length || 0))
-    if (length === 0) {
-      return { noteCount: 0, length: 0, density: 0 }
-    }
-
-    const notes = notesMatrix.value[loopId]?.slice(0, length) || []
-    const noteCount = notes.filter(note => note !== null && note !== undefined).length
-    const density = length > 0 ? noteCount / length : 0
-    return { noteCount, length, density }
-  }
-
-  const updateDensityCache = (loopId) => {
-    const metrics = computeLoopDensityMetrics(loopId)
-    if (loopMetadata[loopId]) {
-      // Avoid updating if density hasn't changed (for reactivity optimization)
-      const densityChanged = Math.abs((loopMetadata[loopId].density || 0) - metrics.density) > 0.01
-
-      loopMetadata[loopId].density = metrics.density
-      loopMetadata[loopId].lastModified = Date.now()
-
-      if (densityChanged && !_batchMode) {
-        debugLog('density updated', { loopId, density: metrics.density })
-      }
-
-      // Track pending updates in batch mode
-      if (_batchMode) {
-        _pendingUpdates.add(loopId)
-      }
-    }
-    return metrics
-  }
-
-  const generateRandomNoteForLoop = (loopId) => {
-    const meta = loopMetadata[loopId]
-    if (!meta) return null
-
-    // Always resolve scale from the scale NAME stored in metadata (or use global)
-    const scaleName = meta.scale || matrixState.currentScale
-    const scaleIntervals = getScale(scaleName)
-    const baseNote = meta.baseNote || matrixState.globalBaseNote
-    const octaveRange = Math.max(1, meta.octaveRange || 1)
-
-    const scaleIndex = Math.floor(Math.random() * scaleIntervals.length)
-    const octave = Math.floor(Math.random() * octaveRange)
-    const note = clampToMidiRange(baseNote + scaleIntervals[scaleIndex] + (octave * 12))
-
-    return note
-  }
-
-  const ensureAtLeastOneNote = (loopId) => {
-    const metrics = computeLoopDensityMetrics(loopId)
-    if (metrics.length === 0 || metrics.noteCount > 0) return
-
-    const fallbackNote = generateRandomNoteForLoop(loopId)
-    notesMatrix.value[loopId][0] = fallbackNote
-    updateDensityCache(loopId)
-    debugLog('fallback note injected', { loopId, fallbackNote })
-  }
-
-  // Computed para obtener la escala actual
-  const currentScaleNotes = computed(() => {
-    return getScale(matrixState.currentScale)
-  })
-
-  // Inicializar metadatos de un loop
-  const initializeLoop = (loopId, config = {}) => {
-    if (loopId >= MAX_LOOPS) return false
-
-    // CRITICAL: Always store scale NAME, never intervals
-    const scaleName = typeof config.scale === 'string' ? config.scale : matrixState.currentScale
-
-    loopMetadata[loopId] = {
-      isActive: false,
-      length: Math.max(1, Math.min(MAX_STEPS, config.length || 16)),
-      scale: scaleName, // Store scale NAME not intervals
-      baseNote: config.baseNote || matrixState.globalBaseNote,
-      density: typeof config.density === 'number' ? config.density : 0.4,
-      octaveRange: config.octaveRange || 2,
-      lastModified: Date.now(),
-      ...config,
-      scale: scaleName // Ensure scale is always overwritten with the name
-    }
-
-    debugLog('initialize loop', { loopId, metadata: { ...loopMetadata[loopId] } })
-    return true
-  }
-
-  // Activar/desactivar loop
-  const setLoopActive = (loopId, active) => {
-    if (!loopMetadata[loopId]) initializeLoop(loopId)
-
-    loopMetadata[loopId].isActive = active
-    if (active) {
-      matrixState.activeLoops.add(loopId)
-    } else {
-      matrixState.activeLoops.delete(loopId)
-    }
-    refreshMatrixStepCount()
-    debugLog('set loop active', { loopId, active })
-  }
-
-  // Actualizar metadatos de un loop
-  const updateLoopMetadata = (loopId, updates) => {
-    if (!loopMetadata[loopId]) initializeLoop(loopId)
-
-    const sanitizedUpdates = { ...updates }
-
-    // Ensure scale is always a string name, never an array
-    if (sanitizedUpdates.scale !== undefined && typeof sanitizedUpdates.scale !== 'string') {
-      sanitizedUpdates.scale = matrixState.currentScale || 'major'
-    }
-
-    if (sanitizedUpdates.length !== undefined) {
-      loopMetadata[loopId].length = Math.max(1, Math.min(MAX_STEPS, sanitizedUpdates.length))
-      delete sanitizedUpdates.length
-      refreshMatrixStepCount()
-    }
-
-    Object.assign(loopMetadata[loopId], sanitizedUpdates)
-    loopMetadata[loopId].lastModified = Date.now()
-    if (sanitizedUpdates.baseNote !== undefined || sanitizedUpdates.density !== undefined) {
-      updateDensityCache(loopId)
-    }
-    debugLog('update metadata', { loopId, updates: sanitizedUpdates })
-    return true
-  }
-
-  // Obtener notas de un loop específico
-  const getLoopNotes = (loopId) => {
-    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return []
-    const length = loopMetadata[loopId].length
-    return notesMatrix.value[loopId].slice(0, length)
-  }
-
-  // Establecer notas de un loop
-  const setLoopNotes = (loopId, notes) => {
-    if (loopId >= MAX_LOOPS || !Array.isArray(notes)) return false
-
-    if (!loopMetadata[loopId]) initializeLoop(loopId)
-
-    const targetLength = Math.max(1, Math.min(MAX_STEPS, notes.length || loopMetadata[loopId].length || 16))
-    loopMetadata[loopId].length = targetLength
-
-    notesMatrix.value[loopId].fill(null)
-
-    notes.forEach((note, index) => {
-      if (index < MAX_STEPS) {
-        notesMatrix.value[loopId][index] = note
-      }
-    })
-
-    const metrics = updateDensityCache(loopId)
-    ensureAtLeastOneNote(loopId)
-    refreshMatrixStepCount()
-    debugLog('set loop notes', { loopId, metrics })
-    return true
-  }
-
-  // Establecer una nota específica
-  const setLoopNote = (loopId, stepIndex, note) => {
-    if (loopId >= MAX_LOOPS || stepIndex >= MAX_STEPS) return false
-
-    notesMatrix.value[loopId][stepIndex] = note
-    const metrics = updateDensityCache(loopId)
-    ensureAtLeastOneNote(loopId)
-    debugLog('set loop note', { loopId, stepIndex, note, metrics })
-    return true
-  }
-
-  const clearLoopNote = (loopId, stepIndex) => {
-    const success = setLoopNote(loopId, stepIndex, null)
-    if (success) {
-      debugLog('clear loop note', { loopId, stepIndex })
-    }
-    return success
-  }
-
-  // Obtener una nota específica
-  const getNote = (loopId, stepIndex) => {
-    if (loopId >= MAX_LOOPS || stepIndex >= MAX_STEPS) return null
-    return notesMatrix.value[loopId][stepIndex]
-  }
-
-  // Generar notas aleatorias para un loop
-  const generateLoopNotes = (loopId, config = {}) => {
-    if (!loopMetadata[loopId]) initializeLoop(loopId, config)
-
-    const meta = loopMetadata[loopId]
-
-    // Always use scale NAME and resolve to intervals
-    const scaleName = typeof config.scale === 'string' ? config.scale : meta.scale
-    const scale = getScale(scaleName)
-    const baseNote = config.baseNote || meta.baseNote
-    const length = Math.max(1, Math.min(MAX_STEPS, config.length || meta.length || 16))
-    const density = typeof config.density === 'number' ? config.density : (meta.density ?? 0.4)
-    const octaveRange = config.octaveRange || meta.octaveRange
-
-    // Calculate how many notes should be placed
-    const targetNoteCount = Math.max(1, Math.round(length * density))
-
-    // Create array of available positions
-    const availablePositions = Array.from({ length }, (_, i) => i)
-
-    // Shuffle positions to distribute notes randomly but evenly
-    for (let i = availablePositions.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-        ;[availablePositions[i], availablePositions[j]] = [availablePositions[j], availablePositions[i]]
-    }
-
-    // Select the first targetNoteCount positions
-    const notePositions = new Set(availablePositions.slice(0, targetNoteCount))
-
-    // Generate the notes array with distributed positions
-    const newNotes = Array(length).fill(null).map((_, idx) => {
-      if (!notePositions.has(idx)) return null
-
-      const scaleIndex = Math.floor(Math.random() * scale.length)
-      const octave = Math.floor(Math.random() * octaveRange)
-      const note = baseNote + scale[scaleIndex] + (octave * 12)
-
-      // Asegurar rango MIDI válido manteniendo la nota en escala
-      const finalNote = clampToMidiRange(note)
-
-      return finalNote
-    })
-
-    // Ensure metadata stores scale NAME
-    meta.scale = scaleName
-    meta.length = length
-    meta.density = density
-    setLoopNotes(loopId, newNotes)
-    debugLog('generate loop notes', { loopId, length, density })
-    return newNotes
-  }
-
-  const resizeLoop = (loopId, newLength, options = {}) => {
-    if (!loopMetadata[loopId]) initializeLoop(loopId)
-
-    const meta = loopMetadata[loopId]
-    const targetLength = Math.max(1, Math.min(MAX_STEPS, Math.round(newLength)))
-    const currentNotes = getLoopNotes(loopId)
-    const density = options.density ?? computeLoopDensityMetrics(loopId).density ?? meta.density ?? 0.4
-
-    let nextNotes
-    if (targetLength <= currentNotes.length) {
-      nextNotes = currentNotes.slice(0, targetLength)
-    } else {
-      nextNotes = [...currentNotes]
-      const extraSteps = targetLength - currentNotes.length
-      for (let i = 0; i < extraSteps; i++) {
-        nextNotes.push(Math.random() < density ? generateRandomNoteForLoop(loopId) : null)
-      }
-    }
-
-    meta.length = targetLength
-    meta.density = density
-    setLoopNotes(loopId, nextNotes)
-    debugLog('resize loop', { loopId, newLength: targetLength, density })
-    return nextNotes
-  }
-
-  // Cuantizar un loop a una nueva escala
-  const quantizeLoop = (loopId, newScale = null) => {
-    if (!loopMetadata[loopId]) return false
-
-    // newScale should be a scale NAME (string), not intervals
-    const targetScaleName = newScale || matrixState.currentScale
-    const scale = getScale(targetScaleName)
-    const baseNote = loopMetadata[loopId].baseNote
-    const length = loopMetadata[loopId].length
-
-    let quantizedCount = 0
-    for (let i = 0; i < length; i++) {
-      const currentNote = notesMatrix.value[loopId][i]
-      if (currentNote !== null) {
-        const quantized = quantizeToScale(currentNote, scale, baseNote)
-        notesMatrix.value[loopId][i] = quantized
-        if (currentNote !== quantized) quantizedCount++
-      }
-    }
-
-    // CRITICAL: Store scale NAME in metadata
-    loopMetadata[loopId].scale = targetScaleName
-    updateDensityCache(loopId)
-    return true
-  }
-
-  // Cuantizar todos los loops activos
-  const quantizeAllActiveLoops = (newScale) => {
-    // Update global scale (should be a scale NAME)
-    matrixState.currentScale = newScale
-
-    matrixState.activeLoops.forEach(loopId => {
-      quantizeLoop(loopId, newScale)
-    })
-  }
-
-  // Setter for global scale
-  const setGlobalScale = (scaleName) => {
-    if (typeof scaleName !== 'string') {
-      console.error('[setGlobalScale] Scale name must be a string, got:', typeof scaleName)
-      return false
-    }
-    matrixState.currentScale = scaleName
-    return true
-  }
-
-  // Operaciones de matriz eficientes para evolución
-
-  // Transponer un loop
-  const transposeLoop = (loopId, semitones) => {
-    if (!loopMetadata[loopId]) return false
-
-    const meta = loopMetadata[loopId]
-    // Resolve scale from NAME stored in metadata
-    const scaleName = meta.scale || matrixState.currentScale
-    const scale = getScale(scaleName)
-    const baseNote = meta.baseNote
-    const length = meta.length
-
-    for (let i = 0; i < length; i++) {
-      const note = notesMatrix.value[loopId][i]
-      if (note !== null) {
-        const newNote = note + semitones
-        const clampedNote = Math.max(24, Math.min(96, newNote))
-        // Quantize to scale after transposition
-        const quantizedNote = quantizeToScale(clampedNote, scale, baseNote)
-        notesMatrix.value[loopId][i] = quantizedNote
-      }
-    }
-
-    updateDensityCache(loopId)
-    ensureAtLeastOneNote(loopId)
-    debugLog('transpose loop', { loopId, semitones })
-    return true
-  }
-
-  // Rotar notas de un loop
-  const rotateLoop = (loopId, steps) => {
-    if (!loopMetadata[loopId]) return false
-
-    const length = loopMetadata[loopId].length
-    if (length === 0) return false
-
-    const notes = getLoopNotes(loopId)
-    if (notes.length === 0) return false
-
-    const rotated = Array.from({ length }, (_, index) => {
-      const originalIndex = (index - steps) % length
-      const safeIndex = originalIndex < 0 ? originalIndex + length : originalIndex
-      return notes[safeIndex]
-    })
-
-    setLoopNotes(loopId, rotated)
-    debugLog('rotate loop', { loopId, steps })
-    return true
-  }
-
-  // Invertir notas de un loop
-  const invertLoop = (loopId) => {
-    if (!loopMetadata[loopId]) return false
-
-    const notes = getLoopNotes(loopId)
-    const reversedNotes = [...notes].reverse()
-    setLoopNotes(loopId, reversedNotes)
-    debugLog('invert loop', { loopId })
-    return true
-  }
-
-  // Mutar notas aleatoriamente
-  const mutateLoop = (loopId, intensity = 0.3) => {
-    if (!loopMetadata[loopId]) return false
-
-    const meta = loopMetadata[loopId]
-    // Resolve scale from NAME
-    const scaleName = meta.scale || matrixState.currentScale
-    const scale = getScale(scaleName)
-    const length = meta.length
-    const changeCount = Math.max(1, Math.floor(length * intensity))
-
-    for (let i = 0; i < changeCount; i++) {
-      const randomIndex = Math.floor(Math.random() * length)
-      const currentNote = notesMatrix.value[loopId][randomIndex]
-
-      if (currentNote !== null) {
-        // Cambiar a una nota cercana en la escala
-        const scaleIndex = Math.floor(Math.random() * scale.length)
-        const octave = Math.floor(Math.random() * meta.octaveRange)
-        const newNote = meta.baseNote + scale[scaleIndex] + (octave * 12)
-        const clampedNote = Math.max(24, Math.min(96, newNote))
-        notesMatrix.value[loopId][randomIndex] = clampedNote
-      }
-    }
-
-    updateDensityCache(loopId)
-    ensureAtLeastOneNote(loopId)
-    debugLog('mutate loop', { loopId, intensity })
-    return true
-  }
-
-  // Copiar notas entre loops
-  const copyLoop = (sourceLoopId, targetLoopId) => {
-    if (sourceLoopId >= MAX_LOOPS || targetLoopId >= MAX_LOOPS) return false
-    if (!loopMetadata[sourceLoopId]) return false
-
-    const sourceNotes = getLoopNotes(sourceLoopId)
-    setLoopNotes(targetLoopId, sourceNotes)
-
-    // Copiar metadatos también
-    if (!loopMetadata[targetLoopId]) initializeLoop(targetLoopId)
-    Object.assign(loopMetadata[targetLoopId], {
-      ...loopMetadata[sourceLoopId],
-      lastModified: Date.now()
-    })
-    updateDensityCache(targetLoopId)
-    refreshMatrixStepCount()
-    debugLog('copy loop', { sourceLoopId, targetLoopId })
-    return true
-  }
-
-  // Obtener estadísticas de la matriz
-  const getMatrixStats = () => {
-    const stats = {
-      activeLoops: matrixState.activeLoops.size,
-      totalNotes: 0,
-      notesPerLoop: {},
-      averageDensity: 0
-    }
-
-    matrixState.activeLoops.forEach(loopId => {
-      const metrics = computeLoopDensityMetrics(loopId)
-      stats.totalNotes += metrics.noteCount
-      stats.notesPerLoop[loopId] = metrics
-    })
-
-    if (matrixState.activeLoops.size > 0 && matrixState.stepCount > 0) {
-      const totalSteps = matrixState.activeLoops.size * matrixState.stepCount
-      stats.averageDensity = totalSteps ? stats.totalNotes / totalSteps : 0
-    }
-
-    return stats
-  }
-
-  // Inicializar matriz
-  const initializeMatrix = () => {
-    // Inicializar la matriz con arrays vacíos
-    for (let i = 0; i < MAX_LOOPS; i++) {
-      notesMatrix.value[i] = new Array(MAX_STEPS).fill(null)
-    }
-
-    // Inicializar metadata vacío
-    Object.keys(loopMetadata).forEach(key => {
-      delete loopMetadata[key]
-    })
-
-    // Inicializar estado por defecto
-    matrixState.activeLoops.clear()
-    matrixState.currentScale = 'major'
-    matrixState.globalBaseNote = 60
-    matrixState.stepCount = 16
-    matrixState.syncMode = 'all'
-    debugLog('initialize matrix')
-  }
-
-  // Limpiar matriz completa
-  const clearMatrix = () => {
-    notesMatrix.value.forEach(loop => loop.fill(null))
-    Object.keys(loopMetadata).forEach(key => delete loopMetadata[key])
-    matrixState.activeLoops.clear()
-    matrixState.stepCount = 16
-    debugLog('clear matrix')
-  }
-
-  // Exportar/importar matriz
-  const exportMatrix = () => {
-    return {
-      notes: notesMatrix.value,
-      metadata: { ...loopMetadata },
-      state: { ...matrixState, activeLoops: Array.from(matrixState.activeLoops) }
-    }
-  }
-
-  const importMatrix = (data) => {
-    if (!data || !data.notes || !data.metadata) return false
-
-    try {
-      notesMatrix.value = data.notes
-      Object.keys(loopMetadata).forEach(key => delete loopMetadata[key])
-
-      // Apply metadata with fallback to ensure scale is always a string name
-      Object.entries(data.metadata).forEach(([loopId, meta]) => {
-        const cleanMeta = { ...meta }
-
-        // If scale is not a string, default to 'major'
-        if (typeof cleanMeta.scale !== 'string') {
-          cleanMeta.scale = 'major'
-        }
-
-        loopMetadata[loopId] = cleanMeta
+  // Initialize music utilities
+  // Performance optimization: Efficient loop initialization
+  function initializeLoop(loopId, options = {}) {
+    if (loopId >= MAX_LOOPS) return
+
+    batchUpdate(() => {
+      // Set default values - scale must be explicitly provided
+      loopMetadata[loopId] = reactive({
+        isActive: options.isActive !== undefined ? options.isActive : true,
+        scale: options.scale || null, // Scale must be explicitly provided
+        baseNote: options.baseNote || matrixState.value.globalBaseNote,
+        length: options.length || matrixState.value.stepCount,
+        octaveRange: options.octaveRange || 2,
+        density: 0,
+        densityMode: options.densityMode || 'auto',
+        manualDensity: typeof options.manualDensity === 'number' ? Math.max(0, Math.min(1, options.manualDensity)) : 0.3,
+        autoDensity: typeof options.autoDensity === 'number' ? Math.max(0, Math.min(1, options.autoDensity)) : 0.3,
+        startOffset: typeof options.startOffset === 'number' ? Math.max(0, Math.min((options.length || matrixState.value.stepCount) - 1, Math.floor(options.startOffset))) : null,
+        lastModified: Date.now(),
+        // Melodic generation fields
+        noteRangeMin: options.noteRangeMin || 24,        // MIDI note min (default: full range)
+        noteRangeMax: options.noteRangeMax || 96,        // MIDI note max (default: full range)
+        patternProbabilities: {  // Per-loop pattern weights
+          euclidean: 0.3,
+          scale: 0.3,
+          random: 0.4
+        },
+        generationMode: 'auto',  // 'auto' | 'locked'
+        lastPattern: null        // Track what was generated for reference
       })
 
-      // Handle activeLoops - fix for old presets where Set was serialized as {}
-      const activeLoopsData = data.state?.activeLoops
-      if (Array.isArray(activeLoopsData)) {
-        matrixState.activeLoops = new Set(activeLoopsData)
-      } else {
-        // Old preset with broken Set serialization - reconstruct from metadata
-        matrixState.activeLoops = new Set()
-        console.warn('[importMatrix] Reconstructing activeLoops from metadata due to corrupted preset data')
+      // Clear the loop
+      for (let i = 0; i < MAX_STEPS; i++) {
+        notesMatrix[loopId][i] = null
       }
 
-      matrixState.currentScale = data.state?.currentScale || 'major'
-      matrixState.globalBaseNote = data.state?.globalBaseNote || 60
-      matrixState.stepCount = data.state?.stepCount || 16
-      matrixState.syncMode = data.state?.syncMode || 'all'
-
-      Object.keys(loopMetadata).forEach(loopId => updateDensityCache(Number(loopId)))
-      refreshMatrixStepCount()
-      debugLog('import matrix', { activeLoops: Array.from(matrixState.activeLoops) })
-      return true
-    } catch (error) {
-      console.error('Error importing matrix:', error)
-      return false
-    }
+      // Update active loops set
+      if (loopMetadata[loopId].isActive) {
+        matrixState.value.activeLoops.add(loopId)
+      } else {
+        matrixState.value.activeLoops.delete(loopId)
+      }
+    })
   }
 
-  // Debug logging method
-  const logNotesMatrix = () => {
+  // Performance optimization: Efficient loop activation
+  function setLoopActive(loopId, isActive) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      loopMetadata[loopId].isActive = isActive
+      loopMetadata[loopId].lastModified = Date.now()
+
+      if (isActive) {
+        matrixState.value.activeLoops.add(loopId)
+      } else {
+        matrixState.value.activeLoops.delete(loopId)
+      }
+    })
+  }
+
+  // Performance optimization: Efficient metadata update
+  function updateLoopMetadata(loopId, metadata) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      // Validate density if provided
+      if (metadata.density !== undefined) {
+        metadata.density = typeof metadata.density === 'number' && !isNaN(metadata.density) ? Math.max(0, Math.min(1, metadata.density)) : 0.3
+      }
+      if (metadata.manualDensity !== undefined) {
+        metadata.manualDensity = typeof metadata.manualDensity === 'number' && !isNaN(metadata.manualDensity) ? Math.max(0, Math.min(1, metadata.manualDensity)) : 0.3
+      }
+      if (metadata.autoDensity !== undefined) {
+        metadata.autoDensity = typeof metadata.autoDensity === 'number' && !isNaN(metadata.autoDensity) ? Math.max(0, Math.min(1, metadata.autoDensity)) : 0.3
+      }
+      if (metadata.densityMode !== undefined) {
+        const mode = metadata.densityMode === 'manual' ? 'manual' : 'auto'
+        metadata.densityMode = mode
+      }
+      // Clamp startOffset to valid range if provided
+      if (metadata.startOffset !== undefined) {
+        const targetLength = (metadata.length !== undefined)
+          ? Math.max(1, Math.floor(metadata.length))
+          : loopMetadata[loopId].length
+        if (typeof metadata.startOffset === 'number' && isFinite(metadata.startOffset)) {
+          metadata.startOffset = Math.max(0, Math.min(targetLength - 1, Math.floor(metadata.startOffset)))
+        } else {
+          metadata.startOffset = null
+        }
+      }
+      Object.assign(loopMetadata[loopId], metadata)
+      loopMetadata[loopId].lastModified = Date.now()
+    })
+  }  // Performance optimization: Efficient note retrieval
+  function getLoopNotes(loopId) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return []
+
+    const meta = loopMetadata[loopId]
+    const loopNotes = notesMatrix[loopId]
+
+    // Performance optimization: Pre-allocate array with known size
+    const result = new Array(meta.length)
+
+    for (let i = 0; i < meta.length; i++) {
+      result[i] = loopNotes[i]
+    }
+
+    return result
+  }
+
+  // Performance optimization: Efficient note setting
+  function setLoopNotes(loopId, notes) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      const loopNotes = notesMatrix[loopId]
+      const meta = loopMetadata[loopId]
+
+      // Clear existing notes
+      for (let i = 0; i < MAX_STEPS; i++) {
+        loopNotes[i] = null
+      }
+
+      // Set new notes
+      for (let i = 0; i < Math.min(notes.length, meta.length); i++) {
+        loopNotes[i] = notes[i]
+      }
+
+      // Update metadata
+      meta.lastModified = Date.now()
+
+      // Invalidate density cache
+      DENSITY_CACHE.delete(`density-${loopId}-${meta.lastModified}`)
+    })
+  }
+
+  // Performance optimization: Efficient single note setting
+  function setLoopNote(loopId, step, note) {
+    if (loopId >= MAX_LOOPS || step >= MAX_STEPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      notesMatrix[loopId][step] = note
+      loopMetadata[loopId].lastModified = Date.now()
+
+      // Invalidate density cache
+      DENSITY_CACHE.delete(`density-${loopId}-${loopMetadata[loopId].lastModified}`)
+    })
+  }
+
+  // Performance optimization: Efficient note clearing
+  function clearLoopNote(loopId, step) {
+    if (loopId >= MAX_LOOPS || step >= MAX_STEPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      notesMatrix[loopId][step] = null
+      loopMetadata[loopId].lastModified = Date.now()
+
+      // Invalidate density cache
+      DENSITY_CACHE.delete(`density-${loopId}-${loopMetadata[loopId].lastModified}`)
+    })
+  }
+
+  // Performance optimization: Efficient note retrieval
+  function getNote(loopId, step) {
+    if (loopId >= MAX_LOOPS || step >= MAX_STEPS) return null
+    return notesMatrix[loopId][step]
+  }
+
+  // Performance optimization: Efficient loop generation
+  function generateLoopNotes(loopId, options = {}) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+    const meta = loopMetadata[loopId]
+    if (meta && meta.generationMode === 'locked') return
+    const density = getEffectiveDensity(loopId)
+    const scaleName = meta.scale || 'major'
+    const scaleIntervals = getScaleIntervalsCached(scaleName)
+    const baseNote = meta.baseNote
+    const noteRange = { min: meta.noteRangeMin, max: meta.noteRangeMax }
+    const startOffset = typeof meta.startOffset === 'number' ? meta.startOffset : 0
+    const patternType = selectPatternType(loopId)
+    const timingMode = meta.densityTiming || (patternType === 'euclidean' ? 'even' : (patternType === 'scale' ? 'even' : 'random'))
+
+    const baseMax = Math.max(0, Math.floor(meta.length / 6))
+    const densityScale = typeof density === 'number' && !isNaN(density) ? (1 + (1 - Math.max(0, Math.min(1, density))) * 0.6) : 1
+    const maxJ = Math.max(0, Math.floor(baseMax * densityScale))
+    const jitter = maxJ > 0 ? Math.floor(Math.random() * (maxJ + 1)) : 0
+    const positions = computePositions({ length: meta.length, density, mode: timingMode, startOffset, allowZero: true, jitter })
+    const possibleNotes = generatePossibleNotes(scaleIntervals, baseNote, noteRange, { tag: 'NotesMatrix' })
+
+    const out = new Array(meta.length).fill(null)
+    if (patternType === 'scale') {
+      const startIndex = Math.floor(Math.random() * Math.max(1, possibleNotes.length))
+      const dir = Math.random() < 0.5 ? 'ascending' : 'descending'
+      const movesWanted = meta.length
+      const seqGen = generateHeadTail({ scaleNotes: possibleNotes, startIndex, moves: movesWanted, direction: dir, bounce: true })
+      const baseSeq = Array.isArray(seqGen.sequence) ? seqGen.sequence.slice() : []
+      const seq = []
+      for (let i = 0; i < movesWanted; i++) seq.push(baseSeq.length ? baseSeq[i % baseSeq.length] : possibleNotes[i % Math.max(1, possibleNotes.length)])
+      for (let i = 0; i < meta.length; i++) out[i] = null
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i]
+        out[pos] = seq[i % seq.length]
+      }
+    } else if (patternType === 'euclidean') {
+      if (possibleNotes.length > 0 && positions.length > 0) {
+        let idx = Math.floor(Math.random() * possibleNotes.length)
+        positions.forEach(p => {
+          out[p] = possibleNotes[idx]
+          idx = (idx + Math.floor(Math.random() * 3) + 1) % possibleNotes.length
+        })
+      }
+    } else {
+      const count = positions.length
+      const notesToPlace = []
+      if (count <= possibleNotes.length) {
+        for (let i = 0; i < count; i++) {
+          const index = Math.floor(i * possibleNotes.length / Math.max(1, count))
+          notesToPlace.push(possibleNotes[index])
+        }
+      } else {
+        for (let i = 0; i < count; i++) {
+          notesToPlace.push(possibleNotes[i % possibleNotes.length])
+        }
+      }
+      for (let i = 0; i < positions.length; i++) {
+        out[positions[i]] = notesToPlace[i]
+      }
+    }
+
+    if (isCounterpointEnabled && typeof isCounterpointEnabled === 'function' && isCounterpointEnabled()) {
+      const otherLoops = Array.from(matrixState.value.activeLoops).filter(id => id !== loopId)
+      if (otherLoops.length > 0) {
+        const otherLoopNotes = otherLoops.map(id => {
+          const arr = []
+          for (let i = 0; i < MAX_STEPS; i++) arr.push(notesMatrix[id][i])
+          return arr
+        })
+        for (let step = 0; step < out.length; step++) {
+          const note = out[step]
+          if (note === null) continue
+          const occupied = analyzeActiveLoops(otherLoopNotes, step)
+          if (occupied.has(note)) {
+            const adjusted = avoidConflicts(note, occupied, scaleIntervals, { baseNote, noteRange })
+            out[step] = adjusted
+          }
+        }
+      }
+    }
+
+    setLoopNotes(loopId, out)
+    updateLoopMetadata(loopId, { density, lastPattern: patternType })
+    const metrics = computeLoopDensityMetrics(loopId)
+  }
+
+  // Performance optimization: Efficient loop resizing
+  function resizeLoop(loopId, newLength) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId] || newLength <= 0 || newLength > MAX_STEPS) return
+
+    batchUpdate(() => {
+      const meta = loopMetadata[loopId]
+      const loopNotes = notesMatrix[loopId]
+
+      // Clear notes outside new range
+      for (let i = newLength; i < MAX_STEPS; i++) {
+        loopNotes[i] = null
+      }
+
+      // Update metadata
+      meta.length = newLength
+      meta.lastModified = Date.now()
+    })
+  }
+
+  // Performance optimization: Efficient quantization
+  function quantizeLoop(loopId, scale = null) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      const meta = loopMetadata[loopId]
+      // Require explicit scale setting
+      if (!scale && !meta.scale) {
+        console.error('No scale provided and meta.scale is not set')
+        throw new Error('Scale must be explicitly provided or set in loop metadata')
+      }
+      const scaleName = scale || meta.scale
+      const scaleIntervals = getScaleIntervalsCached(scaleName)
+      const loopNotes = notesMatrix[loopId]
+
+      // Quantize notes
+      for (let i = 0; i < meta.length; i++) {
+        if (loopNotes[i] !== null) {
+          const note = loopNotes[i]
+
+          // Find closest note in scale
+          let closestNote = null
+          let minDistance = Infinity
+
+          for (let oct = 0; oct < meta.octaveRange; oct++) {
+            for (const interval of scaleIntervals) {
+              const scaleNote = meta.baseNote + interval + (oct * 12)
+              if (scaleNote >= MIN_NOTE && scaleNote <= MAX_NOTE) {
+                const distance = Math.abs(note - scaleNote)
+                if (distance < minDistance) {
+                  minDistance = distance
+                  closestNote = scaleNote
+                }
+              }
+            }
+          }
+
+          // Only update if we found a close match (within 2 semitones)
+          if (closestNote !== null && minDistance <= 2) {
+            loopNotes[i] = closestNote
+          }
+        }
+      }
+
+      // Update metadata
+      meta.lastModified = Date.now()
+      meta.scale = scaleName
+    })
+  }
+
+  // Performance optimization: Efficient batch quantization
+  function quantizeAllActiveLoops(scale = null) {
+    batchUpdate(() => {
+      for (const loopId of matrixState.value.activeLoops) {
+        quantizeLoop(loopId, scale)
+      }
+    })
+  }
+
+  // Performance optimization: Efficient scale setting
+  function setGlobalScale(scale) {
+    if (!scale) return
+
+    batchUpdate(() => {
+      matrixState.value.currentScale = scale
+
+      // Pre-cache scale intervals
+      getScaleIntervalsCached(scale)
+    })
+  }
+
+  function selectPatternType(loopId) {
+    const meta = loopMetadata[loopId]
+    if (!meta) {
+      const arr = ['euclidean', 'scale', 'random']
+      return arr[Math.floor(Math.random() * arr.length)]
+    }
+    if (!meta.patternProbabilities) {
+      updateLoopMetadata(loopId, {
+        patternProbabilities: { euclidean: 0.3, scale: 0.3, random: 0.4 },
+        generationMode: 'auto',
+        lastPattern: null,
+        noteRangeMin: 24,
+        noteRangeMax: 96
+      })
+    }
+    const raw = meta.patternProbabilities || {}
+    const eu = Number(raw.euclidean || 0)
+    const sc = Number(raw.scale || 0)
+    const rnd = Number(raw.random || 0)
+    const total = eu + sc + rnd
+    if (total === 0) {
+      const arr = ['euclidean', 'scale', 'random']
+      return arr[Math.floor(Math.random() * arr.length)]
+    }
+    const rand = Math.random() * total
+    let cum = 0
+    if ((cum += eu) > rand) return 'euclidean'
+    if ((cum += sc) > rand) return 'scale'
+    return 'random'
+  }
+
+
+
+  // Performance optimization: Efficient transposition
+  function transposeLoop(loopId, semitones) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      const meta = loopMetadata[loopId]
+      const loopNotes = notesMatrix[loopId]
+
+      // Transpose notes
+      for (let i = 0; i < meta.length; i++) {
+        if (loopNotes[i] !== null) {
+          const newNote = loopNotes[i] + semitones
+          if (newNote >= MIN_NOTE && newNote <= MAX_NOTE) {
+            loopNotes[i] = newNote
+          }
+        }
+      }
+
+      // Update metadata
+      meta.lastModified = Date.now()
+      meta.baseNote = Math.max(MIN_NOTE, Math.min(MAX_NOTE, meta.baseNote + semitones))
+    })
+  }
+
+  // Performance optimization: Efficient rotation
+  function rotateLoop(loopId, steps) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      const meta = loopMetadata[loopId]
+      const loopNotes = notesMatrix[loopId]
+
+      // Normalize steps to loop length
+      const normalizedSteps = ((steps % meta.length) + meta.length) % meta.length
+
+      // Create temporary array for rotation
+      const temp = new Array(meta.length)
+
+      // Perform rotation
+      for (let i = 0; i < meta.length; i++) {
+        const sourceIndex = (i - normalizedSteps + meta.length) % meta.length
+        temp[i] = loopNotes[sourceIndex]
+      }
+
+      // Copy back to loop
+      for (let i = 0; i < meta.length; i++) {
+        loopNotes[i] = temp[i]
+      }
+
+      // Update metadata
+      meta.lastModified = Date.now()
+    })
+  }
+
+  // Performance optimization: Efficient inversion
+  function invertLoop(loopId) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      const meta = loopMetadata[loopId]
+      const loopNotes = notesMatrix[loopId]
+
+      // Find center note for inversion
+      let sum = 0
+      let count = 0
+
+      for (let i = 0; i < meta.length; i++) {
+        if (loopNotes[i] !== null) {
+          sum += loopNotes[i]
+          count++
+        }
+      }
+
+      if (count === 0) return
+
+      const centerNote = Math.round(sum / count)
+
+      // Invert notes around center
+      for (let i = 0; i < meta.length; i++) {
+        if (loopNotes[i] !== null) {
+          const newNote = centerNote - (loopNotes[i] - centerNote)
+          if (newNote >= MIN_NOTE && newNote <= MAX_NOTE) {
+            loopNotes[i] = newNote
+          }
+        }
+      }
+
+      // Update metadata
+      meta.lastModified = Date.now()
+    })
+  }
+
+  // Performance optimization: Efficient mutation
+  function mutateLoop(loopId, mutationRate = 0.1) {
+    if (loopId >= MAX_LOOPS || !loopMetadata[loopId]) return
+
+    batchUpdate(() => {
+      const meta = loopMetadata[loopId]
+      const scaleIntervals = getScaleIntervalsCached(meta.scale)
+      const loopNotes = notesMatrix[loopId]
+
+      // Pre-compute possible notes
+      const possibleNotes = []
+      for (let oct = 0; oct < meta.octaveRange; oct++) {
+        for (const interval of scaleIntervals) {
+          const note = meta.baseNote + interval + (oct * 12)
+          if (note >= MIN_NOTE && note <= MAX_NOTE) {
+            possibleNotes.push(note)
+          }
+        }
+      }
+
+      // Mutate notes
+      for (let i = 0; i < meta.length; i++) {
+        if (Math.random() < mutationRate) {
+          if (loopNotes[i] !== null && Math.random() < 0.5) {
+            // Remove existing note
+            loopNotes[i] = null
+          } else if (possibleNotes.length > 0) {
+            // Add or change note
+            loopNotes[i] = possibleNotes[Math.floor(Math.random() * possibleNotes.length)]
+          }
+        }
+      }
+
+      // Update metadata
+      meta.lastModified = Date.now()
+    })
+  }
+
+  // Performance optimization: Efficient copying
+  function copyLoop(sourceLoopId, targetLoopId) {
+    if (sourceLoopId >= MAX_LOOPS || targetLoopId >= MAX_LOOPS ||
+      !loopMetadata[sourceLoopId] || !loopMetadata[targetLoopId]) return
+
+    batchUpdate(() => {
+      const sourceMeta = loopMetadata[sourceLoopId]
+      const targetMeta = loopMetadata[targetLoopId]
+      const sourceNotes = notesMatrix[sourceLoopId]
+      const targetNotes = notesMatrix[targetLoopId]
+
+      // Copy metadata
+      Object.assign(targetMeta, { ...sourceMeta, lastModified: Date.now() })
+
+      // Copy notes
+      for (let i = 0; i < MAX_STEPS; i++) {
+        targetNotes[i] = sourceNotes[i]
+      }
+    })
+  }
+
+  // Performance optimization: Efficient matrix initialization
+  function initializeMatrix() {
+    batchUpdate(() => {
+      // Clear all loops
+      for (let i = 0; i < MAX_LOOPS; i++) {
+        for (let j = 0; j < MAX_STEPS; j++) {
+          notesMatrix[i][j] = null
+        }
+
+        // Reset metadata - scale must be explicitly set elsewhere
+        loopMetadata[i] = reactive({
+          isActive: false,
+          scale: null, // Scale must be explicitly set
+          baseNote: matrixState.value.globalBaseNote,
+          length: matrixState.value.stepCount,
+          octaveRange: 2,
+          density: 0,
+          lastModified: Date.now(),
+          // Melodic generation fields
+          noteRangeMin: 24,
+          noteRangeMax: 96,
+          patternProbabilities: {
+            euclidean: 0.3,
+            scale: 0.3,
+            random: 0.4
+          },
+          generationMode: 'auto',
+          lastPattern: null
+        })
+      }
+
+      // Clear active loops
+      matrixState.value.activeLoops.clear()
+
+      // Clear caches
+      SCALE_INTERVALS_CACHE.clear()
+      NOTE_VALIDATION_CACHE.clear()
+      DENSITY_CACHE.clear()
+      memoizedValues.clear()
+    })
+  }
+
+  // Performance optimization: Efficient stats calculation
+  function getMatrixStats() {
+    return getMemoized('matrixStats', () => {
+      let totalNotes = 0
+      let activeLoops = 0
+      let totalDensity = 0
+
+      for (let i = 0; i < MAX_LOOPS; i++) {
+        if (loopMetadata[i].isActive) {
+          activeLoops++
+          const metrics = computeLoopDensityMetrics(i)
+          totalNotes += metrics.noteCount
+          totalDensity += metrics.density
+        }
+      }
+
+      return {
+        totalLoops: MAX_LOOPS,
+        activeLoops,
+        totalNotes,
+        averageDensity: activeLoops > 0 ? totalDensity / activeLoops : 0,
+        globalBaseNote: matrixState.value.globalBaseNote
+      }
+    })
+  }
+
+  // Performance optimization: Efficient matrix clearing
+  function clearMatrix() {
+    batchUpdate(() => {
+      for (let i = 0; i < MAX_LOOPS; i++) {
+        for (let j = 0; j < MAX_STEPS; j++) {
+          notesMatrix[i][j] = null
+        }
+
+        loopMetadata[i].lastModified = Date.now()
+      }
+
+      // Clear caches
+      NOTE_VALIDATION_CACHE.clear()
+      DENSITY_CACHE.clear()
+      memoizedValues.clear()
+    })
+  }
+
+  // Performance optimization: Efficient matrix export
+  function exportMatrix() {
+    const data = {
+      version: '1.0',
+      timestamp: Date.now(),
+      state: {
+        globalBaseNote: matrixState.value.globalBaseNote,
+        stepCount: matrixState.value.stepCount
+        // Removed currentScale - scale is now managed by audioStore
+      },
+      loops: []
+    }
+
+    for (let i = 0; i < MAX_LOOPS; i++) {
+      if (loopMetadata[i].isActive) {
+        data.loops.push({
+          id: i,
+          metadata: { ...loopMetadata[i] },
+          notes: getLoopNotes(i)
+        })
+      }
+    }
+
+    return data
+  }
+
+  // Performance optimization: Efficient matrix import
+  // Performance optimization: Efficient matrix import
+  function importMatrix(data) {
+    if (!data || !data.state || !data.loops) return false
+
+    batchUpdate(() => {
+      // Import state (no currentScale - scale is managed by audioStore)
+      matrixState.value.globalBaseNote = data.state.globalBaseNote || 60
+      matrixState.value.stepCount = data.state.stepCount || 16
+
+      // Clear existing data
+      initializeMatrix()
+
+      // Import loops
+      for (const loopData of data.loops) {
+        if (loopData.id >= 0 && loopData.id < MAX_LOOPS) {
+          initializeLoop(loopData.id, loopData.metadata)
+          setLoopNotes(loopData.id, loopData.notes)
+        }
+      }
+    })
+
+    return true
+  }
+
+  // Performance optimization: Efficient debug logging
+  function logNotesMatrix() {
     console.log('='.repeat(80))
     console.log('NOTES MATRIX DEBUG LOG')
     console.log('='.repeat(80))
     console.log('Global Settings:')
-    console.log(`  Current Scale: "${matrixState.currentScale}"`)
-    console.log(`  Scale Intervals: [${getScale(matrixState.currentScale)}]`)
-    console.log(`  Global Base Note: ${matrixState.globalBaseNote}`)
-    console.log(`  Active Loops: [${Array.from(matrixState.activeLoops).join(', ')}]`)
-    console.log(`  Step Count: ${matrixState.stepCount}`)
+    console.log(`  Global Base Note: ${matrixState.value.globalBaseNote}`)
+    console.log(`  Active Loops: [${Array.from(matrixState.value.activeLoops).join(', ')}]`)
+    console.log(`  Step Count: ${matrixState.value.stepCount}`)
     console.log('-'.repeat(80))
 
-    matrixState.activeLoops.forEach(loopId => {
+    matrixState.value.activeLoops.forEach(loopId => {
       const meta = loopMetadata[loopId]
       if (!meta) {
         console.log(`Loop ${loopId}: NO METADATA`)
@@ -618,8 +856,8 @@ export function useNotesMatrix() {
 
       const notes = getLoopNotes(loopId)
       const metrics = computeLoopDensityMetrics(loopId)
-      const scaleName = meta.scale || matrixState.currentScale
-      const scaleIntervals = getScale(scaleName)
+      const scaleName = meta.scale || 'unknown'
+      const scaleIntervals = meta.scale ? getScaleIntervalsCached(meta.scale) : 'unknown'
 
       console.log(`\nLoop ${loopId} (${meta.isActive ? 'ACTIVE' : 'inactive'}):`)
       console.log(`  Scale Name: "${scaleName}"`)
@@ -631,14 +869,7 @@ export function useNotesMatrix() {
       console.log(`  Notes: [${notes.map((n, i) => {
         if (n === null) return `${i}:--`
         // Check if note is in scale
-        const noteInScale = scaleIntervals.some(interval => {
-          const expectedNote = meta.baseNote + interval
-          // Check within octave range
-          for (let oct = 0; oct < meta.octaveRange; oct++) {
-            if (n === expectedNote + (oct * 12)) return true
-          }
-          return false
-        })
+        const noteInScale = meta.scale ? isNoteInScaleCached(n, meta.baseNote, meta.scale, meta.octaveRange) : true
         return `${i}:${n}${noteInScale ? '' : '⚠️'}`
       }).join(', ')}]`)
     })
@@ -647,11 +878,13 @@ export function useNotesMatrix() {
   }
 
   return {
+    // Size constants (exported for consumers that rely on them)
+    MAX_LOOPS,
+    MAX_STEPS,
     // Estado
     notesMatrix: readonly(notesMatrix),
     loopMetadata: readonly(loopMetadata),
     matrixState: readonly(matrixState),
-    currentScaleNotes,
 
     // Gestión de loops
     initializeLoop,
@@ -679,12 +912,12 @@ export function useNotesMatrix() {
 
     // Generación
     generateLoopNotes,
+    selectPatternType,
     resizeLoop,
 
     // Cuantización
     quantizeLoop,
     quantizeAllActiveLoops,
-    setGlobalScale,
 
     // Operaciones evolutivas
     transposeLoop,
@@ -693,11 +926,19 @@ export function useNotesMatrix() {
     mutateLoop,
     copyLoop,
 
+    // Backwards-compatible aliases (keep here so returned object contains them)
+    // Legacy consumers may call these names; they map to the newer implementations above.
+    activateLoop: (id) => setLoopActive(id, true),
+    deactivateLoop: (id) => setLoopActive(id, false),
+    generateRandomNotes: generateLoopNotes,
+    quantizeLoopToScale: quantizeLoop,
+    quantizeAllToScale: quantizeAllActiveLoops,
+    inverseLoop: invertLoop,
+
     // OPTIMIZATION: Batch operations for performance during evolution
     beginBatch: () => {
       _batchMode = true
       _pendingUpdates.clear()
-      debugLog('batch mode started')
     },
 
     endBatch: () => {
@@ -705,11 +946,8 @@ export function useNotesMatrix() {
 
       // Trigger single reactivity update for all changed loops
       if (_pendingUpdates.size > 0) {
-        triggerRef(notesMatrix)
-        debugLog('batch mode ended', { updatedLoops: _pendingUpdates.size })
+        triggerReactivityDebounced()
         _pendingUpdates.clear()
-      } else {
-        debugLog('batch mode ended', { updatedLoops: 0 })
       }
     },
 
@@ -719,6 +957,178 @@ export function useNotesMatrix() {
     clearMatrix,
     exportMatrix,
     importMatrix,
-    logNotesMatrix
+    logNotesMatrix,
+    // Densidad por loop
+    setLoopDensityMode: (loopId, mode) => {
+      updateLoopMetadata(loopId, { densityMode: mode })
+    },
+    setManualDensity: (loopId, value) => {
+      updateLoopMetadata(loopId, { manualDensity: value, density: value })
+    },
+    setAutoDensity: (loopId, value) => {
+      updateLoopMetadata(loopId, { autoDensity: value, density: value })
+    },
+    getEffectiveDensity: (loopId) => getEffectiveDensity(loopId)
   }
 }
+
+function euclideanRhythm(pulses, steps) {
+  if (pulses <= 0) return []
+  if (pulses >= steps) return Array.from({ length: steps }, (_, i) => i)
+  let positions = []
+  for (let i = 0; i < steps; i++) {
+    if ((i * pulses) % steps < pulses) positions.push(i)
+  }
+  return positions
+}
+
+function computePositions({ length, density, mode = 'even', startOffset = 0, allowZero = false, jitter = 0, seed }) {
+  let positions = []
+  const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0))
+  if (mode === 'fillAll') {
+    let pos = startOffset % length
+    let dir = 1
+    const min = 0
+    const max = length - 1
+    for (let i = 0; i < length; i++) {
+      positions.push(pos)
+      let next = pos + dir
+      if (next > max || next < min) {
+        dir = -dir
+        next = pos + dir
+        if (next > max) next = max
+        if (next < min) next = min
+      }
+      pos = next
+    }
+    return positions
+  }
+  let count = Math.round(length * d)
+  if (!allowZero) count = Math.max(1, count)
+  if (count <= 0) return []
+  if (mode === 'even') {
+    for (let i = 0; i < count; i++) positions.push(Math.floor((i * length) / count))
+    if (jitter && jitter > 0) positions = applyJitterToPositions(positions, jitter, length)
+    return positions.map(p => (p + startOffset) % length)
+  }
+  if (mode === 'random') {
+    const set = new Set()
+    while (set.size < count) set.add(Math.floor(Math.random() * length))
+    return Array.from(set).map(p => (p + startOffset) % length)
+  }
+  if (mode === 'euclidean') {
+    const pulses = Math.round(length * d)
+    if (pulses <= 0) return []
+    let epos = euclideanRhythm(pulses, length)
+    if (jitter && jitter > 0) epos = applyJitterToPositions(epos, jitter, length)
+    return epos.map(p => (p + startOffset) % length)
+  }
+  let raw = []
+  for (let i = 0; i < count; i++) raw.push(Math.floor((i * length) / count))
+  if (jitter && jitter > 0) raw = applyJitterToPositions(raw, jitter, length)
+  return raw.map(p => (p + startOffset) % length)
+}
+
+function applyJitterToPositions(positions, jitter, length) {
+  if (!Array.isArray(positions) || positions.length === 0) return [];
+  const maxJ = Math.max(0, Math.floor(Math.min(jitter, Math.floor(length / 2))));
+  if (maxJ <= 0) return positions.slice();
+  const out = [];
+  const used = new Set();
+  for (let p of positions) {
+    let candidate = p;
+    let tries = 0;
+    const maxTries = 12;
+    while (tries < maxTries) {
+      const offset = Math.floor((Math.random() * (2 * maxJ + 1)) - maxJ);
+      let r = p + offset;
+      if (r < 0) r = 0;
+      if (r >= length) r = length - 1;
+      if (!used.has(r)) { candidate = r; break; }
+      tries++;
+    }
+    if (used.has(candidate)) {
+      let found = -1;
+      for (let d = 1; d < length; d++) {
+        const c1 = candidate - d;
+        const c2 = candidate + d;
+        if (c1 >= 0 && !used.has(c1)) { found = c1; break; }
+        if (c2 < length && !used.has(c2)) { found = c2; break; }
+      }
+      if (found >= 0) candidate = found; else candidate = candidate;
+    }
+    used.add(candidate);
+    out.push(candidate);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+// NOTE: generatePossibleNotes is now centralized in src/utils/noteUtils.js
+
+function generateHeadTail({ scaleNotes, startIndex, moves, direction, tailSize, bounce }) {
+  // do not sort here; `scaleNotes` should already be sorted by the caller
+  const arr = Array.isArray(scaleNotes) ? scaleNotes.slice() : []
+  const n = arr.length
+  if (n === 0) return { sequence: [], steps: [], direction: 'ascending', tailSize: 1 }
+  const dir = direction === 'descending' ? 'descending' : (direction === 'ascending' ? 'ascending' : (Math.random() < 0.5 ? 'ascending' : 'descending'))
+  const ts = typeof tailSize === 'number' && isFinite(tailSize) ? Math.max(1, Math.min(4, Math.floor(tailSize))) : (1 + Math.floor(Math.random() * 4))
+  let head = Math.max(0, Math.min(n - 1, Math.floor(startIndex ?? 0)))
+  let remaining = Math.max(0, Math.floor(moves ?? 0))
+  const seq = []
+  const steps = []
+  let curDir = dir
+  while (remaining > 0) {
+    if (curDir === 'ascending') {
+      if (head >= n - 1) {
+        if (!bounce) break
+        curDir = 'descending'
+        if (head > 0) head = head - 1
+      } else {
+        head = head + 1
+      }
+    } else {
+      if (head <= 0) {
+        if (!bounce) break
+        curDir = 'ascending'
+        if (head < n - 1) head = head + 1
+      } else {
+        head = head - 1
+      }
+    }
+    let headNote = arr[head]
+    if (seq.length && headNote === seq[seq.length - 1]) {
+      const altUp = head + (curDir === 'ascending' ? 1 : -1)
+      const altDown = head - (curDir === 'ascending' ? 1 : -1)
+      if (altUp >= 0 && altUp < n) headNote = arr[altUp]
+      else if (altDown >= 0 && altDown < n) headNote = arr[altDown]
+    }
+    seq.push(headNote)
+    const tail = []
+    for (let k = 1; k <= ts; k++) {
+      const ti = curDir === 'ascending' ? head - k : head + k
+      if (ti < 0 || ti >= n) break
+      const tailNote = arr[ti]
+      tail.push({ index: ti, note: tailNote, jump: curDir === 'ascending' ? -1 : 1 })
+      const nextNote = (seq.length && tailNote === seq[seq.length - 1])
+        ? (curDir === 'ascending' ? (ti - 1 >= 0 ? arr[ti - 1] : tailNote) : (ti + 1 < n ? arr[ti + 1] : tailNote))
+        : tailNote
+      seq.push(nextNote)
+    }
+    steps.push({ headIndex: head, headJump: curDir === 'ascending' ? 1 : -1, tail })
+    remaining--
+  }
+  return { sequence: seq, steps, direction: curDir, tailSize: ts }
+}
+
+function computeMaxJump2(n, headIdx, dir, ts) {
+  if (dir === 'ascending') {
+    const headBound = (n - 1) - headIdx
+    return Math.max(0, headBound)
+  } else {
+    const headBound = headIdx
+    return Math.max(0, headBound)
+  }
+}
+
+// Backwards-compatible aliases for older modules that expect different method names
+// These keep the composable API stable while allowing legacy callers to continue working

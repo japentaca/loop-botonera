@@ -1,22 +1,10 @@
 import { ref, shallowRef, triggerRef } from 'vue'
+import * as Tone from 'tone'
 import { useScales, useNoteUtils } from '../../composables/useMusic'
+import { generatePossibleNotes } from '../../utils/noteUtils'
+import { useMelodicGenerator } from '../../composables/useMelodicGenerator'
+import { clampToMidiRange } from '../../composables/musicUtils.js'
 
-// Helper function for efficient MIDI note clamping
-const clampToMidiRange = (note) => {
-  const MIN_MIDI = 24
-  const MAX_MIDI = 96
-  const OCTAVE = 12
-
-  if (note < MIN_MIDI) {
-    const octavesBelow = Math.ceil((MIN_MIDI - note) / OCTAVE)
-    return note + (octavesBelow * OCTAVE)
-  }
-  if (note > MAX_MIDI) {
-    const octavesAbove = Math.ceil((note - MAX_MIDI) / OCTAVE)
-    return note - (octavesAbove * OCTAVE)
-  }
-  return note
-}
 
 /**
  * Gestor de loops que maneja la creación, configuración y 
@@ -29,6 +17,8 @@ export const useLoopManager = (notesMatrix = null) => {
   const loops = shallowRef([])
   const NUM_LOOPS = 8
 
+  const melodicGenerator = notesMatrix ? useMelodicGenerator(notesMatrix) : null
+
   // Global root note for harmonic consistency - all loops use the same root
   let globalRootNote = 60 // Default to C (middle C)
 
@@ -38,7 +28,7 @@ export const useLoopManager = (notesMatrix = null) => {
   const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
   const debugLog = (label, payload = {}) => {
     if (isDebugEnabled()) {
-      // console.log(`[LoopManager] ${label}`, payload)
+      console.log(`[LoopManager] ${label}`, payload)
     }
   }
 
@@ -46,44 +36,12 @@ export const useLoopManager = (notesMatrix = null) => {
     return notesMatrix.getLoopNoteDensity(loopId)
   }
 
-  const generateNotes = (scale, baseNote, length) => {
-    // scale should be intervals array here
+  // Removed legacy local generators to avoid duplication; use melodic generator delegation instead
 
-    const notes = Array.from({ length }, (_, idx) => {
-      const scaleIndex = Math.floor(Math.random() * scale.length)
-      const octave = Math.floor(Math.random() * 3)
-      const note = baseNote + scale[scaleIndex] + (octave * 12)
-
-      // Asegurar que la nota esté en rango MIDI válido SIN salirse de la escala
-      const finalNote = clampToMidiRange(note)
-
-      if (idx < 3) { // Log first 3 notes
-      }
-
-      return finalNote
-    })
-    return notes
-  }
-
-  const generateNotesInRange = (scale, baseNote, length, maxOctaves = 2) => {
-    // scale should be intervals array here
-
-    return Array.from({ length }, (_, idx) => {
-      if (Math.random() < 0.3) return null // 30% silencio
-
-      const scaleIndex = Math.floor(Math.random() * scale.length)
-      const octave = Math.floor(Math.random() * maxOctaves)
-      const note = baseNote + scale[scaleIndex] + (octave * 12)
-
-      // Asegurar rango MIDI válido manteniendo la nota en escala
-      // Note: using 84 as upper limit instead of 96 for this function
-      const finalNote = Math.min(84, clampToMidiRange(note))
-
-      if (idx < 3 && finalNote !== null) { // Log first 3 non-null notes
-      }
-
-      return finalNote
-    })
+  const generateLoopMelodyFor = (loopId, options = {}) => {
+    if (!notesMatrix) return []
+    notesMatrix.generateLoopNotes(loopId, options)
+    return notesMatrix.getLoopNotes(loopId)
   }
 
   // Generar una respuesta derivada de un loop "call"
@@ -106,7 +64,12 @@ export const useLoopManager = (notesMatrix = null) => {
     // Delta de transposición (en semitonos) con cuantización posterior a la escala
     const transposeDelta = options.transposeDelta ?? ([2, 3, 4][Math.floor(Math.random() * 3)])
 
-    const clampMidi = (n) => n
+    // Build allowed notes for responder within its note range
+    const meta = notesMatrix && notesMatrix.loopMetadata ? notesMatrix.loopMetadata[responderLoop.id] : null
+    const minRange = meta && typeof meta.noteRangeMin === 'number' ? meta.noteRangeMin : 24
+    const maxRange = meta && typeof meta.noteRangeMax === 'number' ? meta.noteRangeMax : 96
+    // Use centralized `generatePossibleNotes` to avoid duplicate logic and sorts
+    const allowedNotes = generatePossibleNotes(scale, baseNote, { min: minRange, max: maxRange })
 
     const transformNote = (note, idx) => {
       let transformed = note
@@ -129,9 +92,29 @@ export const useLoopManager = (notesMatrix = null) => {
         default:
           transformed = note
       }
-      transformed = clampMidi(transformed)
+      transformed = clampToMidiRange(transformed)
       const quantized = quantizeToScale(transformed, scale, baseNote)
-      return quantized
+      if (typeof quantized !== 'number' || allowedNotes.length === 0) return quantized
+      // Snap to nearest allowed note inside responder's range
+      let nearest = allowedNotes[0]
+      let bestDist = Math.abs(quantized - nearest)
+      for (let i = 1; i < allowedNotes.length; i++) {
+        const d = Math.abs(quantized - allowedNotes[i])
+        if (d < bestDist) {
+          bestDist = d
+          nearest = allowedNotes[i]
+        }
+      }
+      debugLog('response-map', {
+        responderId: responderLoop.id,
+        src: note,
+        transformed,
+        quantized,
+        nearest,
+        minRange,
+        maxRange
+      })
+      return nearest
     }
 
     // Construir la secuencia transformada
@@ -144,7 +127,6 @@ export const useLoopManager = (notesMatrix = null) => {
       const src = seq.length ? seq[i % seq.length] : null
       return transformNote(src, i)
     })
-
     return result
   }
 
@@ -161,6 +143,12 @@ export const useLoopManager = (notesMatrix = null) => {
   // Crear estructura básica de loop (sin objetos de audio)
   const createBasicLoop = (id, scaleName, adaptiveVolume = 0.5, adaptiveDensity = null) => {
     // scaleName parameter is the scale NAME (e.g., 'major', 'minorPentatonic')
+    // Ensure we have a valid scale name
+    if (!scaleName || scaleName === 'null') {
+      console.warn(`Invalid scale name provided: "${scaleName}", using 'major' as default`)
+      scaleName = 'major'
+    }
+
     // Get intervals for note generation
     const scale = useScales().getScale(scaleName)
 
@@ -179,12 +167,11 @@ export const useLoopManager = (notesMatrix = null) => {
         octaveRange: 2
       })
 
-      // Generar notas en la matriz centralizada using scale NAME
+      // Generar notas en la matriz centralizada sin pasar densidad explícita
       notesMatrix.generateLoopNotes(id, {
-        scale: scaleName, // This will be resolved to intervals by the function
+        scale: scaleName, // Resuelto internamente por el generador
         baseNote,
         length,
-        density: adaptiveDensity || 0.4,
         octaveRange: 2
       })
     }
@@ -199,6 +186,7 @@ export const useLoopManager = (notesMatrix = null) => {
       // notes: removido - ahora se usa la matriz centralizada
       length,
       currentStep: 0, // Track current beat position
+      lastResetPulse: 0, // Track when the loop was last reset/regenerated
       // Objetos de audio (se asignarán después)
       synth: null,
       panner: null,
@@ -214,7 +202,18 @@ export const useLoopManager = (notesMatrix = null) => {
         decay: 0.3,
         sustain: 0.5,
         release: 0.8
-      }
+      },
+      // Melodic generation fields
+      noteRangeMin: 24,        // MIDI note min (default: full range)
+      noteRangeMax: 96,        // MIDI note max (default: full range)
+      patternProbabilities: {  // Per-loop pattern weights
+        euclidean: 0.3,
+        scale: 0.3,
+        random: 0.4,
+        // Will add more in Phase 2
+      },
+      generationMode: 'auto',  // 'auto' | 'locked'
+      lastPattern: null        // Track what was generated for reference
     }
   }
 
@@ -232,6 +231,7 @@ export const useLoopManager = (notesMatrix = null) => {
       delayAmount: basicLoop.delayAmount,
       reverbAmount: basicLoop.reverbAmount,
       pan: basicLoop.pan,
+      volume: basicLoop.volume,
       synthType: basicLoop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
     }
 
@@ -262,12 +262,12 @@ export const useLoopManager = (notesMatrix = null) => {
       const adaptiveVolume = getAdaptiveVolume ? getAdaptiveVolume(i) : 0.5
       const adaptiveDensity = getAdaptiveDensity ? getAdaptiveDensity() : null
 
-      //console.log(`🔄 LOOP MANAGER: Creating loop ${i}, adaptiveVolume: ${adaptiveVolume}, adaptiveDensity: ${adaptiveDensity}`);
-
-      if (audioEngine && audioEngine.audioInitialized) {
-        loops.value.push(createLoop(i, scaleName, audioEngine, adaptiveVolume, adaptiveDensity))
+      if (audioEngine && audioEngine.audioInitialized.value) {
+        const newLoop = createLoop(i, scaleName, audioEngine, adaptiveVolume, adaptiveDensity)
+        loops.value.push(newLoop)
       } else {
-        loops.value.push(createBasicLoop(i, scaleName, adaptiveVolume, adaptiveDensity))
+        const newLoop = createBasicLoop(i, scaleName, adaptiveVolume, adaptiveDensity)
+        loops.value.push(newLoop)
       }
 
       // console.log(`🔄 LOOP MANAGER: Loop ${i} created successfully`);
@@ -292,6 +292,7 @@ export const useLoopManager = (notesMatrix = null) => {
           delayAmount: loop.delayAmount,
           reverbAmount: loop.reverbAmount,
           pan: loop.pan,
+          volume: loop.volume,
           synthType: loop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
         }
 
@@ -368,6 +369,10 @@ export const useLoopManager = (notesMatrix = null) => {
       case 'volume': {
         const v = Math.abs(value) <= 1 ? Number(value) : Number(value) / 100
         loop.volume = Math.max(0, Math.min(1, v))
+        // Update synth volume immediately for real-time volume control
+        if (loop.synth) {
+          loop.synth.volume.value = Tone.gainToDb(loop.volume)
+        }
         break
       }
       case 'pan': {
@@ -467,29 +472,42 @@ export const useLoopManager = (notesMatrix = null) => {
         notesMatrix.updateLoopMetadata(id, { baseNote: loop.baseNote })
       }
 
-      // Regenerar notas en la matriz centralizada using scale NAME
+      // Regenerar notas en la matriz centralizada usando la densidad efectiva del store
       notesMatrix.generateLoopNotes(id, {
         scale: currentScaleName,
         baseNote: loop.baseNote,
         length: loop.length,
-        density: 0.4,
         octaveRange: 2
       })
     }
   }
 
   // Regenerar loop completo (notas y ajustes relacionados)
-  const regenerateLoop = (id, scale, currentScaleName, adaptiveDensity = null, adaptiveVolume = null) => {
+  const regenerateLoop = (id, scale, currentScaleName, adaptiveVolume = null, currentPulse = null) => {
     // scale is the actual scale array (intervals)
     // currentScaleName is the scale name (e.g., 'major', 'minor')
+    // currentPulse is the current global pulse for step reset
 
     const loop = loops.value[id]
     if (!loop) return
 
-    // Si hay cambio de escala, regenerar la nota base para que esté en la nueva escala
-    if (scale) {
-      const newBaseNote = generateScaleBaseNote(scale)
-      loop.baseNote = newBaseNote
+    // Reset the step counter when regenerating
+    if (currentPulse !== null) {
+      loop.lastResetPulse = currentPulse
+      loop.currentStep = 0
+    }
+
+    // Actualizar baseNote SOLO si la escala cambió o si no pertenece a la escala actual
+    if (scale && currentScaleName) {
+      const meta = notesMatrix && notesMatrix.loopMetadata ? notesMatrix.loopMetadata[id] : null
+      const prevScaleName = meta && meta.scale ? meta.scale : null
+      const baseInterval = loop.baseNote % 12
+      const baseInScale = Array.isArray(scale) ? scale.includes(baseInterval) : true
+      const shouldUpdateBase = (prevScaleName !== currentScaleName) || !baseInScale
+      if (shouldUpdateBase) {
+        const newBaseNote = generateScaleBaseNote(scale)
+        loop.baseNote = newBaseNote
+      }
     }
 
     // Regenerar notas en la matriz centralizada
@@ -502,21 +520,20 @@ export const useLoopManager = (notesMatrix = null) => {
         })
       }
 
-      // Regenerar notas en la matriz centralizada using scale NAME
-      const targetDensity = adaptiveDensity ?? getLoopNoteDensity(id) ?? 0.4
-
+      // Regenerar notas leyendo únicamente de la metadata del store
+      if (notesMatrix.updateLoopMetadata) {
+        const randomOffset = Math.floor(Math.random() * (loop.length || 16))
+        notesMatrix.updateLoopMetadata(id, { startOffset: randomOffset })
+      }
       notesMatrix.generateLoopNotes(id, {
-        scale: currentScaleName, // Pass scale NAME, not intervals
-        baseNote: loop.baseNote,
-        length: loop.length,
-        density: targetDensity,
-        octaveRange: 2
       })
       debugLog('regenerate loop', {
         id,
         scaleChanged: Boolean(scale),
         newLength: loop.length,
-        density: targetDensity
+        density: notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(id) : undefined,
+        resetPulse: currentPulse,
+        lastResetPulse: loop.lastResetPulse
       })
     }
 
@@ -537,6 +554,12 @@ export const useLoopManager = (notesMatrix = null) => {
 
     const midiNote = notesMatrix.getNote(loop.id, step)
     if (midiNote === null || midiNote === undefined) return
+
+    if (!loop.synth) {
+      console.error(`❌ Loop ${loop.id} has no synth! Cannot play note ${midiNote}`);
+      return
+    }
+
     const synthModel = loop.synthModel || 'PolySynth'
 
     // Seleccionar duración según el modelo de síntesis
@@ -551,10 +574,12 @@ export const useLoopManager = (notesMatrix = null) => {
       reverbSend: loop.reverbSend
     }
 
-    audioEngine.playNote(audioChain, midiNote, duration, loop.volume, time)
-  }
-
-  // Aplicar distribución dispersa en el espectro estéreo
+    try {
+      audioEngine.playNote(audioChain, midiNote, duration, 1, time)
+    } catch (error) {
+      console.error(`❌ Error playing note for loop ${loop.id}:`, error);
+    }
+  }  // Aplicar distribución dispersa en el espectro estéreo
   const applySparseDistribution = () => {
     // Obtener loops activos
     const activeLoops = loops.value.filter(loop => loop.isActive)
@@ -681,6 +706,7 @@ export const useLoopManager = (notesMatrix = null) => {
       delayAmount: loop.delayAmount,
       reverbAmount: loop.reverbAmount,
       pan: loop.pan,
+      volume: loop.volume,
       synthType: loop.synthModel
     }
 
@@ -718,8 +744,7 @@ export const useLoopManager = (notesMatrix = null) => {
     applySparseDistribution,
 
     // Funciones de generación
-    generateNotes,
-    generateNotesInRange,
+    generateLoopMelodyFor,
     generateScaleBaseNote,
     generateResponseFromCall,
     regenerateLoopNotes,

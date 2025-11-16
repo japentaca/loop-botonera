@@ -25,7 +25,7 @@
         <div class="mini-control">
           <span class="mini-label">Tamaño</span>
           <Slider :modelValue="sizeIndex"
-            @update:modelValue="audioStore.updateLoopParam(loop.id, 'length', allowedSizes[$event])" :min="0" :max="9"
+            @update:modelValue="audioStore.updateLoopParam(loop.id, 'length', allowedSizes[$event])" :min="0" :max="allowedSizes.length - 1"
             :step="1" class="mini-slider" :disabled="!audioStore.audioInitialized" />
           <span class="mini-value">{{ loop.length }}</span>
         </div>
@@ -68,7 +68,21 @@
       <Button @click="synthStore.openSynthEditor(loop.id)" class="edit-button" icon="pi pi-cog" label="Editar Synth"
         size="small" outlined :disabled="!audioStore.audioInitialized" />
       <Button @click="audioStore.regenerateLoop(loop.id)" class="edit-button" icon="pi pi-refresh"
-        label="Regenerar Loop" size="small" outlined :disabled="!audioStore.audioInitialized" />
+        label="Regenerar Loop" size="small" outlined />
+      <Button @click="showPatternSettings = !showPatternSettings" class="edit-button"
+        :icon="showPatternSettings ? 'pi pi-chevron-up' : 'pi pi-chevron-down'"
+        :label="showPatternSettings ? 'Ocultar Patrones' : 'Mostrar Patrones'" size="small" outlined
+        :disabled="!audioStore.audioInitialized" />
+
+      
+    </div>
+
+    <div v-if="showPatternSettings" class="pattern-settings-section">
+      <PatternSettings v-if="audioStore.loopMetadata" :loopId="loop.id" :loopMetadata="audioStore.loopMetadata"
+        @update-metadata="updateMetadata" />
+      <div v-else class="no-metadata-warning">
+        <p>⚠️ Loop metadata not available</p>
+      </div>
     </div>
 
     <div class="synth-type-display">
@@ -81,11 +95,14 @@
   import { computed, ref, watch, onMounted, onUnmounted, onBeforeMount, onBeforeUnmount } from 'vue'
   import { useAudioStore } from '../stores/audioStore'
   import { useSynthStore } from '../stores/synthStore'
+  import PatternSettings from './PatternSettings.vue'
+  
 
   const componentId = Math.random().toString(36).substr(2, 9)
 
   const audioStore = useAudioStore()
   const synthStore = useSynthStore()
+  
 
   const props = defineProps({
     loop: {
@@ -96,7 +113,7 @@
 
   // onBeforeUpdate and onUpdated removed to prevent spam during playback
   // These fire constantly because currentPulse updates every 16th note  // Tamaños permitidos para el loop
-  const allowedSizes = [4, 8, 12, 16, 32, 48, 64, 128, 256, 512]
+  const allowedSizes = [4, 8, 12, 16, 32, 48, 64, 96, 128, 256, 512]
 
   // Índice del tamaño actual basado en la lista permitida
   const sizeIndex = computed(() => {
@@ -126,6 +143,7 @@
   const currentStep = ref(0)
   const paddedBeatsRemaining = ref('0')
   const beatProgress = ref(0)
+  const showPatternSettings = ref(false)
 
   const updateBeatIndicators = () => {
     if (!props.loop.isActive) {
@@ -135,7 +153,9 @@
       return
     }
 
-    const step = (audioStore.currentPulse - 1) % props.loop.length
+    // Calculate step considering the last reset pulse
+    const adjustedPulse = audioStore.currentPulse - (props.loop.lastResetPulse || 0)
+    const step = Math.max(0, (adjustedPulse - 1) % props.loop.length)
     currentStep.value = step
 
     const remainingPulses = props.loop.length - step - 1
@@ -173,6 +193,15 @@
       animationFrameId = null
     }
   })
+
+  // Update loop metadata for pattern settings
+  const updateMetadata = ({ loopId, updates }) => {
+    //console.log('[LoopCard] updateMetadata called:', { loopId, updates })
+    //console.log('[LoopCard] Current audioStore.loopMetadata:', audioStore.loopMetadata)
+    audioStore.updateLoopMetadata(loopId, updates)
+  }
+
+  
 </script>
 
 <style scoped>
@@ -257,5 +286,35 @@
   .beat-indicator {
     width: 100%;
     margin-top: 0.25rem;
+  }
+
+  /* Pattern settings section */
+  .pattern-settings-section {
+    margin-top: 0.5rem;
+    animation: slideDown 0.3s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      max-height: 0;
+      transform: translateY(-10px);
+    }
+
+    to {
+      opacity: 1;
+      max-height: 500px;
+      transform: translateY(0);
+    }
+  }
+
+  .no-metadata-warning {
+    color: #ff6b6b;
+    padding: 0.5rem;
+    text-align: center;
+    background: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    border-radius: 4px;
+    margin-top: 0.5rem;
   }
 </style>

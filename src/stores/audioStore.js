@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed, markRaw } from 'vue'
+import { ref, computed } from 'vue'
 import { useScales, useMusic } from '../composables/useMusic'
 import { useNotesMatrix } from '../composables/useNotesMatrix'
 
@@ -48,6 +48,13 @@ export const useAudioStore = defineStore('audio', () => {
   const audioEngine = useAudioEngine()
   const loopManager = useLoopManager(notesMatrix)
   const energyManager = useEnergyManager(notesMatrix)
+  // Ensure energy manager knows the configured number of loops from loopManager
+  if (typeof energyManager.updateNumLoops === 'function') {
+    energyManager.updateNumLoops(loopManager.NUM_LOOPS)
+  }
+
+  
+
   const evolutionSystem = useEvolutionSystem(notesMatrix)
 
   // Performance optimization: maintain cache of active loop IDs
@@ -77,8 +84,41 @@ export const useAudioStore = defineStore('audio', () => {
     energyManager.checkAndBalanceEnergy(loops)
   }, 750) // OPTIMIZED: increased from 500ms to 750ms to reduce 140ms blocking tasks
 
+  // Dynamic density application (debounced to avoid thrash)
+  const DENSITY_DEBOUNCE_MS = 250
+  const applyDynamicDensities = debounce(() => {
+    try {
+      const loops = loopManager.loops.value
+      const density = energyManager.computeDynamicDensity(loops, globalDensityBias.value)
+
+      // Update each active, unlocked loop
+      for (let i = 0; i < loops.length; i++) {
+        const loop = loops[i]
+        if (!loop || !loop.isActive) continue
+
+        const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loop.id]
+        if (meta && meta.densityMode === 'manual') continue
+
+        if (notesMatrix.updateLoopMetadata) {
+          notesMatrix.updateLoopMetadata(loop.id, { autoDensity: density, density })
+        }
+      }
+    } catch (err) {
+      console.error('[applyDynamicDensities] error', err)
+    }
+  }, DENSITY_DEBOUNCE_MS)
+
   // Estado específico del store principal (coordinación entre módulos)
-  const currentScale = ref('major')
+  const currentScale = ref('major') // Default scale - must be set before loop initialization
+
+  // Control global de densidad
+  const globalDensityBias = ref(0.5)
+  const updateGlobalDensityBias = (value) => {
+    const v = Math.max(0, Math.min(1, Number(value)))
+    globalDensityBias.value = v
+    applyDynamicDensities()
+    notifyPresetChanges()
+  }
 
   // Estado de evolución automática (coordinación entre módulos)
   const autoEvolve = ref(false)
@@ -123,6 +163,9 @@ export const useAudioStore = defineStore('audio', () => {
         loopManager.playLoopNote(loop, audioEngine, step, time)
       }
     })
+    if (autoEvolve.value && (audioEngine.currentPulse.value % 16 === 0)) {
+      checkEvolve()
+    }
   }
 
   // Inicialización de audio
@@ -136,19 +179,23 @@ export const useAudioStore = defineStore('audio', () => {
 
     audioStoreInitializing = true
 
+    // Step 1: Initialize only Tone.js audio engine
     await audioEngine.initAudio()
 
-    // Configurar callback del transporte para reproducir loops
+    // Step 2: Setup transport callback (but don't initialize loops yet)
     audioEngine.setupTransportCallback(playActiveLoops)
 
-    // Inicializar loops con configuración por defecto - pass scale NAME not intervals
+    audioStoreInitializing = false
+    return true
+  }
+
+  // Initialize music components after preset is loaded
+  const initMusicComponents = async () => {
+    // Initialize loops with the current scale
     loopManager.initializeLoops(currentScale.value, audioEngine)
 
     // Initialize active loops cache
     updateActiveLoopsCache()
-
-    audioStoreInitializing = false
-    return true
   }
 
   // Control de reproducción
@@ -160,6 +207,11 @@ export const useAudioStore = defineStore('audio', () => {
     } else if (!audioEngine.isPlaying.value) {
       stopAutoEvolve()
     }
+  }
+
+  // Resetear contadores de loops para re-sincronizar
+  const resetLoopCounters = () => {
+    audioEngine.resetCounters()
   }
 
   // Control de loops
@@ -178,6 +230,9 @@ export const useAudioStore = defineStore('audio', () => {
     if (energyManager.energyManagementEnabled.value) {
       energyManager.adjustAllLoopVolumes(loopManager.loops.value)
     }
+
+    // Apply dynamic densities (debounced)
+    applyDynamicDensities()
 
     // Notificar cambios para auto-guardado
     notifyPresetChanges()
@@ -203,6 +258,9 @@ export const useAudioStore = defineStore('audio', () => {
     if (energyManager.energyManagementEnabled.value) {
       energyManager.adjustAllLoopVolumes(loopManager.loops.value)
     }
+
+    // Apply dynamic densities (debounced)
+    applyDynamicDensities()
 
     // Notificar cambios (será ignorado si el presetStore está cargando)
     notifyPresetChanges()
@@ -234,33 +292,64 @@ export const useAudioStore = defineStore('audio', () => {
     notifyPresetChanges()
   }
 
+  // Actualizar metadata del loop (patrones, rangos de notas, etc.)
+  const updateLoopMetadata = (loopId, metadata) => {
+    notesMatrix.updateLoopMetadata(loopId, metadata)
+
+    // Disparar notificación de cambios para activar auto-guardado en el preset
+    notifyPresetChanges()
+  }
+
   // Regenerar loop individual
   const regenerateLoop = (id) => {
-    if (!audioEngine.audioInitialized.value) return
 
     const scale = useScales().getScale(currentScale.value)
-    const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
     const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, id)
 
-    // Pass both scale intervals and scale name
-    loopManager.regenerateLoop(id, scale, currentScale.value, adaptiveDensity, adaptiveVolume)
+    // Pass both scale intervals and scale name, plus current pulse for step reset
+    console.log('[Regeneration] regenerateLoop id=', id)
+    loopManager.regenerateLoop(id, scale, currentScale.value, adaptiveVolume, audioEngine.currentPulse.value)
   }
 
   // Regenerar todos los loops
   const regenerateAllLoops = () => {
-    if (!audioEngine.audioInitialized.value) return
 
     const scale = useScales().getScale(currentScale.value)
-
-    for (let i = 0; i < loopManager.NUM_LOOPS; i++) {
-      const adaptiveDensity = energyManager.getAdaptiveDensity(loopManager.loops.value)
+    const currentPulse = audioEngine.currentPulse.value
+    const activeIds = loopManager.loops.value.filter(l => l && l.isActive).map(l => l.id)
+    console.log('[Regeneration] regenerateAllLoops active=', activeIds)
+    for (const i of activeIds) {
       const adaptiveVolume = energyManager.getAdaptiveVolume(loopManager.loops.value, i)
-      // Pass both scale intervals and scale name
-      loopManager.regenerateLoop(i, scale, currentScale.value, adaptiveDensity, adaptiveVolume)
+      console.log('[Regeneration] regenerateAllLoops -> loop', i)
+      loopManager.regenerateLoop(i, scale, currentScale.value, adaptiveVolume, currentPulse)
     }
 
     // Ajustar volúmenes después de regenerar todos
     energyManager.adjustAllLoopVolumes(loopManager.loops.value)
+  }
+
+  // Regenerar loop individual con generación melódica
+  const regenerateLoopMelody = (loopId) => {
+    if (loopId >= loopManager.NUM_LOOPS) return
+
+    melodicGenerator.regenerateLoop(loopId, audioEngine.currentPulse.value)
+  }
+
+  // Regenerar todas las melodías
+  const regenerateAllMelodies = () => {
+    if (!audioEngine.audioInitialized.value) {
+      console.warn('[regenerateAllMelodies] Audio not initialized')
+      return
+    }
+
+    console.log('[regenerateAllMelodies] Starting regeneration of all active loops')
+    melodicGenerator.regenerateAllLoops(audioEngine.currentPulse.value)
+  }
+
+  const logNotesMatrix = () => {
+    const activeIds = loopManager.loops.value.filter(l => l && l.isActive).map(l => l.id)
+    const payload = activeIds.map(id => ({ id, notes: notesMatrix.getLoopNotes(id) }))
+    console.log('[NotesMatrix]', payload)
   }
 
   // Distribución panorámica
@@ -283,6 +372,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   // Actualizar escala musical
   const updateScale = (newScale) => {
+    if (newScale === currentScale.value) return
     const scale = useScales().getScale(newScale)
     if (!scale) {
       console.error(`[updateScale] Invalid scale name: "${newScale}"`)
@@ -292,13 +382,9 @@ export const useAudioStore = defineStore('audio', () => {
     console.log(`[updateScale] Changing global scale from "${currentScale.value}" to "${newScale}", intervals: [${scale}]`)
     currentScale.value = newScale
 
-    // Update the global scale in the notes matrix using setter
-    if (notesMatrix && notesMatrix.setGlobalScale) {
-      notesMatrix.setGlobalScale(newScale)
-    }
+    // Scale is now managed by audioStore only - removed setGlobalScale call
 
     if (!audioEngine.audioInitialized.value) {
-      // If not initialized, just update the scale reference in the matrix
       console.log('[updateScale] Audio not initialized, only updating scale reference')
       return
     }
@@ -312,6 +398,21 @@ export const useAudioStore = defineStore('audio', () => {
 
     console.log(`[updateScale] Scale update complete, all loops now using "${newScale}"`)
     notifyPresetChanges()
+  }
+
+  if (typeof window !== 'undefined') {
+    window.__LOOP_DEBUG = true
+    window.__DBG = {
+      getMeta: (id) => notesMatrix.loopMetadata[id],
+      getNotes: (id) => notesMatrix.getLoopNotes(id),
+      setMeta: (id, updates) => notesMatrix.updateLoopMetadata(id, updates),
+      loops: loopManager.loops,
+      selectPatternType: (id) => notesMatrix.selectPatternType ? notesMatrix.selectPatternType(id) : null,
+      regenerate: (id) => notesMatrix.generateLoopNotes(id),
+      setGenParams: (params) => { window.__DBG.__genParams = { ...params } },
+      clearGenParams: () => { delete window.__DBG.__genParams },
+      getGenParams: () => window.__DBG.__genParams || null
+    }
   }
 
   // Actualizar división del delay
@@ -414,7 +515,11 @@ export const useAudioStore = defineStore('audio', () => {
     const caller = pickCaller(callerCandidates.length ? callerCandidates : activeLoops)
     lastCallerId.value = caller?.id ?? null
 
-    const scale = useScales().getScale(currentScale.value) || useScales().getScale('major')
+    const scale = useScales().getScale(currentScale.value)
+    if (!scale) {
+      console.error(`No scale found for currentScale: "${currentScale.value}"`)
+      throw new Error(`Invalid current scale: "${currentScale.value}"`)
+    }
 
     // Fijar base del respondedor cercana a la del caller si existe, con pequeña variación de octava
     const baseNotes = [36, 48, 60, 72]
@@ -429,7 +534,7 @@ export const useAudioStore = defineStore('audio', () => {
     if (caller) {
       responseNotes = loopManager.generateResponseFromCall(caller, responder, scale, responder.baseNote)
     } else {
-      responseNotes = loopManager.generateNotesInRange(scale, responder.baseNote, responder.length, 2)
+      responseNotes = loopManager.generateLoopMelodyFor(responder.id, {})
     }
 
     // Guardar las notas en la matriz centralizada
@@ -485,28 +590,49 @@ export const useAudioStore = defineStore('audio', () => {
         }
       }
 
-      // Usar el sistema de evolución para evolucionar loops
-      // Pass the global scale intervals instead of availableScales
       const currentScaleIntervals = useScales().getScale(currentScale.value)
-
-      // Excluir reverb y delay de la evolución cuando se están aplicando cambios de estilo
       const isStyleChange = momentumEnabled.value || callResponseEnabled.value || tensionReleaseMode.value
       const evolutionOptions = isStyleChange ? { excludeReverb: true, excludeDelay: true } : {}
+      const intents = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, currentScaleIntervals, evolutionOptions)
 
-      const evolvedLoops = evolutionSystem.evolveMultipleLoops(loopManager.loops.value, currentScaleIntervals, evolutionOptions)
+      const activeLoopsCount = loopManager.loops.value.filter(l => l.isActive).length
+      const regenIntents = intents.filter(i => i.type === 'regenerate')
+      const doGlobalRegeneration = regenIntents.length > Math.floor(activeLoopsCount / 2)
+      const metadataUpdatesByLoop = {}
+      intents.forEach(i => {
+        if (i.type === 'metadataUpdate') {
+          const k = i.loopId
+          const prev = metadataUpdatesByLoop[k] || {}
+          metadataUpdatesByLoop[k] = { ...prev, ...i.updates }
+        }
+      })
 
-      // Aplicar call & response si está activado
+      const start = performance.now()
+      if (doGlobalRegeneration) {
+        for (let loopId = 0; loopId < notesMatrix.MAX_LOOPS; loopId++) {
+          const meta = notesMatrix.loopMetadata[loopId]
+          if (meta && meta.isActive) {
+            notesMatrix.generateLoopNotes(loopId)
+          }
+        }
+      } else {
+        regenIntents.forEach(i => {
+          notesMatrix.generateLoopNotes(i.loopId)
+        })
+      }
+
+      Object.keys(metadataUpdatesByLoop).forEach(loopId => {
+        notesMatrix.updateLoopMetadata(Number(loopId), metadataUpdatesByLoop[loopId])
+      })
+
+      intents.filter(i => i.type === 'quantize').forEach(i => {
+        notesMatrix.quantizeLoop(i.loopId, currentScale.value)
+      })
+
       if (evolveMode.value === 'callResponse' || callResponseEnabled.value) {
         const loopsToReharmonize = selectRandomLoops(Math.ceil(evolutionSystem.evolutionIntensity.value * 5))
         applyCallResponse(loopsToReharmonize)
       }
-
-      // Actualizar loops con las evoluciones
-      evolvedLoops.forEach((evolvedLoop, index) => {
-        if (evolvedLoop !== loopManager.loops.value[index]) {
-          Object.assign(loopManager.loops.value[index], evolvedLoop)
-        }
-      })
 
       // Aplicar gestión de energía después de la evolución
       energyManager.checkAndBalanceEnergy(loopManager.loops.value)
@@ -517,6 +643,8 @@ export const useAudioStore = defineStore('audio', () => {
 
       const modeInfo = evolveMode.value !== 'classic' ? ` [${evolveMode.value}]` : ''
       const tensionInfo = tensionReleaseMode.value ? (isTensionPhase.value ? ' (tensión)' : ' (release)') : ''
+      const elapsed = performance.now() - start
+      console.log(`Regeneration plan applied intents=${intents.length} regen=${doGlobalRegeneration ? 'global' : regenIntents.length} time=${elapsed.toFixed(1)}ms${modeInfo}${tensionInfo}`)
     } finally {
       // Finalizar modo batch y guardar una sola vez si no está en autoEvolve
       if (presetStore && presetStore.endBatchMode) {
@@ -528,7 +656,7 @@ export const useAudioStore = defineStore('audio', () => {
 
   const checkEvolve = () => {
     if (!autoEvolve.value || !audioEngine.isPlaying.value) return
-
+    if ((audioEngine.currentPulse.value % 16) !== 0) return
     // Verificar evolución basada en compases musicales
     const currentMeasure = Math.floor(audioEngine.currentPulse.value / 16)
     const targetMeasure = Math.floor(nextEvolveMeasure.value / 16)
@@ -556,11 +684,7 @@ export const useAudioStore = defineStore('audio', () => {
     evolveStartTime.value = Date.now()
     momentumLevel.value = 0
 
-    evolveIntervalId = setInterval(() => {
-      if (audioEngine.isPlaying.value) {
-        checkEvolve()
-      }
-    }, 100)
+    evolveIntervalId = null
   }
 
   const stopAutoEvolve = async () => {
@@ -582,7 +706,7 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateEvolveInterval = (interval) => {
-    console.log('🔄 updateEvolveInterval called:', interval)
+    //console.log('🔄 updateEvolveInterval called:', interval)
     const measuresInterval = Math.max(2, Math.min(32, Number(interval))) // límites en compases
     evolutionSystem.updateEvolutionSettings({ interval: measuresInterval })
     if (autoEvolve.value) {
@@ -593,14 +717,14 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateEvolveIntensity = (intensity) => {
-    console.log('🔄 updateEvolveIntensity called:', intensity)
+    //console.log('🔄 updateEvolveIntensity called:', intensity)
     const normalizedIntensity = Number(intensity) / 10
     evolutionSystem.updateEvolutionSettings({ intensity: normalizedIntensity })
     notifyPresetChanges()
   }
 
   const updateMomentumMaxLevel = (level) => {
-    console.log('🔄 updateMomentumMaxLevel called:', level)
+    //console.log('🔄 updateMomentumMaxLevel called:', level)
     momentumMaxLevel.value = Number(level)
     notifyPresetChanges()
   }
@@ -651,13 +775,13 @@ export const useAudioStore = defineStore('audio', () => {
   }
 
   const updateMaxSonicEnergyWrapper = (value) => {
-    console.log('🔄 updateMaxSonicEnergy called:', value)
+    //console.log('🔄 updateMaxSonicEnergy called:', value)
     energyManager.updateMaxSonicEnergy(value)
     notifyPresetChanges()
   }
 
   const updateEnergyReductionFactorWrapper = (value) => {
-    console.log('🔄 updateEnergyReductionFactor called:', value)
+    //console.log('🔄 updateEnergyReductionFactor called:', value)
     energyManager.updateEnergyReductionFactor(value)
     notifyPresetChanges()
   }
@@ -698,6 +822,8 @@ export const useAudioStore = defineStore('audio', () => {
     momentumEnabled,
     callResponseEnabled,
     tensionReleaseMode,
+    // Densidad global
+    globalDensityBias,
 
     // Estado de gestión de energía
     energyManagementEnabled: energyManager.energyManagementEnabled,
@@ -706,6 +832,7 @@ export const useAudioStore = defineStore('audio', () => {
 
     // Funciones principales
     initAudio,
+    initMusicComponents,
     togglePlay,
     toggleLoop,
     setLoopActive,
@@ -713,11 +840,17 @@ export const useAudioStore = defineStore('audio', () => {
     updateLoopSynth,
     regenerateLoop,
     regenerateAllLoops,
+    regenerateLoopMelody,
+    regenerateAllMelodies,
+    logNotesMatrix,
     applySparseDistribution,
     updateTempo,
     updateMasterVolume,
     updateScale,
     updateDelayDivision,
+    updateGlobalDensityBias,
+    // Sincronización
+    resetLoopCounters,
 
     // Funciones de evolución automática
     startAutoEvolve,
@@ -749,34 +882,21 @@ export const useAudioStore = defineStore('audio', () => {
     // Expose loopManager for preset operations
     loopManager,
 
+    // Cache management
+    updateActiveLoopsCache,
+
     // Configuración de energía sonora
     updateEnergyManagement: updateEnergyManagementWrapper,
     updateMaxSonicEnergy: updateMaxSonicEnergyWrapper,
     updateEnergyReductionFactor: updateEnergyReductionFactorWrapper,
 
-    // Funciones de matriz de notas centralizada
-    notesMatrix: notesMatrix.notesMatrix,
+    // Central notes matrix (composable) — expose the composable object itself
+    notesMatrix,
+    // Keep convenient accessors for metadata/state where useful
     loopMetadata: notesMatrix.loopMetadata,
     matrixState: notesMatrix.matrixState,
     initializeMatrix: notesMatrix.initializeMatrix,
-    activateLoop: notesMatrix.activateLoop,
-    deactivateLoop: notesMatrix.deactivateLoop,
-    updateLoopMetadata: notesMatrix.updateLoopMetadata,
-    getLoopNotes: notesMatrix.getLoopNotes,
-    setLoopNote: notesMatrix.setLoopNote,
-    clearLoopNote: notesMatrix.clearLoopNote,
-    generateRandomNotes: notesMatrix.generateLoopNotes,
-    quantizeLoopToScale: notesMatrix.quantizeLoopToScale,
-    quantizeAllToScale: notesMatrix.quantizeAllToScale,
-    transposeLoop: notesMatrix.transposeLoop,
-    rotateLoop: notesMatrix.rotateLoop,
-    inverseLoop: notesMatrix.inverseLoop,
-    mutateLoop: notesMatrix.mutateLoop,
-    copyLoop: notesMatrix.copyLoop,
-    getMatrixStats: notesMatrix.getMatrixStats,
-    clearMatrix: notesMatrix.clearMatrix,
-    exportMatrix: notesMatrix.exportMatrix,
-    importMatrix: notesMatrix.importMatrix,
-    logNotesMatrix: notesMatrix.logNotesMatrix
+    // Keep updateLoopMetadata as it's implemented on audioStore and used elsewhere
+    updateLoopMetadata,
   }
 })

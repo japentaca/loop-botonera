@@ -11,7 +11,11 @@
         </Button>
 
         <Button @click="regenerateAllLoops" class="regen-button-compact" icon="pi pi-refresh" label="Regenerar"
-          size="small" :disabled="!audioStore.audioInitialized" />
+          size="small" />
+
+        <Button @click="resetSync" class="sync-button-compact" icon="pi pi-sync" label="Sincronizar"
+          size="small" title="Resetear contador para re-sincronizar los loops"
+          :disabled="!audioStore.audioInitialized" />
 
         <div class="control-group-compact">
           <label class="control-label-compact">Tempo</label>
@@ -25,6 +29,13 @@
           <Slider v-model="tempMasterVolume" :min="0" :max="100" @change="onMasterVolumeInput(tempMasterVolume)"
             class="range-compact" :disabled="!audioStore.audioInitialized" />
           <span class="value-compact">{{ tempMasterVolume }}%</span>
+        </div>
+
+        <div class="control-group-compact">
+          <label class="control-label-compact">Densidad</label>
+          <Slider v-model="tempGlobalDensityBias" :min="0" :max="100" @change="onGlobalDensityBiasInput(tempGlobalDensityBias)"
+            class="range-compact" :disabled="!audioStore.audioInitialized" />
+          <span class="value-compact">{{ tempGlobalDensityBias }}%</span>
         </div>
 
         <Button @click="audioStore.applySparseDistribution" class="sparse-button" label="Sparse" size="small"
@@ -152,11 +163,11 @@
 
   // Estado temporal para el tempo
   const tempTempo = ref(audioStore.tempo)
-  let tempoTimer = null
 
   // Estado temporal para el volumen maestro
   const tempMasterVolume = ref(audioStore.masterVolume || 70)
-  let volumeTimer = null
+
+  const tempGlobalDensityBias = ref(Math.round((audioStore.globalDensityBias || 0.5) * 100))
 
   const nextEvolveInBeats = computed(() => {
     if (!audioStore.autoEvolve) return 0
@@ -175,19 +186,19 @@
   const onTempoInput = (value) => {
     const v = Number(value)
     tempTempo.value = v
-    if (tempoTimer) clearTimeout(tempoTimer)
-    tempoTimer = setTimeout(() => {
-      audioStore.updateTempo(v)
-    }, 300)
+    audioStore.updateTempo(v)
   }
 
   const onMasterVolumeInput = (value) => {
     const v = Number(value)
     tempMasterVolume.value = v
-    if (volumeTimer) clearTimeout(volumeTimer)
-    volumeTimer = setTimeout(() => {
-      audioStore.updateMasterVolume(v)
-    }, 150) // Debounce más corto para volumen para mejor respuesta
+    audioStore.updateMasterVolume(v)
+  }
+
+  const onGlobalDensityBiasInput = (value) => {
+    const v = Math.max(0, Math.min(100, Number(value)))
+    tempGlobalDensityBias.value = v
+    audioStore.updateGlobalDensityBias(v / 100)
   }
 
   // Mantener sincronizado tempTempo con cambios externos
@@ -198,6 +209,10 @@
   // Mantener sincronizado tempMasterVolume con cambios externos
   watch(() => audioStore.masterVolume, (newVolume) => {
     tempMasterVolume.value = newVolume
+  })
+
+  watch(() => audioStore.globalDensityBias, (newBias) => {
+    tempGlobalDensityBias.value = Math.round((newBias || 0) * 100)
   })
 
   // Métodos
@@ -238,6 +253,10 @@
 
   const regenerateAllLoops = () => {
     audioStore.regenerateAllLoops()
+  }
+
+  const resetSync = () => {
+    audioStore.resetLoopCounters()
   }
 
   // Mapeo de etiquetas amigables para divisiones de delay
