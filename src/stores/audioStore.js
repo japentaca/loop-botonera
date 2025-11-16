@@ -97,10 +97,8 @@ export const useAudioStore = defineStore('audio', () => {
         if (!loop || !loop.isActive) continue
 
         const meta = notesMatrix.loopMetadata && notesMatrix.loopMetadata[loop.id]
-        if (meta && meta.generationMode === 'locked') continue
         if (meta && meta.densityMode === 'manual') continue
 
-        // Persist density in metadata only (no regeneration here)
         if (notesMatrix.updateLoopMetadata) {
           notesMatrix.updateLoopMetadata(loop.id, { autoDensity: density, density })
         }

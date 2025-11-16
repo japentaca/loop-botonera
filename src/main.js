@@ -5,7 +5,7 @@ import Aura from '@primevue/themes/aura'
 
 // Importar componentes PrimeVue que usaremos
 import Button from 'primevue/button'
-import Slider from 'primevue/slider'
+import DebouncedSlider from './components/DebouncedSlider.vue'
 import InputNumber from 'primevue/inputnumber'
 import Dialog from 'primevue/dialog'
 import Badge from 'primevue/badge'
@@ -39,7 +39,7 @@ app.use(PrimeVue, {
 
 // Registrar componentes globalmente
 app.component('Button', Button)
-app.component('Slider', Slider)
+app.component('Slider', DebouncedSlider)
 app.component('InputNumber', InputNumber)
 app.component('Dialog', Dialog)
 app.component('Badge', Badge)

@@ -1,6 +1,7 @@
 import { useScales } from './useMusic'
 import { analyzeActiveLoops, avoidConflicts, isCounterpointEnabled } from '../services/counterpointService'
 import { useAudioStore } from '../stores/audioStore'
+import { generatePossibleNotes } from '../utils/noteUtils'
 
 /**
  * Melodic Generation Coordinator
@@ -317,20 +318,7 @@ export function useMelodicGenerator(notesMatrix) {
   }
 }
 
-function generatePossibleNotes(scale, baseNote, noteRange) {
-  const possibleNotes = []
-  const minOctave = Math.floor((noteRange.min - baseNote) / 12)
-  const maxOctave = Math.floor((noteRange.max - baseNote) / 12)
-  for (let oct = minOctave; oct <= maxOctave; oct++) {
-    for (const interval of scale) {
-      const note = baseNote + interval + (oct * 12)
-      if (note >= noteRange.min && note <= noteRange.max) {
-        possibleNotes.push(note)
-      }
-    }
-  }
-  return possibleNotes
-}
+// generatePossibleNotes is now centralized in src/utils/noteUtils.js
 
 function euclideanRhythm(pulses, steps) {
   if (pulses <= 0) return []
@@ -387,8 +375,7 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
 
 function euclidFromOptions({ length, scale, baseNote, noteRange, density, timing = 'euclidean', startOffset = 0 }) {
   const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true })
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
-  possibleNotes.sort((a, b) => a - b)
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange, { tag: 'MelGen' })
   const pattern = new Array(length).fill(null)
   if (possibleNotes.length > 0 && positions.length > 0) {
     let currentIndex = Math.floor(Math.random() * possibleNotes.length)
@@ -401,11 +388,11 @@ function euclidFromOptions({ length, scale, baseNote, noteRange, density, timing
 }
 
 function scaleFromOptions({ length, scale, baseNote, noteRange, density, densityTiming = 'even', startOffset = 0 }) {
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange, { tag: 'MelGen' })
   if (possibleNotes.length === 0) {
     return new Array(length).fill(null)
   }
-  const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
+  const sortedNotes = [...possibleNotes]
   const positions = computePositions({ length, density, mode: densityTiming, startOffset, allowZero: true })
   const placements = positions.length
   if (placements === 0) return new Array(length).fill(null)
@@ -428,13 +415,13 @@ function scaleFromOptions({ length, scale, baseNote, noteRange, density, density
 }
 
 function randomFromOptions({ length, scale, baseNote, noteRange, density, timing = 'random', startOffset = 0 }) {
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange, { tag: 'MelGen' })
   if (possibleNotes.length === 0) {
     return new Array(length).fill(null)
   }
   const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true })
   const noteCount = positions.length
-  const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
+  const sortedNotes = [...possibleNotes]
   const notesToPlace = []
   if (noteCount <= sortedNotes.length) {
     for (let i = 0; i < noteCount; i++) {

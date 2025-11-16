@@ -6,17 +6,19 @@
 import { useAudioStore } from '../stores/audioStore'
 import { useNotesMatrix } from '../composables/useNotesMatrix'
 import { useScales } from '../composables/useMusic'
-const DEBUG = typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
+import { generatePossibleNotes } from './noteUtils'
+// Global debug flag: set window.__LOOP_DEBUG = true in the browser console or in
+// `index.html` to enable debug logs at runtime. For builds you can also set
+// `VITE_LOOP_DEBUG=true` in a `.env` file so `import.meta.env.VITE_LOOP_DEBUG` is
+// available at build time.
+const DEBUG = (typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)) || (typeof import.meta !== 'undefined' && import.meta.env && String(import.meta.env.VITE_LOOP_DEBUG) === 'true')
+
+// Generators should be agnostic to the global pulse: they just produce
+// note arrays. Start offset/alignment must be handled by the caller.
 
 /**
  * Generate Euclidean rhythm pattern using Bjorklund's algorithm
- * @param {Object} params
- * @param {number} params.length - Total number of steps in the pattern
- * @param {Array<number>} params.scale - Scale intervals array (e.g., [0,2,4,5,7,9,11])
- * @param {number} params.baseNote - Base MIDI note number
- * @param {Object} params.noteRange - {min: number, max: number} MIDI range
- * @param {number} params.density - Density factor (0-1), controls number of pulses
- * @param {Object} params.options - Additional options
+ *
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */
 export function generateEuclideanPattern(loopId, options = {}) {
@@ -35,16 +37,15 @@ export function generateEuclideanPattern(loopId, options = {}) {
   const baseNote = meta.baseNote
   const noteRange = { min: meta.noteRangeMin, max: meta.noteRangeMax }
   const density = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3)
-  const currentPulse = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
-  const startOffset = options.startOffset ?? (meta.startOffset ?? (length > 0 ? (currentPulse % length) : 0))
+  // No pulse-dependent offsets: generators only return arrays of notes.
+  const startOffset = typeof options.startOffset === 'number' ? options.startOffset : 0
   const sel1 = chooseTimingAndJitter(loopId, length, density, options)
-  const timing = sel1.timingMode ?? 'euclidean'
+  const timing = sel1.timingMode ?? 'even'
   const jitter = sel1.jitter ?? 0
-  const seed1 = stableHash(String(loopId) + ':' + String(length) + ':' + String(currentPulse) + ':' + String(Math.floor(performance.now())))
+  const seed1 = stableHash(String(loopId) + ':' + String(length) + ':' + String(Math.floor(performance.now())))
 
   const positions = computePositions({ length, density, mode: timing, startOffset, allowZero: true, jitter, seed: seed1 })
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
-  possibleNotes.sort((a, b) => a - b)
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange, { tag: 'PatternGen' })
   const pattern = new Array(length).fill(null)
 
   if (possibleNotes.length > 0 && positions.length > 0) {
@@ -63,13 +64,7 @@ export function generateEuclideanPattern(loopId, options = {}) {
 
 /**
  * Generate scale pattern (formerly called "arpeggio" / broken chord progression)
- * @param {Object} params
- * @param {number} params.length - Total number of steps in the pattern
- * @param {Array<number>} params.scale - Scale intervals array
- * @param {number} params.baseNote - Base MIDI note number
- * @param {Object} params.noteRange - {min: number, max: number} MIDI range
- * @param {number} params.density - Density factor (0-1), controls number of scale sequences
- * @param {Object} params.options - Additional options (scaleType, etc.)
+ *
  * @returns {Array<number|null>} Array of MIDI notes or nulls
  */
 export function generateScalePattern(loopId, options = {}) {
@@ -87,18 +82,18 @@ export function generateScalePattern(loopId, options = {}) {
   const baseNote = meta.baseNote
   const noteRange = { min: meta.noteRangeMin, max: meta.noteRangeMax }
   const density = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3)
-  const currentPulse = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
-  const startOffset = options.startOffset ?? (meta.startOffset ?? (length > 0 ? (currentPulse % length) : 0))
+  // Generators are pulse-agnostic: they return note arrays without alignment.
+  const startOffset = typeof options.startOffset === 'number' ? options.startOffset : 0
   const sel2 = chooseTimingAndJitter(loopId, length, density, options)
   const timingMode = options.densityTiming ?? (sel2.timingMode ?? 'even')
   const jitter2 = sel2.jitter ?? 0
-  const seed2 = stableHash(String(loopId) + ':' + String(length) + ':' + String(currentPulse) + ':' + String(Math.floor(performance.now())))
+  const seed2 = stableHash(String(loopId) + ':' + String(length) + ':' + String(Math.floor(performance.now())))
 
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange, { tag: 'PatternGen' })
   if (possibleNotes.length === 0) {
     return new Array(length).fill(null)
   }
-  const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
+  const sortedNotes = [...possibleNotes]
   const it = timingIterator({ length, density, mode: timingMode, startOffset, allowZero: true, jitter: jitter2, seed: seed2 })
   const allow = new Set()
   for (const p of it) allow.add(p)
@@ -137,13 +132,7 @@ export function generateScalePattern(loopId, options = {}) {
 
 /**
  * Generate enhanced random pattern (improved version of current random generation)
- * @param {Object} params
- * @param {number} params.length - Total number of steps in the pattern
- * @param {Array<number>} params.scale - Scale intervals array
- * @param {number} params.baseNote - Base MIDI note number
- * @param {Object} params.noteRange - {min: number, max: number} MIDI range
- * @param {number} params.density - Density factor (0-1), controls number of notes
- * @param {Object} params.options - Additional options
+ *
  * @returns {Array<number|null>} Array of MIDI notes or nulls
 */
 export function generateRandomPattern(loopId, options = {}) {
@@ -162,10 +151,9 @@ export function generateRandomPattern(loopId, options = {}) {
   const baseNote = meta.baseNote
   const noteRange = { min: meta.noteRangeMin, max: meta.noteRangeMax }
   const density = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loopId) : (typeof meta.density === 'number' ? meta.density : 0.3)
-  const currentPulse = audioStore.currentPulse && typeof audioStore.currentPulse.value === 'number' ? audioStore.currentPulse.value : 0
-  const startOffset = options.startOffset ?? (meta.startOffset ?? (length > 0 ? (currentPulse % length) : 0))
+  const startOffset = typeof options.startOffset === 'number' ? options.startOffset : 0
 
-  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange)
+  const possibleNotes = generatePossibleNotes(scale, baseNote, noteRange, { tag: 'PatternGen' })
   if (possibleNotes.length === 0) {
     DEBUG && console.log('generateRandomPattern failed: no possible notes in range')
     return new Array(length).fill(null)
@@ -174,10 +162,10 @@ export function generateRandomPattern(loopId, options = {}) {
   const sel3 = chooseTimingAndJitter(loopId, length, density, options)
   const mode3 = sel3.timingMode ?? (options.timing ?? 'random')
   const jitter3 = sel3.jitter ?? 0
-  const seed3 = stableHash(String(loopId) + ':' + String(length) + ':' + String(currentPulse) + ':' + String(Math.floor(performance.now())))
+  const seed3 = stableHash(String(loopId) + ':' + String(length) + ':' + String(Math.floor(performance.now())))
   const positions = computePositions({ length, density, mode: mode3, startOffset, allowZero: true, jitter: jitter3, seed: seed3 })
   const noteCount = positions.length
-  const sortedNotes = [...possibleNotes].sort((a, b) => a - b)
+  const sortedNotes = [...possibleNotes]
   const notesToPlace = []
   if (noteCount <= sortedNotes.length) {
     for (let i = 0; i < noteCount; i++) {
@@ -207,34 +195,14 @@ export function generateRandomPattern(loopId, options = {}) {
 
 /**
  * Generate all possible notes within the given range for a scale
- * @param {Array<number>} scale - Scale intervals
- * @param {number} baseNote - Base MIDI note
- * @param {Object} noteRange - {min, max} MIDI range
+ *
  * @returns {Array<number>} Array of valid MIDI notes
  */
-function generatePossibleNotes(scale, baseNote, noteRange) {
-  const possibleNotes = [];
-
-  // Generate notes across multiple octaves within range
-  const minOctave = Math.floor((noteRange.min - baseNote) / 12);
-  const maxOctave = Math.floor((noteRange.max - baseNote) / 12);
-
-  for (let oct = minOctave; oct <= maxOctave; oct++) {
-    for (const interval of scale) {
-      const note = baseNote + interval + (oct * 12);
-      if (note >= noteRange.min && note <= noteRange.max) {
-        possibleNotes.push(note);
-      }
-    }
-  }
-
-  return possibleNotes;
-}
+// generatePossibleNotes is now provided by src/utils/noteUtils.js
 
 /**
  * Generate Euclidean rhythm using Bjorklund's algorithm
- * @param {number} pulses - Number of pulses (notes)
- * @param {number} steps - Total number of steps
+ *
  * @returns {Array<number>} Array of positions where pulses occur
  */
 function euclideanRhythm(pulses, steps) {
@@ -259,7 +227,7 @@ function euclideanRhythm(pulses, steps) {
  * mode: 'euclidean' | 'even' | 'random' | 'fillAll'
  * allowZero: when true, density==0 yields zero positions instead of forcing 1
  */
-function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false, jitter = 0, seed }) {
+function computePositions({ length, density, mode = 'even', startOffset = 0, allowZero = false, jitter = 0, seed }) {
   const positions = [];
   const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0));
   const rng = createRng(seed);
@@ -372,8 +340,11 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     return positions.map(p => (p + startOffset) % length);
   }
 
-  // default: euclidean
-  const raw = euclideanRhythm(count, length);
+  // default: even
+  const raw = [];
+  for (let i = 0; i < count; i++) {
+    raw.push(Math.floor((i * length) / count));
+  }
   if (jitter && jitter > 0) {
     const j = Math.floor(jitter);
     for (let i = 0; i < raw.length; i++) {
@@ -394,7 +365,7 @@ function* timingIterator({ length, density, mode, startOffset, allowZero, jitter
 function createRng(seed) {
   if (typeof seed !== 'number' || !isFinite(seed)) return () => Math.random()
   let a = seed >>> 0
-  return function() {
+  return function () {
     a = (a + 0x6D2B79F5) >>> 0
     let t = Math.imul(a ^ (a >>> 15), 1 | a)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) >>> 0
@@ -426,24 +397,48 @@ function chooseTimingAndJitter(loopId, length, density, options) {
 }
 
 export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, direction, tailSize }) {
-  const arr = Array.isArray(scaleNotes) ? scaleNotes.slice().sort((a, b) => a - b) : [];
+  // do not sort here; `scaleNotes` should already be sorted by the caller
+  const arr = Array.isArray(scaleNotes) ? scaleNotes.slice() : [];
   const n = arr.length;
   if (n === 0) return { sequence: [], steps: [], direction: 'ascending', tailSize: 1 };
-  const dir = direction === 'descending' ? 'descending' : (direction === 'ascending' ? 'ascending' : (Math.random() < 0.5 ? 'ascending' : 'descending'));
+  // We need to be able to change the direction (bounce) as the head hits
+  // the boundaries so that the head can travel across the full set of notes.
+  let dir = direction === 'descending' ? 'descending' : (direction === 'ascending' ? 'ascending' : (Math.random() < 0.5 ? 'ascending' : 'descending'));
   const ts = typeof tailSize === 'number' && isFinite(tailSize) ? Math.max(1, Math.min(4, Math.floor(tailSize))) : (1 + Math.floor(Math.random() * 4));
   let head = Math.max(0, Math.min(n - 1, Math.floor(startIndex ?? 0)));
   let remaining = Math.max(0, Math.floor(moves ?? 0));
   const seq = [];
   const steps = [];
   while (remaining > 0) {
-    let maxJ = computeMaxJump(n, head, dir, ts);
+    let { minJ, maxJ } = computeMaxJump(n, head, dir, ts);
     if (maxJ < 1) {
-      if (dir === 'ascending' && head >= n - 1) head = Math.max(0, n - 2);
-      else if (dir === 'descending' && head <= 0) head = Math.min(n - 1, 1);
-      maxJ = computeMaxJump(n, head, dir, ts);
+      // We're at the boundary: flip direction but keep head at the boundary so
+      // the boundary note itself can be used as a head position before moving.
+      if (dir === 'ascending' && head >= n - 1) {
+        dir = 'descending';
+        // keep head at n - 1, so the boundary is included
+      } else if (dir === 'descending' && head <= 0) {
+        dir = 'ascending';
+        // keep head at 0
+      }
+      ({ minJ, maxJ } = computeMaxJump(n, head, dir, ts));
       if (maxJ < 1) break;
     }
-    const j = 1 + Math.floor(Math.random() * maxJ);
+    // If the min allowed jump is greater than max (can't fit full tail),
+    // fall back to allowing any jump available (1..maxJ), which will produce
+    // truncated tails in that case.
+    const effectiveMin = (minJ && minJ > 1) ? minJ : 1;
+    const effectiveMax = Math.max(0, maxJ);
+    if (effectiveMax < effectiveMin) {
+      // no full-tail-safe jump available; allow any smaller jump
+      if (effectiveMax < 1) break;
+      const j1 = 1 + Math.floor(Math.random() * effectiveMax);
+      var j = j1;
+    } else {
+      const range = effectiveMax - effectiveMin + 1;
+      const j2 = effectiveMin + Math.floor(Math.random() * range);
+      var j = j2;
+    }
     head = dir === 'ascending' ? head + j : head - j;
     let headNote = arr[head];
     if (seq.length && headNote === seq[seq.length - 1]) {
@@ -459,10 +454,8 @@ export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, d
       if (ti < 0 || ti >= n) break;
       const tailNote = arr[ti];
       tail.push({ index: ti, note: tailNote, jump: dir === 'ascending' ? -1 : 1 });
-      const nextNote = (seq.length && tailNote === seq[seq.length - 1])
-        ? (dir === 'ascending' ? (ti + 1 < n ? arr[ti + 1] : tailNote) : (ti - 1 >= 0 ? arr[ti - 1] : tailNote))
-        : tailNote;
-      seq.push(nextNote);
+      // Tail should just follow the head directly (no duplicate avoidance)
+      seq.push(tailNote);
     }
     steps.push({ headIndex: head, headJump: dir === 'ascending' ? j : -j, tail });
     remaining--;
@@ -471,11 +464,18 @@ export function generateHeadTailScaleSequence({ scaleNotes, startIndex, moves, d
 }
 
 function computeMaxJump(n, headIdx, dir, ts) {
+  // Returns an object with minJ and maxJ that are safe bounds for the head
+  // to jump while allowing a full tail of size `ts` to exist.
+  const tail = typeof ts === 'number' && isFinite(ts) ? Math.max(0, Math.floor(ts)) : 0;
   if (dir === 'ascending') {
-    const headBound = (n - 1) - headIdx;
-    return Math.max(0, headBound);
+    const maxByBounds = Math.max(0, (n - 1) - headIdx);
+    // Ensure newHead - tail >= 0 => head + j >= tail => j >= tail - head
+    const minByTail = Math.max(1, tail - headIdx);
+    return { minJ: minByTail, maxJ: maxByBounds };
   } else {
-    const headBound = headIdx;
-    return Math.max(0, headBound);
+    const maxByBounds = Math.max(0, headIdx);
+    // Ensure newHead + tail <= n - 1 => head - j + tail <= n - 1 => j >= head + tail - (n - 1)
+    const minByTail = Math.max(1, headIdx + tail - (n - 1));
+    return { minJ: minByTail, maxJ: maxByBounds };
   }
 }

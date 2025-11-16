@@ -29,7 +29,7 @@ export const useEnergyManager = (notesMatrix = null) => {
   const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
   const debugLog = (label, payload = {}) => {
     if (isDebugEnabled()) {
-      console.log(`[EnergyManager] ${label}`, payload)
+      //console.log(`[EnergyManager] ${label}`, payload)
     }
   }
 
@@ -116,8 +116,8 @@ export const useEnergyManager = (notesMatrix = null) => {
   // New: computeDynamicDensity - deterministic mapping based on active loop count
   // NUM_LOOPS is configurable at runtime (audioStore will set it from loopManager.NUM_LOOPS)
   let NUM_LOOPS = 8
-  const MIN_DYNAMIC_DENSITY = 0.15
-  const MAX_DYNAMIC_DENSITY = 0.9
+  const MIN_DYNAMIC_DENSITY = 0.0
+  const MAX_DYNAMIC_DENSITY = 1.0
   const DENSITY_REDUCTION_FACTOR_ON_ENERGY = 0.7
 
   const lerp = (a, b, t) => (a * (1 - t)) + (b * t)
@@ -126,13 +126,8 @@ export const useEnergyManager = (notesMatrix = null) => {
     if (!energyManagementEnabled.value) return Math.max(MIN_DYNAMIC_DENSITY, Math.min(MAX_DYNAMIC_DENSITY, Number(bias) || 0.3))
 
     const activeCount = Math.max(1, loops.filter(l => l.isActive).length)
-    const effectiveNumLoops = Math.max(1, NUM_LOOPS || loops.length || 1)
-    const t = (activeCount - 1) / Math.max(1, (effectiveNumLoops - 1))
 
-    let baseDensity = lerp(MAX_DYNAMIC_DENSITY, MIN_DYNAMIC_DENSITY, t)
-
-    const preferred = Math.max(MIN_DYNAMIC_DENSITY, Math.min(MAX_DYNAMIC_DENSITY, Number(bias)))
-    baseDensity = lerp(baseDensity, preferred, 0.5)
+    let baseDensity = 1 / activeCount
 
     const currentEnergy = calculateSonicEnergy(loops)
     if (currentEnergy > maxSonicEnergy.value) {

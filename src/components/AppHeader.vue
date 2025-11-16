@@ -163,14 +163,11 @@
 
   // Estado temporal para el tempo
   const tempTempo = ref(audioStore.tempo)
-  let tempoTimer = null
 
   // Estado temporal para el volumen maestro
   const tempMasterVolume = ref(audioStore.masterVolume || 70)
-  let volumeTimer = null
 
   const tempGlobalDensityBias = ref(Math.round((audioStore.globalDensityBias || 0.5) * 100))
-  let densityTimer = null
 
   const nextEvolveInBeats = computed(() => {
     if (!audioStore.autoEvolve) return 0
@@ -189,28 +186,19 @@
   const onTempoInput = (value) => {
     const v = Number(value)
     tempTempo.value = v
-    if (tempoTimer) clearTimeout(tempoTimer)
-    tempoTimer = setTimeout(() => {
-      audioStore.updateTempo(v)
-    }, 300)
+    audioStore.updateTempo(v)
   }
 
   const onMasterVolumeInput = (value) => {
     const v = Number(value)
     tempMasterVolume.value = v
-    if (volumeTimer) clearTimeout(volumeTimer)
-    volumeTimer = setTimeout(() => {
-      audioStore.updateMasterVolume(v)
-    }, 150) // Debounce más corto para volumen para mejor respuesta
+    audioStore.updateMasterVolume(v)
   }
 
   const onGlobalDensityBiasInput = (value) => {
     const v = Math.max(0, Math.min(100, Number(value)))
     tempGlobalDensityBias.value = v
-    if (densityTimer) clearTimeout(densityTimer)
-    densityTimer = setTimeout(() => {
-      audioStore.updateGlobalDensityBias(v / 100)
-    }, 250)
+    audioStore.updateGlobalDensityBias(v / 100)
   }
 
   // Mantener sincronizado tempTempo con cambios externos

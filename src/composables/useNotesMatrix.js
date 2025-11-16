@@ -1,4 +1,8 @@
 import { ref, readonly, triggerRef, computed, reactive } from 'vue'
+import { generatePossibleNotes } from '../utils/noteUtils'
+
+// Debug flag (set window.__LOOP_DEBUG=true in the browser console to enable)
+const DEBUG = typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
 import { useScales } from './useMusic'
 import { analyzeActiveLoops, avoidConflicts, isCounterpointEnabled } from '../services/counterpointService'
 
@@ -347,21 +351,24 @@ export function useNotesMatrix() {
     const noteRange = { min: meta.noteRangeMin, max: meta.noteRangeMax }
     const startOffset = typeof meta.startOffset === 'number' ? meta.startOffset : 0
     const patternType = selectPatternType(loopId)
-    const timingMode = meta.densityTiming || (patternType === 'euclidean' ? 'euclidean' : (patternType === 'scale' ? 'even' : 'random'))
+    const timingMode = meta.densityTiming || (patternType === 'euclidean' ? 'even' : (patternType === 'scale' ? 'even' : 'random'))
 
     const positions = computePositions({ length: meta.length, density, mode: timingMode, startOffset, allowZero: true })
-    const possibleNotes = generatePossibleNotes(scaleIntervals, baseNote, noteRange)
-    possibleNotes.sort((a, b) => a - b)
+    const possibleNotes = generatePossibleNotes(scaleIntervals, baseNote, noteRange, { tag: 'NotesMatrix' })
 
     const out = new Array(meta.length).fill(null)
     if (patternType === 'scale') {
       const startIndex = Math.floor(Math.random() * Math.max(1, possibleNotes.length))
       const dir = Math.random() < 0.5 ? 'ascending' : 'descending'
-      const stepsToEdge = dir === 'ascending' ? ((possibleNotes.length - 1) - startIndex) : startIndex
-      const seqGen = generateHeadTail({ scaleNotes: possibleNotes, startIndex, moves: Math.max(positions.length, stepsToEdge + 1), direction: dir })
-      const seq = Array.isArray(seqGen.sequence) ? seqGen.sequence : []
+      const movesWanted = meta.length
+      const seqGen = generateHeadTail({ scaleNotes: possibleNotes, startIndex, moves: movesWanted, direction: dir, bounce: true })
+      const baseSeq = Array.isArray(seqGen.sequence) ? seqGen.sequence.slice() : []
+      const seq = []
+      for (let i = 0; i < movesWanted; i++) seq.push(baseSeq.length ? baseSeq[i % baseSeq.length] : possibleNotes[i % Math.max(1, possibleNotes.length)])
+      for (let i = 0; i < meta.length; i++) out[i] = null
       for (let i = 0; i < positions.length; i++) {
-        out[positions[i]] = seq.length ? seq[i % seq.length] : possibleNotes[i % possibleNotes.length]
+        const pos = positions[i]
+        out[pos] = seq[i % seq.length]
       }
     } else if (patternType === 'euclidean') {
       if (possibleNotes.length > 0 && positions.length > 0) {
@@ -971,7 +978,7 @@ function euclideanRhythm(pulses, steps) {
   return positions
 }
 
-function computePositions({ length, density, mode = 'euclidean', startOffset = 0, allowZero = false }) {
+function computePositions({ length, density, mode = 'even', startOffset = 0, allowZero = false }) {
   const positions = []
   const d = Math.max(0, Math.min(1, typeof density === 'number' && !isNaN(density) ? density : 0))
   if (mode === 'fillAll') {
@@ -1004,25 +1011,16 @@ function computePositions({ length, density, mode = 'euclidean', startOffset = 0
     while (set.size < count) set.add(Math.floor(Math.random() * length))
     return Array.from(set).map(p => (p + startOffset) % length)
   }
-  const raw = euclideanRhythm(count, length)
+  const raw = []
+  for (let i = 0; i < count; i++) raw.push(Math.floor((i * length) / count))
   return raw.map(p => (p + startOffset) % length)
 }
 
-function generatePossibleNotes(scale, baseNote, noteRange) {
-  const possibleNotes = []
-  const minOctave = Math.floor((noteRange.min - baseNote) / 12)
-  const maxOctave = Math.floor((noteRange.max - baseNote) / 12)
-  for (let oct = minOctave; oct <= maxOctave; oct++) {
-    for (const interval of scale) {
-      const note = baseNote + interval + (oct * 12)
-      if (note >= noteRange.min && note <= noteRange.max) possibleNotes.push(note)
-    }
-  }
-  return possibleNotes
-}
+// NOTE: generatePossibleNotes is now centralized in src/utils/noteUtils.js
 
-function generateHeadTail({ scaleNotes, startIndex, moves, direction, tailSize }) {
-  const arr = Array.isArray(scaleNotes) ? scaleNotes.slice().sort((a, b) => a - b) : []
+function generateHeadTail({ scaleNotes, startIndex, moves, direction, tailSize, bounce }) {
+  // do not sort here; `scaleNotes` should already be sorted by the caller
+  const arr = Array.isArray(scaleNotes) ? scaleNotes.slice() : []
   const n = arr.length
   if (n === 0) return { sequence: [], steps: [], direction: 'ascending', tailSize: 1 }
   const dir = direction === 'descending' ? 'descending' : (direction === 'ascending' ? 'ascending' : (Math.random() < 0.5 ? 'ascending' : 'descending'))
@@ -1031,34 +1029,48 @@ function generateHeadTail({ scaleNotes, startIndex, moves, direction, tailSize }
   let remaining = Math.max(0, Math.floor(moves ?? 0))
   const seq = []
   const steps = []
+  let curDir = dir
   while (remaining > 0) {
-    let maxJ = computeMaxJump2(n, head, dir, ts)
-    if (maxJ < 1) break
-    const j = 1
-    head = dir === 'ascending' ? head + j : head - j
+    if (curDir === 'ascending') {
+      if (head >= n - 1) {
+        if (!bounce) break
+        curDir = 'descending'
+        if (head > 0) head = head - 1
+      } else {
+        head = head + 1
+      }
+    } else {
+      if (head <= 0) {
+        if (!bounce) break
+        curDir = 'ascending'
+        if (head < n - 1) head = head + 1
+      } else {
+        head = head - 1
+      }
+    }
     let headNote = arr[head]
     if (seq.length && headNote === seq[seq.length - 1]) {
-      const altUp = head + (dir === 'ascending' ? 1 : -1)
-      const altDown = head - (dir === 'ascending' ? 1 : -1)
+      const altUp = head + (curDir === 'ascending' ? 1 : -1)
+      const altDown = head - (curDir === 'ascending' ? 1 : -1)
       if (altUp >= 0 && altUp < n) headNote = arr[altUp]
       else if (altDown >= 0 && altDown < n) headNote = arr[altDown]
     }
     seq.push(headNote)
     const tail = []
     for (let k = 1; k <= ts; k++) {
-      const ti = dir === 'ascending' ? head - k : head + k
+      const ti = curDir === 'ascending' ? head - k : head + k
       if (ti < 0 || ti >= n) break
       const tailNote = arr[ti]
-      tail.push({ index: ti, note: tailNote, jump: dir === 'ascending' ? -1 : 1 })
+      tail.push({ index: ti, note: tailNote, jump: curDir === 'ascending' ? -1 : 1 })
       const nextNote = (seq.length && tailNote === seq[seq.length - 1])
-        ? (dir === 'ascending' ? (ti + 1 < n ? arr[ti + 1] : tailNote) : (ti - 1 >= 0 ? arr[ti - 1] : tailNote))
+        ? (curDir === 'ascending' ? (ti - 1 >= 0 ? arr[ti - 1] : tailNote) : (ti + 1 < n ? arr[ti + 1] : tailNote))
         : tailNote
       seq.push(nextNote)
     }
-    steps.push({ headIndex: head, headJump: dir === 'ascending' ? j : -j, tail })
+    steps.push({ headIndex: head, headJump: curDir === 'ascending' ? 1 : -1, tail })
     remaining--
   }
-  return { sequence: seq, steps, direction: dir, tailSize: ts }
+  return { sequence: seq, steps, direction: curDir, tailSize: ts }
 }
 
 function computeMaxJump2(n, headIdx, dir, ts) {

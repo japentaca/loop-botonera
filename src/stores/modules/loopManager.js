@@ -1,6 +1,7 @@
 import { ref, shallowRef, triggerRef } from 'vue'
 import * as Tone from 'tone'
 import { useScales, useNoteUtils } from '../../composables/useMusic'
+import { generatePossibleNotes } from '../../utils/noteUtils'
 import { useMelodicGenerator } from '../../composables/useMelodicGenerator'
 import { clampToMidiRange } from '../../composables/musicUtils.js'
 
@@ -67,18 +68,8 @@ export const useLoopManager = (notesMatrix = null) => {
     const meta = notesMatrix && notesMatrix.loopMetadata ? notesMatrix.loopMetadata[responderLoop.id] : null
     const minRange = meta && typeof meta.noteRangeMin === 'number' ? meta.noteRangeMin : 24
     const maxRange = meta && typeof meta.noteRangeMax === 'number' ? meta.noteRangeMax : 96
-    const allowedNotes = (() => {
-      const arr = []
-      const minOct = Math.floor((minRange - baseNote) / 12)
-      const maxOct = Math.floor((maxRange - baseNote) / 12)
-      for (let oct = minOct; oct <= maxOct; oct++) {
-        for (const interval of scale) {
-          const cand = baseNote + interval + (oct * 12)
-          if (cand >= minRange && cand <= maxRange) arr.push(cand)
-        }
-      }
-      return arr.sort((a, b) => a - b)
-    })()
+    // Use centralized `generatePossibleNotes` to avoid duplicate logic and sorts
+    const allowedNotes = generatePossibleNotes(scale, baseNote, { min: minRange, max: maxRange })
 
     const transformNote = (note, idx) => {
       let transformed = note
@@ -157,7 +148,7 @@ export const useLoopManager = (notesMatrix = null) => {
       console.warn(`Invalid scale name provided: "${scaleName}", using 'major' as default`)
       scaleName = 'major'
     }
-    
+
     // Get intervals for note generation
     const scale = useScales().getScale(scaleName)
 
