@@ -52,6 +52,19 @@ function _msToNextMeasure(tempoMsPerBeat) {
   }
 }
 
+function _getTempoFromStore() {
+  try {
+    const audioStore = useAudioStore()
+    if (!audioStore) return 120
+    // Handle both the case where tempo is a ref (tempo.value) or a plain number
+    if (audioStore.tempo && typeof audioStore.tempo.value === 'number') return audioStore.tempo.value
+    if (typeof audioStore.tempo === 'number') return audioStore.tempo
+    return 120
+  } catch (err) {
+    return 120
+  }
+}
+
 function _stepCycleImpl(cycle) {
   // Register last step time for UI countdown
   try { cycle.lastStepTime = Date.now() } catch (e) { }
@@ -66,23 +79,49 @@ function _stepCycleImpl(cycle) {
   if (scope === 'global') {
     console.log(`${new Date().toISOString()} [tonalCycles] step: scope=${scope} strategy=${strategy} current=${audioStore.currentScale}`)
     // Determine next scale
+    // If scaleLocked is active, cycles should not alter the global scale
+    const isScaleLocked = Boolean(audioStore && audioStore.scaleLocked && (audioStore.scaleLocked.value !== undefined ? audioStore.scaleLocked.value : audioStore.scaleLocked))
+    if (isScaleLocked) {
+      console.log(`${new Date().toISOString()} [tonalCycles] step: scaleLocked, skipping global update`)
+      return
+    }
+
     if (strategy === 'rotateMode') {
       const current = audioStore.currentScale || 'major'
       const next = _rotateModeName(current)
       audioStore.updateScale(next)
     } else if (strategy === 'shiftKey') {
-      // shift root by semitone up
-      // not changing mode, compute next root note as text if possible
-      // This PoC: simply call getRelatedScale for variety
-      const related = getScale(audioStore.currentScale)
-      // fallback: use next mode as well
-      const next = _rotateModeName(audioStore.currentScale || 'major')
-      audioStore.updateScale(next)
+      // shift global root by semitone across active loops
+      const loops = audioStore.loopManager?.loops?.value || []
+      loops.forEach(loop => {
+        if (!loop || !loop.isActive) return
+        const id = loop.id
+        try {
+          notesMatrix.transposeLoop(id, 1)
+          const meta = notesMatrix.loopMetadata[id] || {}
+          const scaleName = meta.scale || audioStore.currentScale
+          notesMatrix.quantizeLoop(id, scaleName)
+          notesMatrix.generateLoopNotes(id, { silent: true })
+        } catch (err) {
+          // fallback: update metadata baseNote and quantize
+          try { notesMatrix.updateLoopMetadata(id, { baseNote: (notesMatrix.loopMetadata[id]?.baseNote || 60) + 1 }) } catch (e) { }
+        }
+      })
     }
   } else if (scope === 'group') {
     const groupId = config.groupId
     if (!groupId) return
     const members = notesMatrix.getGroupMembers(groupId)
+    if (strategy === 'shiftKey') {
+      // Shift each member by semitone and quantize
+      members.forEach(id => {
+        notesMatrix.transposeLoop(id, 1)
+        const meta = notesMatrix.loopMetadata[id] || {}
+        const scaleName = meta.scale || audioStore.currentScale
+        notesMatrix.quantizeLoop(id, scaleName)
+        notesMatrix.generateLoopNotes(id, { silent: true })
+      })
+    }
     members.forEach(id => {
       if (strategy === 'rotateMode') {
         // apply mode rotate per loop: just quantize and possibly regenerate
@@ -101,16 +140,23 @@ function _stepCycleImpl(cycle) {
     const meta = notesMatrix.loopMetadata[loopId] || {}
     const currentScale = meta.scale || audioStore.currentScale
     const next = _rotateModeName(currentScale)
-    notesMatrix.quantizeLoop(loopId, next)
-    notesMatrix.generateLoopNotes(loopId, { silent: true })
+    if (strategy === 'rotateMode') {
+      notesMatrix.quantizeLoop(loopId, next)
+      notesMatrix.generateLoopNotes(loopId, { silent: true })
+    } else if (strategy === 'shiftKey') {
+      // shift the loop root by one semitone and re-quantize
+      notesMatrix.transposeLoop(loopId, 1)
+      const scaleName = meta.scale || audioStore.currentScale
+      notesMatrix.quantizeLoop(loopId, scaleName)
+      notesMatrix.generateLoopNotes(loopId, { silent: true })
+    }
   }
 }
 
 export function startCycle(cfg = {}) {
   // prevent duplicate cycles by default: only one active cycle per (scope,loopId,groupId,strategy)
   const allowMultiple = !!cfg.allowMultiple
-  const audioStore = useAudioStore()
-  const tempo = (audioStore && audioStore.tempo && typeof audioStore.tempo.value === 'number') ? audioStore.tempo.value : 120
+  const tempo = _getTempoFromStore()
   const tempoMsPerBeat = 60000 / Math.max(1, tempo) // ms per quarter note
 
   if (!allowMultiple) {
@@ -211,6 +257,32 @@ export function startCycle(cfg = {}) {
   return { id: cycleId, stop: () => stopCycle(cycleId), step: () => _stepCycleImpl(cycles.get(cycleId)), pause: () => pauseCycle(cycleId), resume: () => resumeCycle(cycleId) }
 }
 
+// Recompute intervals for all active cycles according to the new tempo
+export function updateCyclesForTempo(newTempo) {
+  try {
+    const tempo = typeof newTempo === 'number' ? newTempo : _getTempoFromStore()
+    const tempoMsPerBeat = 60000 / Math.max(1, tempo)
+    for (const [id, c] of cycles.entries()) {
+      const cfg = c.config || {}
+      const newIntervalMs = Math.max(50, (cfg.intervalBeats || 4) * tempoMsPerBeat)
+      c.config.intervalMs = newIntervalMs
+      // If currently running, restart interval with new ms
+      if (c.timer) {
+        clearInterval(c.timer)
+        const step = () => _stepCycleImpl(c)
+        c.timer = setInterval(step, newIntervalMs)
+        c.lastStepTime = Date.now()
+      }
+      cycles.set(id, c)
+    }
+    _emitChange()
+    return true
+  } catch (err) {
+    console.warn('[tonalCycles] updateCyclesForTempo failed', err)
+    return false
+  }
+}
+
 export function stopCycle(cycleId) {
   const cycle = cycles.get(cycleId)
   if (!cycle) return false
@@ -243,8 +315,7 @@ export function resumeCycle(cycleId) {
   }
   const shouldSnap = !!c.config.snapToMeasure
   if (shouldSnap) {
-    const audioStore = useAudioStore()
-    const tempo = (audioStore && audioStore.tempo && typeof audioStore.tempo.value === 'number') ? audioStore.tempo.value : 120
+    const tempo = _getTempoFromStore()
     const tempoMsPerBeat = 60000 / Math.max(1, tempo)
     const msToNextMeasure = _msToNextMeasure(tempoMsPerBeat)
     // schedule a one-time step aligned to measure, then set up periodic interval

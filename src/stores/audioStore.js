@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useScales, useMusic } from '../composables/useMusic.js'
 import { useNotesMatrix } from '../composables/useNotesMatrix.js'
-import { startCycle, stopCycle, stepCycle, pauseCycle, resumeCycle, listCycles, subscribe as subscribeTonalCycles } from '../modules/tonalCycles.js'
+import { startCycle, stopCycle, stepCycle, pauseCycle, resumeCycle, listCycles, subscribe as subscribeTonalCycles, updateCyclesForTempo } from '../modules/tonalCycles.js'
 
 // Importar los nuevos módulos especializados
 import { useAudioEngine } from './modules/audioEngine.js'
@@ -465,6 +465,7 @@ export const useAudioStore = defineStore('audio', () => {
   // Control de tempo
   const updateTempo = (newTempo) => {
     audioEngine.updateTempo(newTempo)
+    try { updateCyclesForTempo(newTempo) } catch (err) { console.warn('[audioStore] updateCyclesForTempo failed', err) }
     notifyPresetChanges()
   }
 

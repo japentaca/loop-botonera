@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:integration": "node tests/integration/voice_generators.test.js && node tests/integration/counterpoint.test.js && node tests/integration/tonal_integration.test.js && node tests/integration/tonal_cycles.test.js && node tests/integration/tonal_cycles_dedupe.test.js && node tests/integration/tonal_cycles_start_update.test.js && node tests/integration/tonal_cycles_snap_measure.test.js"
+    "test:integration": "node tests/integration/voice_generators.test.js && node tests/integration/counterpoint.test.js && node tests/integration/tonal_integration.test.js && node tests/integration/tonal_cycles.test.js && node tests/integration/tonal_cycles_dedupe.test.js && node tests/integration/tonal_cycles_start_update.test.js && node tests/integration/tonal_cycles_snap_measure.test.js && node tests/integration/tonal_cycles_interval_beats.test.js && node tests/integration/tonal_cycles_tempo_change.test.js && node tests/integration/tonal_cycles_scale_locked.test.js && node tests/integration/tonal_cycles_shift_key.test.js"
   },
   "keywords": [],
   "author": "",
