@@ -26,9 +26,21 @@ export const useLoopManager = (notesMatrix = null) => {
   const synthTypes = ['sine', 'triangle', 'square', 'sawtooth']
 
   const isDebugEnabled = () => typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
+  const _serialize = (v) => {
+    try {
+      return JSON.stringify(v)
+    } catch (e) {
+      if (Array.isArray(v)) return v.map(x => (typeof x === 'object' ? String(x) : x)).join(', ')
+      return String(v)
+    }
+  }
   const debugLog = (label, payload = {}) => {
     if (isDebugEnabled()) {
-      console.log(`[LoopManager] ${label}`, payload)
+      if (payload && typeof payload === 'object') {
+        console.log(`[LoopManager] ${label}`, _serialize(payload))
+      } else {
+        console.log(`[LoopManager] ${label}`, payload)
+      }
     }
   }
 

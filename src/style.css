@@ -39,7 +39,8 @@ body {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6) !important;
   /* Performance optimization */
   contain: layout style;
-  position: relative; /* for overlay positioning */
+  position: relative;
+  /* for overlay positioning */
 }
 
 .header-row-main {
@@ -49,14 +50,18 @@ body {
   align-items: center;
   gap: 16px;
   margin-bottom: 8px;
+  position: relative;
+  /* allow absolute centering of the title */
 }
 
 .header-row-secondary {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start; /* allow variable heights without overlap */
+  align-items: flex-start;
+  /* allow variable heights without overlap */
   gap: 20px;
-  flex-wrap: wrap; /* allow items to move to next line when needed */
+  flex-wrap: wrap;
+  /* allow items to move to next line when needed */
 }
 
 
@@ -77,6 +82,16 @@ body {
   /* center inside the grid */
 }
 
+/* Center the title visually across the viewport and avoid overlap by placing it above controls */
+.header-row-main .title-compact {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  pointer-events: none;
+  /* allow click-through to buttons */
+}
+
 .main-controls {
   display: flex;
   gap: 15px;
@@ -94,6 +109,10 @@ body {
   border-right: 1px solid rgba(255, 255, 255, 0.04);
   padding-right: 12px;
   margin-right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 48%;
 }
 
 .music-controls {
@@ -108,20 +127,33 @@ body {
   align-items: center;
 }
 
+/* Right-aligned control block to keep controls anchored to the right side of the header */
+.main-controls-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  justify-self: end;
+  max-width: 48%;
+}
+
 /* Tonal cycles controls grid to keep controls orderly */
 .tonal-cycles-controls {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
   align-items: start;
-  grid-auto-rows: min-content; /* ensure children define their own row heights */
+  grid-auto-rows: minmax(56px, min-content);
+  /* ensure children define their own row heights */
   width: 100%;
 }
 
 .tonal-cycles-controls .control-group-compact {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
+  min-height: 56px;
 }
 
 .tonal-cycles-controls .control-label-compact {
@@ -200,16 +232,23 @@ body {
   box-shadow: 0 4px 12px rgba(0, 217, 255, 0.3);
 }
 
-.header-btn-compact { margin-left: 6px; margin-right: 6px; flex: 0 0 auto; }
+.header-btn-compact {
+  margin-left: 6px;
+  margin-right: 6px;
+  flex: 0 0 auto;
+}
 
 .control-group-compact {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: auto;
-  flex: 0 1 auto; /* keep width to content, allow wrapping but avoid negative shrink that causes overlaps */
-  min-height: 36px; /* ensure controls have enough vertical space */
-  margin-bottom: 6px; /* spacing when wrapping occurs */
+  flex: 0 1 auto;
+  /* keep width to content, allow wrapping but avoid negative shrink that causes overlaps */
+  min-height: 36px;
+  /* ensure controls have enough vertical space */
+  margin-bottom: 6px;
+  /* spacing when wrapping occurs */
 }
 
 /* Slider special control (for tempo / master volume) */
@@ -1773,6 +1812,9 @@ input[type="range"]::-moz-range-thumb,
     flex-direction: column;
     gap: 10px;
     margin-bottom: 10px;
+    /* Keep header usable on small screens by limiting height and allowing scroll */
+    max-height: 260px;
+    overflow-y: auto;
   }
 
   .header-row-secondary {
@@ -1812,6 +1854,9 @@ input[type="range"]::-moz-range-thumb,
     width: 100%;
     justify-content: center;
     gap: 8px;
+    /* Prevent a single panel from growing too tall — allow scrolling inside the column */
+    max-height: 220px;
+    overflow-y: auto;
   }
 
   /* Make buttons touch-friendly */
@@ -1831,7 +1876,8 @@ input[type="range"]::-moz-range-thumb,
   .control-group-compact {
     flex-direction: column;
     align-items: flex-start;
-    min-width: 140px;
+    min-width: 120px;
+    /* smaller control groups on mobile help keep vertical size lower */
   }
 
   /* Make slider groups take full width on mobile */
@@ -2053,6 +2099,10 @@ input[type="range"]::-moz-range-thumb,
 
   .title-compact {
     font-size: 14px;
+    position: static;
+    /* restore to normal flow on small screens */
+    transform: none;
+    pointer-events: auto;
   }
 
   .header-compact {
@@ -2073,15 +2123,18 @@ input[type="range"]::-moz-range-thumb,
 
   .main-controls-right {
     justify-content: flex-end;
-    min-width: 200px;
+    min-width: 0;
+    max-width: none;
+    /* allow full width on narrow screens */
   }
 
   .main-controls-right .control-group-compact {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 0 0 auto; /* do not shrink, avoid sliding under adjacent buttons */
-    }
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    /* do not shrink, avoid sliding under adjacent buttons */
+  }
 
   .loop-grid {
     gap: 10px;
@@ -2204,7 +2257,8 @@ input[type="range"]::-moz-range-thumb,
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap; /* allow wrapping on desktop to avoid overlaps */
+  flex-wrap: wrap;
+  /* allow wrapping on desktop to avoid overlaps */
 }
 
 .cycles-table {
@@ -2212,46 +2266,66 @@ input[type="range"]::-moz-range-thumb,
   border-collapse: collapse;
   font-size: 11px;
 }
-.cycles-table th, .cycles-table td {
+
+.cycles-table th,
+.cycles-table td {
   padding: 6px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
+
 .cycles-table th {
   color: #a8d4ff;
   text-align: left;
 }
+
 .cycles-table td {
   color: #e0e0e0;
 }
+
 .active-cycles-detailed {
   margin-top: 6px;
-  grid-column: 1 / -1; /* force table to span full grid width under other controls, preventing overlap */
+  grid-column: 1 / -1;
+  /* force table to span full grid width under other controls, preventing overlap */
   width: 100%;
 }
 
 .cycles-overlay {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 100%;
-  background: rgba(26,26,26,0.98);
-  border: 1px solid rgba(102,102,102,0.6);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  /* Make cycles overlay fixed to viewport so it can escape header stacking contexts
+     and always appear above content (loop grid, cards, etc.). */
+  position: fixed;
+  top: calc(var(--header-height, 84px) + 8px);
+  /* Offset from top so it sits below header controls */
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(960px, calc(100% - 32px));
+  background: rgba(26, 26, 26, 0.98);
+  border: 1px solid rgba(102, 102, 102, 0.6);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   border-radius: 8px;
-  z-index: 1200;
+  z-index: 999999;
+  /* ensure it's above other UI elements */
   padding: 8px;
 }
+
 .cycles-overlay-inner {
   width: 100%;
   max-height: 360px;
   overflow-y: auto;
 }
-.overlay-header{ display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:6px;}
+
+.overlay-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
 
 .tonal-cycles-table-wrapper {
   margin-top: 8px;
   width: 100%;
 }
+
 .status-pill {
   display: inline-block;
   padding: 2px 8px;
@@ -2259,16 +2333,30 @@ input[type="range"]::-moz-range-thumb,
   font-size: 11px;
   font-weight: 600;
 }
-.status-pill.running { background: rgba(30,200,80,0.12); color: #7fffa0; }
-.status-pill.waiting { background: rgba(255,200,80,0.08); color: #ffd580; }
-.status-pill.paused { background: rgba(255,80,80,0.06); color: #ffb2b2; }
+
+.status-pill.running {
+  background: rgba(30, 200, 80, 0.12);
+  color: #7fffa0;
+}
+
+.status-pill.waiting {
+  background: rgba(255, 200, 80, 0.08);
+  color: #ffd580;
+}
+
+.status-pill.paused {
+  background: rgba(255, 80, 80, 0.06);
+  color: #ffb2b2;
+}
+
 .progress-bar {
   width: 100%;
   height: 8px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 6px;
   overflow: hidden;
 }
+
 .progress-bar-inner {
   height: 100%;
   background: linear-gradient(90deg, #00d9ff, #7b2ff7);
@@ -2279,16 +2367,18 @@ input[type="range"]::-moz-range-thumb,
 .help-button {
   margin-left: 8px;
 }
+
 .header-help-inline {
   margin-top: 8px;
   margin-bottom: 8px;
   padding: 10px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.03);
+  border: 1px solid rgba(255, 255, 255, 0.03);
   font-size: 12px;
   color: #bcd8ff;
 }
+
 .audio-status {
   display: inline-block;
   padding: 6px 8px;
@@ -2297,9 +2387,50 @@ input[type="range"]::-moz-range-thumb,
   font-size: 12px;
   font-weight: 600;
 }
-.audio-status.ready { background: rgba(30,200,80,0.06); color: #7fffa0; border: 1px solid rgba(30,200,80,0.12) }
-.audio-status.not-ready { background: rgba(255,80,80,0.04); color: #ffb2b2; border: 1px solid rgba(255,80,80,0.06) }
+
+.audio-status.ready {
+  background: rgba(30, 200, 80, 0.06);
+  color: #7fffa0;
+  border: 1px solid rgba(30, 200, 80, 0.12)
+}
+
+.audio-status.not-ready {
+  background: rgba(255, 80, 80, 0.04);
+  color: #ffb2b2;
+  border: 1px solid rgba(255, 80, 80, 0.06)
+}
 
 /* Minor visual improvements for audio status */
-.audio-status .audio-icon { margin-right: 6px; font-size: 13px; opacity: 0.95; }
-.audio-status .audio-label { vertical-align: middle; font-weight: 600; }
+.audio-status .audio-icon {
+  margin-right: 6px;
+  font-size: 13px;
+  opacity: 0.95;
+}
+
+.audio-status .audio-label {
+  vertical-align: middle;
+  font-weight: 600;
+}
+
+/* Ensure buttons inside header row use grid gaps rather than individual margins */
+.header-row-main .header-btn-compact {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.header-row-main .control-group-compact {
+  margin-bottom: 0 !important;
+}
+
+/* Make the header go full viewport width on desktop and mobile while keeping content centered */
+.header-compact.full-viewport {
+  position: relative;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  width: 100vw;
+  border-radius: 0;
+  padding-left: 24px;
+  padding-right: 24px;
+}

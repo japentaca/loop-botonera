@@ -22,10 +22,18 @@ export function generatePossibleNotes(scale, baseNote, noteRange, options = {}) 
   possibleNotes.sort((a, b) => a - b)
   const DEBUG = typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
   if (DEBUG) {
+    const serialize = (v) => {
+      try {
+        return JSON.stringify(v)
+      } catch (e) {
+        if (Array.isArray(v)) return v.map(x => (typeof x === 'object' ? String(x) : x)).join(', ')
+        return String(v)
+      }
+    }
     if (options && typeof options.tag === 'string') {
-      console.log(`[${options.tag}] POSSIBLE`, possibleNotes)
+      console.log(`[${options.tag}] POSSIBLE`, serialize(possibleNotes))
     } else {
-      console.log('POSSIBLE', possibleNotes)
+      console.log('POSSIBLE', serialize(possibleNotes))
     }
   }
   return possibleNotes

@@ -1,5 +1,5 @@
 <template>
-  <div class="header-compact">
+  <div class="header-compact full-viewport" ref="headerEl">
     <!-- Fila superior: Título y controles principales -->
     <div class="header-row-main">
       <div class="main-controls-left">
@@ -29,7 +29,8 @@
           severity="help" title="Log notes matrix to console" :disabled="!audioStore.audioInitialized" />
       </div>
 
-
+      <!-- A centered title makes the grid layout balanced and keeps controls aligned -->
+      <h1 class="title-compact" role="heading" aria-level="1">Loop Botonera</h1>
 
       <div class="main-controls-right">
         <!-- main-controls-right only contains the sliders and presets/pulse -->
@@ -107,11 +108,8 @@
         <div class="tonal-cycles-controls">
           <div class="control-group-compact">
             <label class="control-label-compact">Cycles</label>
-            <Dropdown v-model:optionValue="cycleScope" :modelValue="cycleScope" @update:modelValue="onCycleScopeChange"
-              :options="cycleScopeOptions" optionLabel="label" optionValue="value" class="select-compact" />
-            <Dropdown v-model:optionValue="cycleStrategy" :modelValue="cycleStrategy"
-              @update:modelValue="(v) => cycleStrategy = v" :options="cycleStrategyOptions" optionLabel="label"
-              optionValue="value" class="select-compact" />
+            <Dropdown v-model="cycleScope" :options="cycleScopeOptions" optionLabel="label" optionValue="value" class="select-compact" @update:modelValue="onCycleScopeChange" />
+            <Dropdown v-model="cycleStrategy" :options="cycleStrategyOptions" optionLabel="label" optionValue="value" class="select-compact" @update:modelValue="(v) => cycleStrategy = v" />
           </div>
 
           <div class="control-group-compact">
@@ -170,8 +168,9 @@
               increase the interval for longer windows.</small>
           </div>
           <!-- Tonal cycles table: moved to overlay controlled by `showCyclesPanel` -->
-          <div v-if="showCyclesPanel" class="cycles-overlay" role="dialog" aria-label="Active cycles panel">
-            <div class="cycles-overlay-inner">
+          <teleport to="body">
+            <div v-if="showCyclesPanel" class="cycles-overlay" role="dialog" aria-label="Active cycles panel">
+              <div class="cycles-overlay-inner">
               <div class="overlay-header">
                 <strong>Active Cycles</strong>
                 <Button @click="showCyclesPanel = false" class="header-btn-compact" icon="pi pi-times" size="small" title="Close" />
@@ -202,8 +201,9 @@
                 </tbody>
               </table>
             </div>
+              </div>
             </div>
-          </div>
+          </teleport>
         </div>
       </div>
     </div>
@@ -385,6 +385,19 @@
 
   const delayDivisionFriendlyLabel = computed(() => divisionLabelMap[audioStore.delayDivision] || audioStore.delayDivision)
 
+  // Header ref and dynamic offset for overlay
+  const headerEl = ref(null)
+  const setHeaderOffset = () => {
+    try {
+      const el = headerEl.value || document.querySelector('.header-compact')
+      if (!el) return
+      const h = el.getBoundingClientRect().height || 0
+      document.documentElement.style.setProperty('--header-height', `${Math.round(h)}px`)
+    } catch (e) {
+      // ignore
+    }
+  }
+
   // Tonal cycles UI state
   const cycleScope = ref('global')
   const cycleGroupId = ref('')
@@ -418,9 +431,13 @@
   let uiTickInterval = null
   onMounted(() => {
     uiTickInterval = setInterval(() => { nowMs.value = Date.now() }, 250)
+    // Compute header offset and update CSS var for overlays
+    setHeaderOffset()
+    window.addEventListener('resize', setHeaderOffset)
   })
   onUnmounted(() => {
     if (uiTickInterval) clearInterval(uiTickInterval)
+    window.removeEventListener('resize', setHeaderOffset)
   })
 
   const cycleScopeOptions = [

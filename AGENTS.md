@@ -52,3 +52,8 @@
 ### Testing
 - **Integration Tests**: Located in `tests/integration`. Run via `npm run test:integration`.
 - **Frontend Verification**: Use Chrome DevTools MCP to verify UI at `http://localhost:5173/`.
+
+### Recent UI tweaks
+- **Header layout**: The `AppHeader` layout has been improved to provide a centered title, balanced left/right controls and better responsive behavior (desktop grid + mobile stacking). This fixes misalignment and inconsistent spacing.
+
+- **Header overflow fix (mobile)**: Limit header height and enable vertical scrolling for `.header-row-main` and `.main-controls-left/right` on small screens. This prevents the header from growing excessively tall after initializing audio when many control groups are visible.

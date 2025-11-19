@@ -54,7 +54,7 @@ function _msToNextMeasure(tempoMsPerBeat) {
 
 function _stepCycleImpl(cycle) {
   // Register last step time for UI countdown
-  try { cycle.lastStepTime = Date.now() } catch (e) {}
+  try { cycle.lastStepTime = Date.now() } catch (e) { }
   const { config } = cycle
   const audioStore = useAudioStore()
   const notesMatrix = useNotesMatrix()
@@ -195,13 +195,13 @@ export function startCycle(cfg = {}) {
         _stepCycleImpl(cycles.get(cycleId))
         timer = setInterval(step, config.intervalMs)
         // record lastStepTime
-        try { cycles.get(cycleId).lastStepTime = Date.now() } catch (e) {}
+        try { cycles.get(cycleId).lastStepTime = Date.now() } catch (e) { }
       }, msToNext)
       cycles.set(cycleId, { config, timer: null, waitingTimeout: waiting, paused: false })
       console.log(`${new Date().toISOString()} [tonalCycles] startCycle id=${cycleId} scope=${config.scope} strategy=${config.strategy} snapToMeasure intervalMs=${config.intervalMs} waitingMs=${msToNext}`)
     } else {
       timer = setInterval(step, config.intervalMs)
-      try { cycles.get(cycleId).lastStepTime = Date.now() } catch (e) {}
+      try { cycles.get(cycleId).lastStepTime = Date.now() } catch (e) { }
       paused = false
       console.log(`${new Date().toISOString()} [tonalCycles] startCycle id=${cycleId} scope=${config.scope} strategy=${config.strategy} intervalMs=${config.intervalMs}`)
     }
