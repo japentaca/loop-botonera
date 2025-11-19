@@ -8,6 +8,9 @@ const MODE_SEQUENCE = ['major', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'm
 const cycles = new Map() // cycleId -> { config, timer, waitingTimeout, paused, lastStepTime }
 let nextCycleId = 1
 const _listeners = new Set()
+const pulsesPerBeat = 4
+let _transportListenerRegistered = false
+let _transportListenerFn = null
 
 function _emitChange() {
   try {
@@ -17,6 +20,53 @@ function _emitChange() {
     })
   } catch (err) {
     console.error('[tonalCycles] _emitChange error', err)
+  }
+}
+
+function _registerTransportListenerIfNeeded() {
+  try {
+    if (_transportListenerRegistered) return
+    const audioStore = useAudioStore()
+    if (!audioStore || typeof audioStore.registerTransportListener !== 'function') return
+    _transportListenerFn = (time, pulse) => {
+      try {
+        // Check cycles on each pulse; step cycles when nextPulse reached
+        for (const [id, c] of cycles.entries()) {
+          if (!c) continue
+          const cfg = c.config || {}
+          if (c.paused) continue
+          if (!c.nextPulse) continue
+          if (pulse >= c.nextPulse) {
+            try {
+              _stepCycleImpl(c)
+            } catch (e) { console.warn('[tonalCycles] step error', e) }
+            // If we were waiting for a snapToMeasure start, clear the waiting flag
+            if (c.waitingTimeout) c.waitingTimeout = null
+            // schedule next
+            const stepPulses = cfg.intervalPulses || (cfg.intervalBeats || 4) * pulsesPerBeat
+            c.nextPulse = c.nextPulse + stepPulses
+            cycles.set(id, c)
+          }
+        }
+      } catch (err) { console.warn('[tonalCycles] transport listener error', err) }
+    }
+    audioStore.registerTransportListener(_transportListenerFn)
+    _transportListenerRegistered = true
+  } catch (err) {
+    console.warn('[tonalCycles] registerTransportListener failed', err)
+  }
+}
+
+function _unregisterTransportListener() {
+  try {
+    if (!_transportListenerRegistered) return
+    const audioStore = useAudioStore()
+    if (!audioStore || typeof audioStore.unregisterTransportListener !== 'function') return
+    if (_transportListenerFn) audioStore.unregisterTransportListener(_transportListenerFn)
+    _transportListenerRegistered = false
+    _transportListenerFn = null
+  } catch (err) {
+    console.warn('[tonalCycles] unregisterTransportListener failed', err)
   }
 }
 
@@ -35,19 +85,18 @@ function _rotateModeName(current) {
   return seq[(idx + 1) % seq.length]
 }
 
-// compute ms to next measure to support 'snapToMeasure'
-function _msToNextMeasure(tempoMsPerBeat) {
+// compute pulses to next measure to support 'snapToMeasure'
+// 16 pulses = 1 measure (16th notes); 4 pulses = 1 beat (quarter note)
+function _pulsesToNextMeasure() {
   try {
     const audioStore = useAudioStore()
     const currentPulse = Number(audioStore.currentPulse?.value || audioStore.currentPulse || 0)
     const pulsesPerMeasure = 16
-    const msPerPulse = tempoMsPerBeat / 4
     const nextMeasurePulse = (Math.floor(currentPulse / pulsesPerMeasure) + 1) * pulsesPerMeasure
     const diffPulses = Math.max(0, nextMeasurePulse - currentPulse)
-    const ms = Math.max(0, Math.round(diffPulses * msPerPulse))
-    return ms
+    return diffPulses
   } catch (err) {
-    console.warn('[tonalCycles] _msToNextMeasure failed, defaulting to 0', err)
+    console.warn('[tonalCycles] _pulsesToNextMeasure failed, defaulting to 0', err)
     return 0
   }
 }
@@ -156,8 +205,7 @@ function _stepCycleImpl(cycle) {
 export function startCycle(cfg = {}) {
   // prevent duplicate cycles by default: only one active cycle per (scope,loopId,groupId,strategy)
   const allowMultiple = !!cfg.allowMultiple
-  const tempo = _getTempoFromStore()
-  const tempoMsPerBeat = 60000 / Math.max(1, tempo) // ms per quarter note
+  // pulses per beat basis: 4 pulses per beat (16 pulses per measure)
 
   if (!allowMultiple) {
     // Match by scope + target (loopId or groupId if applicable). If found, update the cycle's config
@@ -176,41 +224,30 @@ export function startCycle(cfg = {}) {
         newConfig.groupId = cfg.groupId != null ? cfg.groupId : newConfig.groupId
         newConfig.snapToMeasure = !!cfg.snapToMeasure
         newConfig.intervalBeats = cfg.intervalBeats || newConfig.intervalBeats || 4
-        newConfig.intervalMs = Math.max(50, newConfig.intervalBeats * tempoMsPerBeat)
+        newConfig.intervalPulses = Math.max(1, newConfig.intervalBeats * pulsesPerBeat)
 
-        console.log(`${new Date().toISOString()} [tonalCycles] startCycle update config: id=${id} newIntervalMs=${newConfig.intervalMs} snapToMeasure=${newConfig.snapToMeasure}`)
+        console.log(`${new Date().toISOString()} [tonalCycles] startCycle update config: id=${id} intervalBeats=${newConfig.intervalBeats} intervalPulses=${newConfig.intervalPulses} snapToMeasure=${newConfig.snapToMeasure}`)
 
         // apply new config
         c.config = newConfig
 
-        // clear any existing timer or waitingTimeout and re-schedule according to new config
-        if (c.timer) {
-          clearInterval(c.timer)
-          c.timer = null
-        }
-        if (c.waitingTimeout) {
-          clearTimeout(c.waitingTimeout)
-          c.waitingTimeout = null
-        }
+        // clear any existing timer or waitingTimeout; we are now pulse-driven
+        c.waitingTimeout = null
 
         // If startImmediately explicitly false, leave timers stopped; else schedule
         const shouldStartImmediately = cfg.startImmediately !== false
         if (shouldStartImmediately && newConfig.snapToMeasure) {
-          // If snapToMeasure, we need to schedule to the next measure
-          const msToNextMeasure = _msToNextMeasure(tempoMsPerBeat)
-          c.waitingTimeout = setTimeout(() => {
-            _stepCycleImpl(c)
-            // set interval for subsequent steps
-            const step = () => _stepCycleImpl(c)
-            c.timer = setInterval(step, newConfig.intervalMs)
-            c.waitingTimeout = null
-            // update lastStepTime for UI
-            c.lastStepTime = Date.now()
-          }, msToNextMeasure)
+          // schedule next pulse aligned to measure
+          const pulsesToNext = _pulsesToNextMeasure()
+          const audioStore = useAudioStore()
+          const currentPulse = Number((audioStore.currentPulse?.value || audioStore.currentPulse || 0))
+          c.nextPulse = currentPulse + pulsesToNext
+          c.waitingTimeout = true
         } else if (shouldStartImmediately) {
-          const step = () => _stepCycleImpl(c)
-          c.timer = setInterval(step, newConfig.intervalMs)
-          c.lastStepTime = Date.now()
+          const audioStore = useAudioStore()
+          const currentPulse = Number((audioStore.currentPulse?.value || audioStore.currentPulse || 0))
+          c.nextPulse = currentPulse + newConfig.intervalPulses
+          c.waitingTimeout = null
         }
 
         cycles.set(id, c)
@@ -224,7 +261,7 @@ export function startCycle(cfg = {}) {
   const config = {
     scope: cfg.scope || 'global',
     intervalBeats: cfg.intervalBeats || 4,
-    intervalMs: Math.max(50, (cfg.intervalBeats || 4) * tempoMsPerBeat), // default: 4 beats at tempo
+    intervalPulses: Math.max(1, (cfg.intervalBeats || 4) * pulsesPerBeat), // default: 4 beats -> 16 pulses
     strategy: cfg.strategy || 'rotateMode',
     loopId: cfg.loopId,
     groupId: cfg.groupId
@@ -233,26 +270,23 @@ export function startCycle(cfg = {}) {
   const step = () => _stepCycleImpl(cycles.get(cycleId))
   let timer = null
   let paused = false
-  if (typeof setInterval === 'function' && cfg.startImmediately !== false) {
+  // use pulse-based scheduling via transport listener
+  const audioStore = useAudioStore()
+  _registerTransportListenerIfNeeded()
+  if (cfg.startImmediately !== false) {
+    const currentPulse = Number((audioStore.currentPulse?.value || audioStore.currentPulse || 0))
     if (cfg.snapToMeasure) {
-      // schedule to next measure and then set interval
-      const msToNext = _msToNextMeasure(tempoMsPerBeat)
-      const waiting = setTimeout(() => {
-        _stepCycleImpl(cycles.get(cycleId))
-        timer = setInterval(step, config.intervalMs)
-        // record lastStepTime
-        try { cycles.get(cycleId).lastStepTime = Date.now() } catch (e) { }
-      }, msToNext)
-      cycles.set(cycleId, { config, timer: null, waitingTimeout: waiting, paused: false })
-      console.log(`${new Date().toISOString()} [tonalCycles] startCycle id=${cycleId} scope=${config.scope} strategy=${config.strategy} snapToMeasure intervalMs=${config.intervalMs} waitingMs=${msToNext}`)
+      const pulsesToNext = _pulsesToNextMeasure()
+      cycles.set(cycleId, { config, timer: null, waitingTimeout: true, paused: false, lastStepTime: null, nextPulse: currentPulse + pulsesToNext })
+      console.log(`${new Date().toISOString()} [tonalCycles] startCycle id=${cycleId} scope=${config.scope} strategy=${config.strategy} snapToMeasure intervalBeats=${config.intervalBeats} intervalPulses=${config.intervalPulses} waitingPulses=${pulsesToNext}`)
     } else {
-      timer = setInterval(step, config.intervalMs)
-      try { cycles.get(cycleId).lastStepTime = Date.now() } catch (e) { }
-      paused = false
-      console.log(`${new Date().toISOString()} [tonalCycles] startCycle id=${cycleId} scope=${config.scope} strategy=${config.strategy} intervalMs=${config.intervalMs}`)
+      cycles.set(cycleId, { config, timer: null, waitingTimeout: null, paused: false, lastStepTime: null, nextPulse: currentPulse + config.intervalPulses })
+      console.log(`${new Date().toISOString()} [tonalCycles] startCycle id=${cycleId} scope=${config.scope} strategy=${config.strategy} intervalBeats=${config.intervalBeats} intervalPulses=${config.intervalPulses}`)
     }
+    paused = false
+  } else {
+    cycles.set(cycleId, { config, timer: null, waitingTimeout: null, paused: true, lastStepTime: null, nextPulse: null })
   }
-  cycles.set(cycleId, { config, timer, waitingTimeout: null, paused, lastStepTime: timer ? Date.now() : null })
   _emitChange()
   return { id: cycleId, stop: () => stopCycle(cycleId), step: () => _stepCycleImpl(cycles.get(cycleId)), pause: () => pauseCycle(cycleId), resume: () => resumeCycle(cycleId) }
 }
@@ -260,18 +294,15 @@ export function startCycle(cfg = {}) {
 // Recompute intervals for all active cycles according to the new tempo
 export function updateCyclesForTempo(newTempo) {
   try {
-    const tempo = typeof newTempo === 'number' ? newTempo : _getTempoFromStore()
-    const tempoMsPerBeat = 60000 / Math.max(1, tempo)
+    // With pulse-based scheduling, tempo changes don't affect interval in beats
     for (const [id, c] of cycles.entries()) {
       const cfg = c.config || {}
-      const newIntervalMs = Math.max(50, (cfg.intervalBeats || 4) * tempoMsPerBeat)
-      c.config.intervalMs = newIntervalMs
-      // If currently running, restart interval with new ms
-      if (c.timer) {
-        clearInterval(c.timer)
-        const step = () => _stepCycleImpl(c)
-        c.timer = setInterval(step, newIntervalMs)
-        c.lastStepTime = Date.now()
+      c.config.intervalPulses = Math.max(1, (cfg.intervalBeats || 4) * pulsesPerBeat)
+      // If cycle has a nextPulse scheduled, we keep it; otherwise compute from current pulse
+      if (!c.nextPulse) {
+        const audioStore = useAudioStore()
+        const currentPulse = Number((audioStore.currentPulse?.value || audioStore.currentPulse || 0))
+        c.nextPulse = currentPulse + c.config.intervalPulses
       }
       cycles.set(id, c)
     }
@@ -286,9 +317,10 @@ export function updateCyclesForTempo(newTempo) {
 export function stopCycle(cycleId) {
   const cycle = cycles.get(cycleId)
   if (!cycle) return false
-  if (cycle.timer) clearInterval(cycle.timer)
-  if (cycle.waitingTimeout) clearTimeout(cycle.waitingTimeout)
+  // Clear any scheduled fields and remove cycle
   cycles.delete(cycleId)
+  // If no cycles remain, unregister transport listener
+  if (cycles.size === 0) _unregisterTransportListener()
   _emitChange()
   return true
 }
@@ -296,9 +328,6 @@ export function stopCycle(cycleId) {
 export function pauseCycle(cycleId) {
   const c = cycles.get(cycleId)
   if (!c) return false
-  if (c.timer) clearInterval(c.timer)
-  if (c.waitingTimeout) clearTimeout(c.waitingTimeout)
-  c.timer = null
   c.paused = true
   cycles.set(cycleId, c)
   console.log(`${new Date().toISOString()} [tonalCycles] pauseCycle id=${cycleId}`)
@@ -309,32 +338,22 @@ export function pauseCycle(cycleId) {
 export function resumeCycle(cycleId) {
   const c = cycles.get(cycleId)
   if (!c) return false
-  if (c.timer) {
-    // already running
-    return true
-  }
+  // Recompute the nextPulse from the current transport pulse depending on snapToMeasure
   const shouldSnap = !!c.config.snapToMeasure
+  const audioStore = useAudioStore()
+  const currentPulse = Number((audioStore.currentPulse?.value || audioStore.currentPulse || 0))
   if (shouldSnap) {
-    const tempo = _getTempoFromStore()
-    const tempoMsPerBeat = 60000 / Math.max(1, tempo)
-    const msToNextMeasure = _msToNextMeasure(tempoMsPerBeat)
-    // schedule a one-time step aligned to measure, then set up periodic interval
-    c.waitingTimeout = setTimeout(() => {
-      _stepCycleImpl(c)
-      const step = () => _stepCycleImpl(c)
-      c.timer = setInterval(step, c.config.intervalMs)
-      c.waitingTimeout = null
-      cycles.set(cycleId, c)
-      _emitChange()
-    }, msToNextMeasure)
+    const pulsesToNext = _pulsesToNextMeasure()
+    c.nextPulse = currentPulse + pulsesToNext
+    // indicate that we are waiting for a snap-to-measure start
+    c.waitingTimeout = true
   } else {
-    // restart timer
-    const step = () => _stepCycleImpl(c)
-    c.timer = setInterval(step, c.config.intervalMs)
+    const intervalPulses = c.config.intervalPulses || (c.config.intervalBeats || 4) * pulsesPerBeat
+    c.nextPulse = currentPulse + intervalPulses
   }
   c.paused = false
   cycles.set(cycleId, c)
-  console.log(`${new Date().toISOString()} [tonalCycles] resumeCycle id=${cycleId} interval=${c.config.intervalMs}ms`)
+  console.log(`${new Date().toISOString()} [tonalCycles] resumeCycle id=${cycleId} intervalBeats=${c.config.intervalBeats} intervalPulses=${c.config.intervalPulses}`)
   _emitChange()
   return true
 }
@@ -342,7 +361,7 @@ export function resumeCycle(cycleId) {
 export function getCycleInfo(cycleId) {
   const c = cycles.get(cycleId)
   if (!c) return null
-  return { id: cycleId, config: c.config, paused: !!c.paused, waiting: !!c.waitingTimeout, lastStepTime: c.lastStepTime || null }
+  return { id: cycleId, config: c.config, paused: !!c.paused, waiting: !!c.waitingTimeout, lastStepTime: c.lastStepTime || null, nextPulse: c.nextPulse || null }
 }
 
 export function stepCycle(cycleId) {

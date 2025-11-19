@@ -26,6 +26,8 @@ export const useAudioEngine = () => {
   let reverb = null
   let masterGain = null
   let _feedbackResetTimer = null
+  // Fallback transport interval id for Node/test environments where Tone.Transport isn't available
+  let __nodeTransportIntervalId = null
 
   // Configuración de debug
   const DEBUG_AUDIO = false
@@ -90,10 +92,40 @@ export const useAudioEngine = () => {
     audioInitialized.value = true
   }
 
-  // Configurar el callback del transporte
+  // Transport callback management - allow registering multiple listeners
+  const _transportMainCallback = { cb: null }
+  const transportListeners = new Set()
+
   const setupTransportCallback = (callback) => {
     if (!audioInitialized.value) return
+    _transportMainCallback.cb = callback
+    // Clear any old listeners if any; keep the registered listeners set
+    // We'll call main callback + all registered transport listeners on each pulse
+  }
 
+  const registerTransportListener = (fn) => {
+    if (typeof fn === 'function') transportListeners.add(fn)
+  }
+
+  const unregisterTransportListener = (fn) => {
+    transportListeners.delete(fn)
+  }
+
+  // Provide a test helper that directly triggers a transport pulse (useful for Node tests)
+  const testTransportPulse = () => {
+    const time = Date.now()
+    _internalPulse = _internalPulse + 1
+    if (_internalPulse % 4 === 0) {
+      currentPulse.value = _internalPulse
+      beatFlash.value = !beatFlash.value
+    }
+    try { if (typeof _transportMainCallback.cb === 'function') _transportMainCallback.cb(time, _internalPulse) } catch (err) { console.warn('[audioEngine] transport main callback error', err) }
+    for (const l of transportListeners) { try { l(time, _internalPulse) } catch (err) { console.warn('[audioEngine] transport listener error', err) } }
+    return _internalPulse
+  }
+
+  // Install Tone transport scheduler if available, otherwise we'll run a fallback scheduler in start/stopTransport
+  if (typeof Tone?.Transport?.scheduleRepeat === 'function') {
     Tone.Transport.scheduleRepeat((time) => {
       _internalPulse = _internalPulse + 1
 
@@ -103,7 +135,17 @@ export const useAudioEngine = () => {
         beatFlash.value = !beatFlash.value // Toggle flash on each beat
       }
 
-      callback(time, _internalPulse)
+      // Call main callback if configured
+      try {
+        if (typeof _transportMainCallback.cb === 'function') _transportMainCallback.cb(time, _internalPulse)
+      } catch (err) {
+        console.warn('[audioEngine] transport main callback error', err)
+      }
+
+      // Call additional listeners
+      for (const l of transportListeners) {
+        try { l(time, _internalPulse) } catch (err) { console.warn('[audioEngine] transport listener error', err) }
+      }
     }, "16n")
   }
 
@@ -111,14 +153,41 @@ export const useAudioEngine = () => {
   const startTransport = async () => {
     if (!isPlaying.value) {
       await initAudio()
-      Tone.Transport.start()
+      // If Tone.Transport has scheduleRepeat available, use Tone transport; otherwise use fallback interval.
+      if (typeof Tone?.Transport?.start === 'function' && typeof Tone?.Transport?.scheduleRepeat === 'function') {
+        Tone.Transport.start()
+      } else {
+        // Fallback scheduler: call callbacks according to tempo and pulses per beat
+        const pulsesPerBeat = 4
+        const pulseMs = (60000 / (tempo.value || 120)) / pulsesPerBeat
+        // Create fallback interval to mimic Tone.Transport
+        if (__nodeTransportIntervalId == null) {
+          __nodeTransportIntervalId = setInterval(() => {
+            const time = Date.now()
+            _internalPulse = _internalPulse + 1
+            if (_internalPulse % 4 === 0) {
+              currentPulse.value = _internalPulse
+              beatFlash.value = !beatFlash.value
+            }
+            try { if (typeof _transportMainCallback.cb === 'function') _transportMainCallback.cb(time, _internalPulse) } catch (err) { console.warn('[audioEngine] transport main callback error', err) }
+            for (const l of transportListeners) { try { l(time, _internalPulse) } catch (err) { console.warn('[audioEngine] transport listener error', err) } }
+          }, Math.max(10, Math.round(pulseMs)))
+        }
+      }
       isPlaying.value = true
     }
   }
 
   const stopTransport = () => {
     if (isPlaying.value) {
-      Tone.Transport.pause()
+      if (typeof Tone?.Transport?.pause === 'function' && typeof Tone?.Transport?.scheduleRepeat === 'function') {
+        Tone.Transport.pause()
+      } else {
+        if (__nodeTransportIntervalId != null) {
+          clearInterval(__nodeTransportIntervalId)
+          __nodeTransportIntervalId = null
+        }
+      }
       isPlaying.value = false
     }
   }
@@ -287,11 +356,17 @@ export const useAudioEngine = () => {
     createAudioChain,
     playNote,
 
+    // Transport listener registration for modules that need to step on pulses
+    registerTransportListener,
+    unregisterTransportListener,
+
     // Reset counters for sync
     resetCounters,
 
     // Efectos
     softResetDelayFeedback,
-    updateDelayTime
+    updateDelayTime,
+    // Test helpers (for Node tests)
+    testTransportPulse,
   }
 }

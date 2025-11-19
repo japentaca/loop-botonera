@@ -11,6 +11,7 @@ El proyecto tiene varias piezas clave:
 - `audioStore` (`src/stores/audioStore.js`): store central que gestiona el estado global (escala, tempo, loops, etc.) y coordina módulos como `loopManager`, `energyManager`, `audioEngine` y `evolutionSystem`.
 - `notesMatrix` (`src/composables/useNotesMatrix.js`): matriz central de notas y metadatos por loop (escala local, baseNote, densidad, etc.).
 - `tonalCycles` (`src/modules/tonalCycles.js`): módulo que programa y gestiona ciclos tonales. Un ciclo aplica transformaciones periódicas (p. ej. rotar la escala) sobre un objetivo (scope): global, group o loop.
+- Nota para desarrolladores: Use `audioStore.registerTransportListener(fn)` / `audioStore.unregisterTransportListener(fn)` (exported por `audioStore`) para registrar listeners de transporte desde módulos. Evite usar `audioStore.audioEngine` directamente para no filtrar la implementación interna.
 - UI: `AppHeader.vue` (`src/components/AppHeader.vue`) contiene el panel para crear/controlar ciclos tonales.
 
 ---
@@ -77,9 +78,10 @@ A continuación se detalla el efecto exacto de cada `scope` en los ciclos.
 
 ## 5. Programación y timing
 
-- `intervalBeats`: valor en beats (negras), transformado a milisegundos según `audioStore.tempo` (BPM) y usado como `intervalMs`.
-- `snapToMeasure`: cuando está habilitado, la primera ejecución se programa para el próximo compás (calculado con `_msToNextMeasure` en `tonalCycles.js`).
-- El módulo calcula `lastStepTime` para mostrar un contador de siguiente paso en la UI (AppHeader).
+- `intervalBeats`: valor en beats (negras). El scheduling usa beats/pulsos (4 pulsos por beat) y el intervalo se expresa en beats; el cálculo se realiza en pulsos del transporte para garantizar sincronía musical y no se expresa en segundos.
+- `snapToMeasure`: cuando está habilitado, la primera ejecución se programa para el próximo compás; el cálculo se realiza en pulsos del transporte (16 pulsos por compás) para garantizar sincronía musical.
+  - Nota: el estado `waiting` indica que el ciclo está programado y esperando el siguiente compás (se usa cuando `snapToMeasure` está activo). Una vez que se ejecuta el primer paso, `waiting` se limpia y el ciclo pasa a su programacion regular.
+- El módulo registra `lastStepTime` (marca de tiempo) para la interfaz, pero los cálculos de programación y los contadores se realizan en beats/pulsos para mantener la sincronía musical (ver `nextInBeats` / `nextInPulses` en la UI).
 - Si `startImmediately` es `false`, no se programará la repetición inmediatamente.
 
 ---
@@ -135,17 +137,12 @@ A continuación se detalla el efecto exacto de cada `scope` en los ciclos.
 
 ## 10. Limitaciones conocidas y próximos pasos (recomendaciones)
 
-- `shiftKey` es un PoC — el comportamiento aún puede necesitar mejoras para definir cómo rotar la tónica sin cambiar la modalidad.
-- `scaleLocked` no evita cambios por ciclos; recomendar revisar si debería bloquear cambios globales.
  - `shiftKey` ahora realiza una transposición de la tónica por semitono de manera robusta:
    - En `scope = global` transpone todos los loops activos (ajusta `baseNote` y re-cuadriza).
    - En `scope = group` transpone y recuantiza los miembros del grupo.
    - En `scope = loop` transpone y recuantiza el loop concreto.
  - `scaleLocked` ahora evita que los ciclos globales cambien la escala: si `scaleLocked` está activo, los ciclos *no ejecutarán* `updateScale`. La UI aún permite cambios manuales de escala (toggle en `StyleConfigDialog`), pero el guardado evita cambios automáticos por ciclos.
-- `tonalCycles` actualmente no actualiza la `baseNote` al cambiar escala (algunos ajustes en `loopManager` hacen este paso), revisar coherencia en casos de root diferente.
 
-- Corrección reciente: se detectó que `tonalCycles` no respetaba correctamente el `intervalBeats` cuando el tempo se estaba proporcionando como un valor numérico (no como `ref.value`). Esto provocaba que el valor por defecto (120 BPM) se utilizara en lugar del tempo actual, por lo que el intervalo en ms se calculaba con un tempo erróneo y daba como resultado un intervalo menor. Se corrigió `_getTempoFromStore()` para leer `audioStore.tempo` tanto si es un `ref` como si es un número, y ahora `intervalBeats` se respeta de forma consistente.
- - Mejora: los ciclos ahora actualizan su `intervalMs` cuando se cambia el tempo global (llamando a `audioStore.updateTempo`), y reinician sus temporizadores para respetar el nuevo tempo sin que el usuario tenga que reiniciar cada ciclo.
 
 ---
 

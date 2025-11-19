@@ -130,6 +130,7 @@
               <option v-for="id in cycleIds" :key="id" :value="id">{{ id }}</option>
             </select>
             <Button @click="rescanCycles" label="Rescan" size="small" class="header-btn-compact" />
+            <div v-if="selectedCycleNext !== null" class="cycle-countdown" style="display:inline-block;margin-left:8px;">{{ formatNext(selectedCycleNext) }}</div>
           </div>
 
           <div class="control-group-compact">
@@ -188,10 +189,10 @@
                       <span class="status-pill" :class="c.status">{{ c.status }}</span>
                     </td>
                     <td>
-                      <div v-if="c.nextInMs !== null" class="progress-bar" :title="formatNext(c.nextInMs)">
-                        <div class="progress-bar-inner" :style="{ width: (100 - (c.nextInMs / (c.intervalMs || 1) * 100)).toFixed(1) + '%' }"></div>
+                      <div v-if="c.nextInBeats !== null" class="progress-bar" :title="formatNext(c.nextInBeats)">
+                        <div class="progress-bar-inner" :style="{ width: (100 - (c.nextInBeats / (c.intervalBeats || 1) * 100)).toFixed(1) + '%' }"></div>
                       </div>
-                      <div class="next-text">{{ formatNext(c.nextInMs) }}</div>
+                      <div class="next-text">{{ formatNext(c.nextInBeats) }} <small v-if="c.nextPulse">(nextPulse: {{ c.nextPulse }})</small></div>
                     </td>
                     <td>
                       <Button @click="selectCycle(c.id)" icon="pi pi-check" size="small" title="Select cycle" />
@@ -426,17 +427,13 @@
 
   const cycleSnapToMeasure = ref(false)
 
-  // UI tick to update countdowns
-  const nowMs = ref(Date.now())
-  let uiTickInterval = null
+  // UI tick removed; countdowns use transport pulses instead of MS time
   onMounted(() => {
-    uiTickInterval = setInterval(() => { nowMs.value = Date.now() }, 250)
     // Compute header offset and update CSS var for overlays
     setHeaderOffset()
     window.addEventListener('resize', setHeaderOffset)
   })
   onUnmounted(() => {
-    if (uiTickInterval) clearInterval(uiTickInterval)
     window.removeEventListener('resize', setHeaderOffset)
   })
 
@@ -467,29 +464,38 @@
 
   const activeCycleDetails = computed(() => {
     const cycles = audioStore.activeTonalCycles || []
-    const tempo = Number(audioStore.tempo || 120)
-    const msPerBeat = 60000 / Math.max(1, tempo)
+    const currentPulse = Number(audioStore.currentPulse?.value || audioStore.currentPulse || 0)
     return cycles.map(c => {
       const cfg = c.config || {}
       const status = c.paused ? 'paused' : (c.waiting ? 'waiting' : 'running')
-      const last = c.lastStepTime || null
-      const intervalMs = cfg.intervalMs || (cfg.intervalBeats ? cfg.intervalBeats * msPerBeat : null)
-      let nextInMs = null
-      if (last && intervalMs) {
-        nextInMs = Math.max(0, Math.round(last + intervalMs - nowMs.value))
+      const intervalPulses = cfg.intervalPulses || ((cfg.intervalBeats || 4) * 4)
+      const nextPulse = c.nextPulse || null
+      let nextInPulses = null
+      if (nextPulse != null) {
+        nextInPulses = Math.max(0, nextPulse - currentPulse)
       }
+      const nextInBeats = nextInPulses != null ? (nextInPulses / 4) : null
       return {
         id: c.id,
         scope: cfg.scope,
         strategy: cfg.strategy,
         intervalBeats: cfg.intervalBeats || 4,
-        intervalMs: intervalMs,
+        intervalPulses: intervalPulses,
         status,
         waiting: !!c.waiting,
-        lastStepTime: last,
-        nextInMs
+        lastStepTime: c.lastStepTime || null,
+        nextInPulses,
+        nextPulse,
+        nextInBeats
       }
     })
+  })
+
+  const selectedCycleNext = computed(() => {
+    const cycles = activeCycleDetails.value || []
+    const selected = cycles.find(c => c.id === selectedCycleId.value)
+    if (!selected) return null
+    return selected.nextInBeats
   })
 
   const stopCycle = () => {
@@ -524,26 +530,17 @@
     if (selectedCycleId.value === id) selectedCycleId.value = null
   }
 
-  const formatNext = (ms) => {
-    if (ms == null) return '—'
-    const tempo = Number(audioStore.tempo || 120)
-    const msPerBeat = Math.max(1, 60000 / tempo)
-    const beats = ms / msPerBeat
+  const formatNext = (beats) => {
+    if (beats == null) return '—'
     if (beats >= 1) {
-      const b = beats.toFixed(1)
-      return `${b} beats`
+      return `${beats.toFixed(1)} beats`
     }
-    const seconds = Math.round(ms / 1000)
-    if (seconds < 1) return '<1s'
-    return `${seconds}s`
+    // Beats < 1: show pulses as a fraction (quarter beats)
+    const pulses = Math.round(beats * 4)
+    return `${pulses} pulses`
   }
 
-  // Keep cycle interval beats as the primary unit
-  const cycleIntervalMs = computed(() => {
-    const tempo = Number(audioStore.tempo || 120)
-    const msPerBeat = (60000 / Math.max(1, tempo))
-    return Math.round(msPerBeat * Math.max(1, Number(cycleIntervalBeats.value || 1)))
-  })
+  // Cycle interval is expressed in beats; no ms conversion is needed for UI
 
   const rescanCycles = () => {
     // Force a scan of existing cycles and ensure selected cycle remains valid

@@ -782,6 +782,9 @@ export const useAudioStore = defineStore('audio', () => {
     // Estado del motor de audio
     audioInitialized: audioEngine.audioInitialized,
     isPlaying: audioEngine.isPlaying,
+    // Provide controlled transport listener API
+    registerTransportListener: (fn) => audioEngine.registerTransportListener(fn),
+    unregisterTransportListener: (fn) => audioEngine.unregisterTransportListener(fn),
     currentPulse: audioEngine.currentPulse,
     currentBeat: audioEngine.currentBeat,
     beatFlash: audioEngine.beatFlash,
@@ -894,5 +897,7 @@ export const useAudioStore = defineStore('audio', () => {
     initializeMatrix: notesMatrix.initializeMatrix,
     // Keep updateLoopMetadata as it's implemented on audioStore and used elsewhere
     updateLoopMetadata,
+    // Test helper to trigger a transport pulse without starting audio (Node tests)
+    triggerTransportPulse: () => audioEngine.testTransportPulse(),
   }
 })

@@ -29,6 +29,23 @@ async function run() {
   // waiting probably false until resume invoked; ensure we can resume
   const { resumeCycle } = await import('../../src/modules/tonalCycles.js')
   await resumeCycle(h1.id)
+  // After resume, the cycle should be scheduled and waiting for next measure
+  const postWaiting = listCycles().find(c => c.id === h1.id)
+  assert(postWaiting && postWaiting.waiting === true, 'Cycle should be waiting after resume (snapToMeasure)')
+
+  // Trigger transport pulses manually in Node test environment and wait for the scheduled pulse to occur
+  const listBefore = listCycles().find(c => c.id === h1.id)
+  const nextPulse = listBefore.nextPulse || 0
+  const currentPulse = Number(audioStore.currentPulse?.value || audioStore.currentPulse || 0)
+  const pulsesToNext = Math.max(0, nextPulse - currentPulse)
+  // Trigger pulses synchronously using the store helper
+  for (let i = 0; i <= pulsesToNext; i++) audioStore.triggerTransportPulse()
+
+  const postStepped = listCycles().find(c => c.id === h1.id)
+  assert(postStepped && postStepped.waiting === false, 'Cycle waiting should be cleared after the measure is reached')
+  assert(postStepped && postStepped.lastStepTime !== null, 'Cycle lastStepTime should be set after stepping')
+
+  // No need to stop transport; we triggered pulses directly
   // after resume we expect paused is false and either waiting or timer set (can't easily read timer from test)
   const post = listCycles().find(c => c.id === h1.id)
   assert(post && !post.paused, 'Cycle resumed and not paused')

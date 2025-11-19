@@ -31,9 +31,8 @@ async function run() {
   assert(h4 && h4.id === h1.id, 'Same cycle id returned for updated interval')
   const cycles = listCycles()
   const info = cycles.find(c => c.id === h1.id)
-  const msPerBeat = 60000 / (audioStore.tempo && audioStore.tempo.value ? audioStore.tempo.value : 120)
-  const expectedInterval = Math.max(50, 8 * msPerBeat)
-  assert(info.config.intervalMs === expectedInterval, `Interval updated: ${info.config.intervalMs} === ${expectedInterval}`)
+  const expectedPulses = 8 * 4 // 8 beats -> 32 pulses
+  assert(info.config.intervalPulses === expectedPulses, `Interval updated in pulses: ${info.config.intervalPulses} === ${expectedPulses}`)
 
   // Cleanup
   stopCycle(h1.id)

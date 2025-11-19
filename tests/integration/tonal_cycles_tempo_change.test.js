@@ -14,32 +14,24 @@ async function run() {
   notesMatrix.initializeLoop(0, { isActive: true, length: 8, baseNote: 60, scale: 'major' })
   audioStore.updateScale('major')
 
-  // Set tempo for deterministic ms per beat
-  audioStore.updateTempo(60) // 1000 ms per beat
+  // Set tempo for deterministic behavior; scheduling uses beats/pulses, not ms
+  audioStore.updateTempo(60) // tempo set to 60 BPM
 
-  // Start cycle with 4 beats (expect 4000 ms) and immediate start
-  let capturedIntervalMs = null
-  const originalSetInterval = global.setInterval
-  global.setInterval = (fn, ms) => {
-    capturedIntervalMs = ms
-    return originalSetInterval(fn, ms)
-  }
-
+  // Start cycle with 4 beats and immediate start
   const handle = startCycle({ scope: 'global', strategy: 'rotateMode', intervalBeats: 4, startImmediately: true })
-  await new Promise(resolve => setTimeout(resolve, 20))
-  assert(capturedIntervalMs === 4000, `Expected initial interval 4000ms got ${capturedIntervalMs}`)
+  // validate config is stored in beats/pulses
+  const info = listCycles().find(c => c.id === handle.id)
+  assert(info.config.intervalBeats === 4, `intervalBeats expected 4, got ${info.config.intervalBeats}`)
+  assert(info.config.intervalPulses === 16, `intervalPulses expected 16, got ${info.config.intervalPulses}`)
 
-  // Now change tempo to 120bpm - expect interval to become 2000ms
-  global.setInterval = (fn, ms) => { capturedIntervalMs = ms; return originalSetInterval(fn, ms) }
+  // Now change tempo to 120bpm - in beats-based scheduling, intervalPulses shouldn't change
   audioStore.updateTempo(120)
-  // wait to give a chance to update
-  await new Promise(resolve => setTimeout(resolve, 20))
-  assert(capturedIntervalMs === 2000, `Expected updated interval 2000ms got ${capturedIntervalMs}`)
+  const infoAfterTempo = listCycles().find(c => c.id === handle.id)
+  assert(infoAfterTempo.config.intervalBeats === 4, `intervalBeats expected 4 after tempo change, got ${infoAfterTempo.config.intervalBeats}`)
+  assert(infoAfterTempo.config.intervalPulses === 16, `intervalPulses expected 16 after tempo change, got ${infoAfterTempo.config.intervalPulses}`)
 
   // cleanup
   stopCycle(handle.id)
-  // restore
-  global.setInterval = originalSetInterval
   console.log('tonal_cycles_tempo_change test passed')
 }
 
