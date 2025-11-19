@@ -1,7 +1,8 @@
-import { useScales } from './useMusic'
-import { analyzeActiveLoops, avoidConflicts, isCounterpointEnabled } from '../services/counterpointService'
-import { useAudioStore } from '../stores/audioStore'
-import { generatePossibleNotes } from '../utils/noteUtils'
+import { useScales } from './useMusic.js'
+import { analyzeActiveLoops, analyzeActiveLoopsWithContext, avoidConflicts, hasPerfectConsonanceWithAny, isCounterpointEnabled } from '../services/counterpointService.js'
+import { generateVoicedGroupPattern } from '../utils/voiceGenerators.js'
+import { useAudioStore } from '../stores/audioStore.js'
+import { generatePossibleNotes } from '../utils/noteUtils.js'
 
 /**
  * Melodic Generation Coordinator
@@ -275,14 +276,18 @@ export function useMelodicGenerator(notesMatrix) {
       const note = adjustedNotes[step]
       if (note === null) continue
 
-      // Analyze occupied notes at this step
-      const occupiedNotes = analyzeActiveLoops(otherLoopNotes, step)
-
-      // Avoid conflicts if necessary
-      if (occupiedNotes.has(note)) {
-        const adjustedNote = avoidConflicts(note, occupiedNotes, scale, {
+      // Analyze occupied notes and context at this step
+      const ctx = analyzeActiveLoopsWithContext(otherLoopNotes, step)
+      // Avoid conflicts if necessary (occupied or perfect consonance)
+      if (ctx.occupied.has(note) || hasPerfectConsonanceWithAny(note, ctx.mapping)) {
+        const prevOwn = notesMatrix.getLoopNotes(loopId)[step - 1] ?? null
+        const adjustedNote = avoidConflicts(note, ctx.occupied, scale, {
           baseNote: meta.baseNote,
-          noteRange: { min: meta.noteRangeMin, max: meta.noteRangeMax }
+          noteRange: { min: meta.noteRangeMin, max: meta.noteRangeMax },
+          otherMapping: ctx.mapping,
+          otherPrevMapping: ctx.prevMapping,
+          prevOwn,
+          currentStep: step
         })
         adjustedNotes[step] = adjustedNote
       }
@@ -314,6 +319,7 @@ export function useMelodicGenerator(notesMatrix) {
     regenerateLoop,
     regenerateAllLoops,
     selectPatternType,
+    generateVoicedGroup: (groupId, options) => generateVoicedGroupPattern(groupId, options),
     applyCounterpoint,
     getActiveLoops
   }

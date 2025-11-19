@@ -1,11 +1,13 @@
 {
   "name": "vue-temp",
+  "type": "module",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:integration": "node tests/integration/voice_generators.test.js && node tests/integration/counterpoint.test.js && node tests/integration/tonal_integration.test.js && node tests/integration/tonal_cycles.test.js && node tests/integration/tonal_cycles_dedupe.test.js && node tests/integration/tonal_cycles_start_update.test.js && node tests/integration/tonal_cycles_snap_measure.test.js"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +22,10 @@
     "tone": "^15.1.22",
     "vite": "^7.1.10",
     "vue": "^3.5.22",
-    "vue-router": "^4.6.3"
+    "vue-router": "^4.6.3",
+    "@tonaljs/note": "^4.0.0",
+    "@tonaljs/interval": "^4.0.0",
+    "@tonaljs/scale": "^4.0.0",
+    "@tonaljs/chord": "^4.0.0"
   }
 }

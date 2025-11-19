@@ -1,14 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as Tone from 'tone'
-import { useAudioStore } from './audioStore'
+import { useAudioStore } from './audioStore.js'
 
 export const useSynthStore = defineStore('synth', () => {
   // Estado del modal
   const isModalOpen = ref(false)
   const currentLoopId = ref(null)
   const originalSynthConfig = ref(null)
-  
+
   // Configuración temporal del sintetizador
   const tempSynthConfig = ref({
     synthType: 'PolySynth',
@@ -45,10 +45,10 @@ export const useSynthStore = defineStore('synth', () => {
     const audioStore = useAudioStore()
     const loopsArr = Array.isArray(audioStore.loops) ? audioStore.loops : audioStore.loops?.value
     const loop = loopsArr?.[loopId]
-    
+
     if (loop) {
       currentLoopId.value = loopId
-      
+
       // Tomar snapshot de la configuración original del loop
       originalSynthConfig.value = {
         synthType: loop.synthModel || 'PolySynth',
@@ -57,10 +57,10 @@ export const useSynthStore = defineStore('synth', () => {
         harmonicity: loop.harmonicity || 3,
         modulationIndex: loop.modulationIndex || 10
       }
-      
+
       // Inicializar temporal con el config actual
       tempSynthConfig.value = JSON.parse(JSON.stringify(originalSynthConfig.value))
-      
+
       isModalOpen.value = true
     }
   }
@@ -173,11 +173,11 @@ export const useSynthStore = defineStore('synth', () => {
   // Previsualizar configuración
   const previewSynth = () => {
     if (currentLoopId.value === null) return
-    
+
     const audioStore = useAudioStore()
     const loopsArr = Array.isArray(audioStore.loops) ? audioStore.loops : audioStore.loops?.value
     const loop = loopsArr?.[currentLoopId.value]
-    
+
     if (!loop || !loop.synth) return
 
     try {
@@ -191,24 +191,24 @@ export const useSynthStore = defineStore('synth', () => {
         } else {
           tempSynth.connect(Tone.getContext().destination)
         }
-      } catch {}
-      
+      } catch { }
+
       const DEBUG_VERBOSE = false
       const ctxState = Tone.context?.state
       const transportState = Tone.Transport?.state
       if (DEBUG_VERBOSE) {
         // Estado de transporte/sesión para preview (silenciado)
       }
-      
+
       // Reproducir nota de prueba
       const testNote = 'C4'
       const useTime = ctxState === 'running' ? Tone.Transport?.now?.() : undefined
       tempSynth.triggerAttackRelease(testNote, '8n', useTime)
-      
+
       // Limpiar después de un tiempo
       setTimeout(() => {
-        try { tempSynth.disconnect() } catch {}
-        try { tempSynth.dispose() } catch {}
+        try { tempSynth.disconnect() } catch { }
+        try { tempSynth.dispose() } catch { }
       }, 2000)
     } catch (error) {
       console.error('Error en preview:', error)
@@ -219,7 +219,7 @@ export const useSynthStore = defineStore('synth', () => {
   // Aplicar configuración al loop
   const applySynthConfig = () => {
     if (currentLoopId.value === null) return
-    
+
     try {
       const audioStore = useAudioStore()
       const loopId = currentLoopId.value
@@ -235,7 +235,7 @@ export const useSynthStore = defineStore('synth', () => {
       }
 
       audioStore.updateLoopSynth(loopId, cfg)
-      
+
       // audioStore.updateLoopSynth ya sincroniza los campos del loop
       closeSynthEditor()
     } catch (error) {
@@ -271,7 +271,7 @@ export const useSynthStore = defineStore('synth', () => {
           volume: 6
         })
         break
-      
+
       case 'FMSynth':
         synth = new Tone.PolySynth(Tone.FMSynth, {
           ...synthConfig,
@@ -282,7 +282,7 @@ export const useSynthStore = defineStore('synth', () => {
           }
         })
         break
-      
+
       case 'PluckSynth':
         synth = new Tone.PluckSynth({
           attackNoise: 1,
@@ -290,7 +290,7 @@ export const useSynthStore = defineStore('synth', () => {
           resonance: 0.7
         })
         break
-      
+
       case 'MembraneSynth':
         synth = new Tone.MembraneSynth({
           pitchDecay: 0.05,
@@ -299,7 +299,7 @@ export const useSynthStore = defineStore('synth', () => {
           envelope: config.envelope
         })
         break
-      
+
       default: // PolySynth
         synth = new Tone.PolySynth(Tone.Synth, synthConfig)
         break
@@ -329,7 +329,7 @@ export const useSynthStore = defineStore('synth', () => {
     tempSynthConfig,
     synthTypes,
     oscillatorTypes,
-    
+
     // Funciones
     openSynthEditor,
     closeSynthEditor,

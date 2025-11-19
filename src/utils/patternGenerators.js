@@ -3,10 +3,10 @@
  * Loop-aware generators that fetch parameters from the central store
  * All functions return arrays of MIDI note numbers or null (for rests)
  */
-import { useAudioStore } from '../stores/audioStore'
-import { useNotesMatrix } from '../composables/useNotesMatrix'
-import { useScales } from '../composables/useMusic'
-import { generatePossibleNotes } from './noteUtils'
+import { useAudioStore } from '../stores/audioStore.js'
+import { useNotesMatrix } from '../composables/useNotesMatrix.js'
+import { useScales } from '../composables/useMusic.js'
+import { generatePossibleNotes } from './noteUtils.js'
 // Global debug flag: set window.__LOOP_DEBUG = true in the browser console or in
 // `index.html` to enable debug logs at runtime. For builds you can also set
 // `VITE_LOOP_DEBUG=true` in a `.env` file so `import.meta.env.VITE_LOOP_DEBUG` is

@@ -1,10 +1,10 @@
 import { ref, readonly, triggerRef, computed, reactive } from 'vue'
-import { generatePossibleNotes } from '../utils/noteUtils'
+import { generatePossibleNotes } from '../utils/noteUtils.js'
 
 // Debug flag (set window.__LOOP_DEBUG=true in the browser console to enable)
 const DEBUG = typeof window !== 'undefined' && Boolean(window.__LOOP_DEBUG)
-import { useScales } from './useMusic'
-import { analyzeActiveLoops, avoidConflicts, isCounterpointEnabled } from '../services/counterpointService'
+import { useScales } from './useMusic.js'
+import { analyzeActiveLoops, analyzeActiveLoopsWithContext, avoidConflicts, hasPerfectConsonanceWithAny, isCounterpointEnabled } from '../services/counterpointService.js'
 
 // Get scale utility at module level
 const { getScale } = useScales()
@@ -61,7 +61,11 @@ const loopMetadata = new Array(MAX_LOOPS).fill(null).map(() => reactive({
     // Will add more in Phase 2
   },
   generationMode: 'auto',  // 'auto' | 'locked'
-  lastPattern: null        // Track what was generated for reference
+  lastPattern: null,       // Track what was generated for reference
+  // Voice grouping and multi-voice config (opt-in)
+  voiceGroupId: null,
+  voiceConfig: [{ offset: 0, role: 'melody' }, { offset: -12, role: 'bass' }],
+  voicesEnabled: false
 }))
 
 const matrixState = ref({
@@ -198,7 +202,11 @@ export function useNotesMatrix() {
           random: 0.4
         },
         generationMode: 'auto',  // 'auto' | 'locked'
-        lastPattern: null        // Track what was generated for reference
+        lastPattern: null,        // Track what was generated for reference
+        // Voice grouping and multi-voice config (opt-in)
+        voiceGroupId: null,
+        voiceConfig: [{ offset: 0, role: 'melody' }, { offset: -12, role: 'bass' }],
+        voicesEnabled: false
       })
 
       // Clear the loop
@@ -411,9 +419,10 @@ export function useNotesMatrix() {
         for (let step = 0; step < out.length; step++) {
           const note = out[step]
           if (note === null) continue
-          const occupied = analyzeActiveLoops(otherLoopNotes, step)
-          if (occupied.has(note)) {
-            const adjusted = avoidConflicts(note, occupied, scaleIntervals, { baseNote, noteRange })
+          const ctx = analyzeActiveLoopsWithContext(otherLoopNotes, step)
+          if (ctx.occupied.has(note) || hasPerfectConsonanceWithAny(note, ctx.mapping)) {
+            const prevOwn = notesMatrix[loopId][step - 1] !== undefined ? notesMatrix[loopId][step - 1] : null
+            const adjusted = avoidConflicts(note, ctx.occupied, scaleIntervals, { baseNote, noteRange, otherMapping: ctx.mapping, otherPrevMapping: ctx.prevMapping, prevOwn, currentStep: step })
             out[step] = adjusted
           }
         }
@@ -701,6 +710,68 @@ export function useNotesMatrix() {
     })
   }
 
+  // Voice grouping helper: link loops into a voice group
+  function linkLoopsAsVoices(masterLoopId, loopIds = []) {
+    if (masterLoopId == null || !Array.isArray(loopIds)) return null
+    const members = [masterLoopId, ...loopIds].filter(id => Number.isInteger(id) && id >= 0 && id < MAX_LOOPS)
+    if (members.length === 0) return null
+    const groupId = `vg_${Date.now()}_${Math.floor(Math.random() * 100000)}`
+    batchUpdate(() => {
+      members.forEach(id => {
+        if (!loopMetadata[id]) return
+        loopMetadata[id].voiceGroupId = groupId
+        if (!Array.isArray(loopMetadata[id].voiceConfig) || loopMetadata[id].voiceConfig.length === 0) {
+          loopMetadata[id].voiceConfig = [{ offset: 0, role: 'melody' }]
+        }
+      })
+    })
+    return groupId
+  }
+
+  // Return the members (loop ids) of a voice group
+  function getGroupMembers(groupId) {
+    if (!groupId) return []
+    const members = []
+    for (let i = 0; i < MAX_LOOPS; i++) {
+      if (loopMetadata[i] && loopMetadata[i].voiceGroupId === groupId) members.push(i)
+    }
+    return members
+  }
+
+  // Return all voice group IDs and members counts
+  function getAllVoiceGroups() {
+    const groups = new Map()
+    for (let i = 0; i < MAX_LOOPS; i++) {
+      const gm = loopMetadata[i] && loopMetadata[i].voiceGroupId
+      if (!gm) continue
+      if (!groups.has(gm)) groups.set(gm, [])
+      groups.get(gm).push(i)
+    }
+    return Array.from(groups.entries()).map(([gid, arr]) => ({ id: gid, members: arr }))
+  }
+
+  // Unlink a group: remove the voiceGroupId value from members
+  function unlinkGroup(groupId) {
+    if (!groupId) return
+    batchUpdate(() => {
+      for (let i = 0; i < MAX_LOOPS; i++) {
+        if (loopMetadata[i] && loopMetadata[i].voiceGroupId === groupId) loopMetadata[i].voiceGroupId = null
+      }
+    })
+  }
+
+  // Toggle voice group enabled flag
+  function setGroupVoicesEnabled(groupId, enabled = true) {
+    const members = getGroupMembers(groupId)
+    if (members.length === 0) return
+    batchUpdate(() => {
+      members.forEach(id => {
+        if (!loopMetadata[id]) return
+        loopMetadata[id].voicesEnabled = !!enabled
+      })
+    })
+  }
+
   // Performance optimization: Efficient matrix initialization
   function initializeMatrix() {
     batchUpdate(() => {
@@ -728,7 +799,11 @@ export function useNotesMatrix() {
             random: 0.4
           },
           generationMode: 'auto',
-          lastPattern: null
+          lastPattern: null,
+          // Voice grouping and multi-voice config (opt-in)
+          voiceGroupId: null,
+          voiceConfig: [{ offset: 0, role: 'melody' }, { offset: -12, role: 'bass' }],
+          voicesEnabled: false
         })
       }
 
@@ -970,7 +1045,12 @@ export function useNotesMatrix() {
     setAutoDensity: (loopId, value) => {
       updateLoopMetadata(loopId, { autoDensity: value, density: value })
     },
-    getEffectiveDensity: (loopId) => getEffectiveDensity(loopId)
+    getEffectiveDensity: (loopId) => getEffectiveDensity(loopId),
+    // Voice grouping APIs
+    linkLoopsAsVoices,
+    getGroupMembers,
+    unlinkGroup,
+    setGroupVoicesEnabled
   }
 }
 

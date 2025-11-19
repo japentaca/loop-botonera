@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, nextTick } from 'vue'
-import { useAudioStore } from './audioStore'
-import { useNotesMatrix } from '../composables/useNotesMatrix'
-import { useSynthStore } from './synthStore'
+import { useAudioStore } from './audioStore.js'
+import { useNotesMatrix } from '../composables/useNotesMatrix.js'
+import { useSynthStore } from './synthStore.js'
 import {
   createPreset as createPresetService,
   getAllPresets,
@@ -11,7 +11,7 @@ import {
   deletePreset,
   duplicatePreset,
   getStorageStats
-} from '../services/presetService'
+} from '../services/presetService.js'
 
 export const usePresetStore = defineStore('preset', () => {
   // Estado reactivo

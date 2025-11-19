@@ -67,15 +67,23 @@ export function useScales() {
   }
 
   const getScale = (name) => {
-    if (_scaleCache.has(name)) {
-      return _scaleCache.get(name)
+    // Accept some common aliases (ionian/aeolian/natural minor -> minor)
+    const aliasMap = {
+      ionian: 'major',
+      aeolian: 'minor',
+      'natural-minor': 'minor',
+      'natural_minor': 'minor'
     }
-    if (!scales[name]) {
+    const resolved = aliasMap[name] || name
+    if (_scaleCache.has(resolved)) {
+      return _scaleCache.get(resolved)
+    }
+    if (!scales[resolved]) {
       console.error(`Scale not found: "${name}". Available scales: ${Object.keys(scales).join(', ')}`)
       throw new Error(`Invalid scale name: "${name}"`)
     }
-    const scaleIntervals = scales[name]
-    _scaleCache.set(name, scaleIntervals)
+    const scaleIntervals = scales[resolved]
+    _scaleCache.set(resolved, scaleIntervals)
     return scaleIntervals
   }
 

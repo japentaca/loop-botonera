@@ -4,11 +4,15 @@
     <div class="header-row-main">
       <div class="main-controls-left">
         <!-- Playback and general controls -->
-        <Button @click="togglePlay"
-          :class="['play-button-compact', 'header-btn-compact', { playing: audioStore.isPlaying }]" size="small"
-          :title="audioStore.isPlaying ? 'Pausa' : 'Play'" :disabled="!audioStore.audioInitialized">
-          {{ audioStore.isPlaying ? '⏸️' : '▶️' }}
-        </Button>
+        <div class="play-wrapper">
+          <Button @click="togglePlay"
+            :class="['play-button-compact', 'header-btn-compact', { playing: audioStore.isPlaying }]" size="small"
+            :title="audioStore.isPlaying ? 'Pausa' : (audioStore.audioInitialized ? 'Play' : 'Click to initialize audio')">{{ audioStore.isPlaying ? '⏸️' : '▶️' }}</Button>
+          <span :class="['audio-status', audioStore.audioInitialized ? 'ready' : 'not-ready']" title="Audio initialization state">
+            <span class="audio-icon" aria-hidden="true">{{ audioStore.audioInitialized ? '🔊' : '🔇' }}</span>
+            <span class="audio-label">{{ audioStore.audioInitialized ? 'Audio ready' : 'Click Play to initialize audio' }}</span>
+          </span>
+        </div>
 
         <Button @click="generateAllPatterns" class="regen-button-compact header-btn-compact" icon="pi pi-refresh"
           label="Regenerar" size="small" />
@@ -58,6 +62,7 @@
           <Button @click="openPresetDialog" class="preset-button-compact header-btn-compact" icon="pi pi-save"
             label="Presets" size="small" title="Gestionar presets" :disabled="!audioStore.audioInitialized" />
           <span class="preset-name-label">{{ presetStore.currentPreset?.name || 'Sin preset' }}</span>
+          <Button class="help-button" icon="pi pi-question" size="small" severity="help" @click="toggleHelp" title="Quick help" />
         </div>
 
         <!-- Visualizador de pulsos integrado (moved to right section) -->
@@ -65,6 +70,9 @@
           <div :class="['pulse-light', { flash: audioStore.beatFlash }]"></div>
         </div>
       </div>
+    </div>
+    <div v-if="showHelp" class="header-help-inline">
+      <small>Quick help: Use Play to start audio. To use Tonal cycles: choose scope (Global/Group/Loop), set Interval (beats), optionally enable "Snap to measure", and click Start. Check table below to monitor active cycles and action them.</small>
     </div>
 
     <!-- Fila inferior: Controles de música y evolución -->
@@ -95,6 +103,108 @@
         <div class="evolve-progress-compact" v-if="audioStore.autoEvolve">
           <span class="next-evolve">{{ nextEvolveInBeats }}</span>
         </div>
+        <!-- Tonal cycles controls -->
+        <div class="tonal-cycles-controls">
+          <div class="control-group-compact">
+            <label class="control-label-compact">Cycles</label>
+            <Dropdown v-model:optionValue="cycleScope" :modelValue="cycleScope" @update:modelValue="onCycleScopeChange"
+              :options="cycleScopeOptions" optionLabel="label" optionValue="value" class="select-compact" />
+            <Dropdown v-model:optionValue="cycleStrategy" :modelValue="cycleStrategy"
+              @update:modelValue="(v) => cycleStrategy = v" :options="cycleStrategyOptions" optionLabel="label"
+              optionValue="value" class="select-compact" />
+          </div>
+
+          <div class="control-group-compact">
+            <label class="control-label-compact">Target</label>
+            <select v-if="cycleScope === 'group'" v-model="cycleGroupId" class="select-compact">
+              <option value="">-- Select group --</option>
+              <option v-for="g in voiceGroups" :key="g.id" :value="g.id">{{ g.id }} ({{ g.members.length }} loops)
+              </option>
+            </select>
+            <input v-if="cycleScope === 'loop'" v-model.number="cycleLoopId" type="number" placeholder="loopId"
+              class="input-compact" min="0" />
+          </div>
+
+          <div class="control-group-compact">
+            <label class="control-label-compact">Active Cycle</label>
+            <select v-model="selectedCycleId" class="select-compact">
+              <option value="">-- Select active cycle --</option>
+              <option v-for="id in cycleIds" :key="id" :value="id">{{ id }}</option>
+            </select>
+            <Button @click="rescanCycles" label="Rescan" size="small" class="header-btn-compact" />
+          </div>
+
+          <div class="control-group-compact">
+            <label class="control-label-compact">Interval (beats)</label>
+            <Slider v-model="cycleIntervalBeats" :min="1" :max="64" class="range-compact range-compact--small" />
+            <span class="value-compact">{{ cycleIntervalBeats }} beats</span>
+          </div>
+          <div class="control-group-compact">
+            <label class="control-label-compact"><input type="checkbox" v-model="cycleSnapToMeasure" /> Snap to measure</label>
+            <small class="control-description">Start the cycle aligned to the next measure</small>
+          </div>
+
+          <div class="control-group-compact">
+            <template v-if="existingMatchingCycle">
+              <Button @click="startCycle" label="Update" size="small" class="header-btn-compact" title="Update existing cycle: change strategy/interval/snapToMeasure" />
+              <Button @click="startCycle" label="Start New" size="small" class="header-btn-compact" :disabled="!allowMultipleCycles" title="Start a new cycle even when matching one exists (Allow multiple)" />
+            </template>
+            <template v-else>
+              <Button @click="startCycle" label="Start" size="small" class="header-btn-compact" title="Start a new cycle" />
+            </template>
+            <Button @click="stopCycle" label="Stop" size="small" class="header-btn-compact" />
+            <Button @click="stepCycle" label="Step" size="small" class="header-btn-compact" />
+            <Button @click="pauseCycleUI" label="Pause" size="small" class="header-btn-compact" />
+            <Button @click="resumeCycleUI" label="Resume" size="small" class="header-btn-compact" />
+          </div>
+
+          <div class="control-group-compact">
+            <div class="active-cycles-compact">Active: <span v-for="c in cycleIds" :key="c">{{ c }} </span></div>
+            <label class="allow-multiple-toggle"><input type="checkbox" v-model="allowMultipleCycles" /> Allow
+              multiple</label>
+            <Button @click="showCyclesPanel = !showCyclesPanel" :class="['header-btn-compact']" icon="pi pi-list" size="small" :label="showCyclesPanel ? 'Close cycles' : 'Open cycles'" />
+          </div>
+          <!-- moved active cycles table outside of the per-control grid to avoid overlap -->
+          <div class="control-group-compact">
+            <small class="control-description">Timing is measured in beats (quarter notes). Adjust tempo for BPM, or
+              increase the interval for longer windows.</small>
+          </div>
+          <!-- Tonal cycles table: moved to overlay controlled by `showCyclesPanel` -->
+          <div v-if="showCyclesPanel" class="cycles-overlay" role="dialog" aria-label="Active cycles panel">
+            <div class="cycles-overlay-inner">
+              <div class="overlay-header">
+                <strong>Active Cycles</strong>
+                <Button @click="showCyclesPanel = false" class="header-btn-compact" icon="pi pi-times" size="small" title="Close" />
+              </div>
+              <div class="active-cycles-detailed">
+                <table class="cycles-table">
+                <thead><tr><th>ID</th><th>Scope</th><th>Strategy</th><th>Interval</th><th>Status</th><th>Next</th><th>Actions</th></tr></thead>
+                <tbody>
+                  <tr v-for="c in activeCycleDetails" :key="c.id">
+                    <td>{{ c.id }}</td>
+                    <td>{{ c.scope }}</td>
+                    <td>{{ c.strategy }}</td>
+                    <td>{{ c.intervalBeats }} beats</td>
+                    <td>
+                      <span class="status-pill" :class="c.status">{{ c.status }}</span>
+                    </td>
+                    <td>
+                      <div v-if="c.nextInMs !== null" class="progress-bar" :title="formatNext(c.nextInMs)">
+                        <div class="progress-bar-inner" :style="{ width: (100 - (c.nextInMs / (c.intervalMs || 1) * 100)).toFixed(1) + '%' }"></div>
+                      </div>
+                      <div class="next-text">{{ formatNext(c.nextInMs) }}</div>
+                    </td>
+                    <td>
+                      <Button @click="selectCycle(c.id)" icon="pi pi-check" size="small" title="Select cycle" />
+                      <Button @click="stopSelected(c.id)" icon="pi pi-times" size="small" severity="danger" title="Stop and remove" />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -111,6 +221,7 @@
   import { useAudioStore } from '../stores/audioStore'
   import { usePresetStore } from '../stores/presetStore'
   import { useScales } from '../composables/useMusic'
+  import { useNotesMatrix } from '../composables/useNotesMatrix.js'
   import StyleConfigDialog from './StyleConfigDialog.vue'
   import PresetManagerDialog from './PresetManagerDialog.vue'
 
@@ -119,6 +230,8 @@
   const audioStore = useAudioStore()
   const presetStore = usePresetStore()
   const { scales, scaleNames, scaleNamesSpanish } = useScales()
+  const notesMatrix = useNotesMatrix()
+  const voiceGroups = computed(() => notesMatrix.getAllVoiceGroups())
 
   // onBeforeUpdate and onUpdated removed to prevent spam during playback
   // These fire constantly because evolveProgress and other computed props update with currentPulse  // Obtener las claves de las escalas para el selector
@@ -143,6 +256,7 @@
 
   // Estado para el diálogo de configuración de estilos
   const isStyleDialogOpen = ref(false)
+  const showHelp = ref(false)
 
   // Configuración del multiselector de evolución
   // Evolution types simplified: momentum, call/response, and tension/release disabled
@@ -258,6 +372,8 @@
     presetStore.openDialog()
   }
 
+  const toggleHelp = () => { showHelp.value = !showHelp.value }
+
   // Función para loggear la matriz de notas
   const logNotesMatrix = () => {
     if (audioStore.logNotesMatrix) {
@@ -268,4 +384,161 @@
   }
 
   const delayDivisionFriendlyLabel = computed(() => divisionLabelMap[audioStore.delayDivision] || audioStore.delayDivision)
+
+  // Tonal cycles UI state
+  const cycleScope = ref('global')
+  const cycleGroupId = ref('')
+  const cycleLoopId = ref(0)
+  const cycleIntervalBeats = ref(4)
+  const cycleStrategy = ref('rotateMode')
+  const cycleIds = computed(() => (audioStore.activeTonalCycles || []).map(c => c.id))
+  const selectedCycleId = ref(null)
+  const allowMultipleCycles = ref(false)
+  const showCyclesPanel = ref(false)
+
+  const existingMatchingCycle = computed(() => {
+    const cycles = audioStore.activeTonalCycles || []
+    const scope = cycleScope.value || 'global'
+    const loopId = cycleScope.value === 'loop' ? Number(cycleLoopId.value) : null
+    const groupId = cycleScope.value === 'group' ? cycleGroupId.value : null
+    return cycles.find(c => {
+      const cfg = c.config || {}
+      const sameScope = cfg.scope === scope
+      const sameLoop = (cfg.loopId == null && loopId == null) || cfg.loopId === loopId
+      const sameGroup = (cfg.groupId == null && groupId == null) || cfg.groupId === groupId
+      // Match only by scope + target so Start works as Update for changed properties
+      return sameScope && sameLoop && sameGroup
+    })
+  })
+
+  const cycleSnapToMeasure = ref(false)
+
+  // UI tick to update countdowns
+  const nowMs = ref(Date.now())
+  let uiTickInterval = null
+  onMounted(() => {
+    uiTickInterval = setInterval(() => { nowMs.value = Date.now() }, 250)
+  })
+  onUnmounted(() => {
+    if (uiTickInterval) clearInterval(uiTickInterval)
+  })
+
+  const cycleScopeOptions = [
+    { label: 'Global', value: 'global' },
+    { label: 'Group', value: 'group' },
+    { label: 'Loop', value: 'loop' }
+  ]
+  const cycleStrategyOptions = [
+    { label: 'Rotate Mode', value: 'rotateMode' },
+    { label: 'Shift Key', value: 'shiftKey' }
+  ]
+
+  const onCycleScopeChange = (val) => {
+    cycleScope.value = val
+  }
+
+  const startCycle = () => {
+    const cfg = { scope: cycleScope.value, intervalBeats: cycleIntervalBeats.value, strategy: cycleStrategy.value, snapToMeasure: !!cycleSnapToMeasure.value, allowMultiple: !!allowMultipleCycles.value }
+    if (cycleScope.value === 'group') cfg.groupId = cycleGroupId.value
+    if (cycleScope.value === 'loop') cfg.loopId = cycleLoopId.value
+    const handle = audioStore.startTonalCycle(cfg)
+    if (handle && handle.id) {
+      // selectedCycleId is set to the newly created cycle; active cycles list is reactive
+      selectedCycleId.value = handle.id
+    }
+  }
+
+  const activeCycleDetails = computed(() => {
+    const cycles = audioStore.activeTonalCycles || []
+    const tempo = Number(audioStore.tempo || 120)
+    const msPerBeat = 60000 / Math.max(1, tempo)
+    return cycles.map(c => {
+      const cfg = c.config || {}
+      const status = c.paused ? 'paused' : (c.waiting ? 'waiting' : 'running')
+      const last = c.lastStepTime || null
+      const intervalMs = cfg.intervalMs || (cfg.intervalBeats ? cfg.intervalBeats * msPerBeat : null)
+      let nextInMs = null
+      if (last && intervalMs) {
+        nextInMs = Math.max(0, Math.round(last + intervalMs - nowMs.value))
+      }
+      return {
+        id: c.id,
+        scope: cfg.scope,
+        strategy: cfg.strategy,
+        intervalBeats: cfg.intervalBeats || 4,
+        intervalMs: intervalMs,
+        status,
+        waiting: !!c.waiting,
+        lastStepTime: last,
+        nextInMs
+      }
+    })
+  })
+
+  const stopCycle = () => {
+    if (!selectedCycleId.value) return
+    const id = selectedCycleId.value
+    audioStore.stopTonalCycle(id)
+    // active cycles list updates automatically via store subscription
+    selectedCycleId.value = null
+  }
+
+  const stepCycle = () => {
+    if (!selectedCycleId.value) return
+    audioStore.stepTonalCycle(selectedCycleId.value)
+  }
+
+  const pauseCycleUI = () => {
+    if (!selectedCycleId.value) return
+    audioStore.pauseTonalCycle(selectedCycleId.value)
+  }
+
+  const resumeCycleUI = () => {
+    if (!selectedCycleId.value) return
+    audioStore.resumeTonalCycle(selectedCycleId.value)
+  }
+
+  const selectCycle = (id) => {
+    selectedCycleId.value = id
+  }
+
+  const stopSelected = (id) => {
+    audioStore.stopTonalCycle(id)
+    if (selectedCycleId.value === id) selectedCycleId.value = null
+  }
+
+  const formatNext = (ms) => {
+    if (ms == null) return '—'
+    const tempo = Number(audioStore.tempo || 120)
+    const msPerBeat = Math.max(1, 60000 / tempo)
+    const beats = ms / msPerBeat
+    if (beats >= 1) {
+      const b = beats.toFixed(1)
+      return `${b} beats`
+    }
+    const seconds = Math.round(ms / 1000)
+    if (seconds < 1) return '<1s'
+    return `${seconds}s`
+  }
+
+  // Keep cycle interval beats as the primary unit
+  const cycleIntervalMs = computed(() => {
+    const tempo = Number(audioStore.tempo || 120)
+    const msPerBeat = (60000 / Math.max(1, tempo))
+    return Math.round(msPerBeat * Math.max(1, Number(cycleIntervalBeats.value || 1)))
+  })
+
+  const rescanCycles = () => {
+    // Force a scan of existing cycles and ensure selected cycle remains valid
+    const info = audioStore.listTonalCycles() || []
+    if (!selectedCycleId.value && info.length > 0) selectedCycleId.value = info[0].id
+    // If selected cycle id is no longer available, reset to first
+    if (selectedCycleId.value && !info.find(c => c.id === selectedCycleId.value)) {
+      selectedCycleId.value = info.length > 0 ? info[0].id : null
+    }
+  }
+  onMounted(() => {
+    // If cycles exist, set a default selected id
+    if (!selectedCycleId.value && cycleIds.value.length > 0) selectedCycleId.value = cycleIds.value[0]
+  })
 </script>

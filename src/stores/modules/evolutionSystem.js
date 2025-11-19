@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
-import { useAudioStore } from '../audioStore'
-import { useNoteUtils, useScales } from '../../composables/useMusic'
+import { useAudioStore } from '../audioStore.js'
+import { useNoteUtils, useScales } from '../../composables/useMusic.js'
 
 /**
  * Sistema de evolución automática que modifica loops de forma inteligente

@@ -1,13 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useScales, useMusic } from '../composables/useMusic'
-import { useNotesMatrix } from '../composables/useNotesMatrix'
+import { useScales, useMusic } from '../composables/useMusic.js'
+import { useNotesMatrix } from '../composables/useNotesMatrix.js'
+import { startCycle, stopCycle, stepCycle, pauseCycle, resumeCycle, listCycles, subscribe as subscribeTonalCycles } from '../modules/tonalCycles.js'
 
 // Importar los nuevos módulos especializados
-import { useAudioEngine } from './modules/audioEngine'
-import { useLoopManager } from './modules/loopManager'
-import { useEnergyManager } from './modules/energyManager'
-import { useEvolutionSystem } from './modules/evolutionSystem'
+import { useAudioEngine } from './modules/audioEngine.js'
+import { useLoopManager } from './modules/loopManager.js'
+import { useEnergyManager } from './modules/energyManager.js'
+import { useEvolutionSystem } from './modules/evolutionSystem.js'
 
 // Debounce utility function for performance optimization
 const debounce = (fn, delay) => {
@@ -24,7 +25,7 @@ let presetStoreInstance = null
 const getPresetStore = async () => {
   if (!presetStoreInstance) {
     // Importación dinámica para evitar problemas de ciclo de dependencias
-    const { usePresetStore } = await import('./presetStore')
+    const { usePresetStore } = await import('./presetStore.js')
     presetStoreInstance = usePresetStore()
   }
   return presetStoreInstance
@@ -56,6 +57,17 @@ export const useAudioStore = defineStore('audio', () => {
 
 
   const evolutionSystem = useEvolutionSystem(notesMatrix)
+
+  // Tonal cycles reactive list
+  const tonalCyclesList = ref(listCycles() || [])
+  // Subscribe to changes in tonalCycles
+  try {
+    subscribeTonalCycles((list) => {
+      tonalCyclesList.value = list || []
+    })
+  } catch (err) {
+    console.warn('[audioStore] subscribeTonalCycles failed', err)
+  }
 
   // Performance optimization: maintain cache of active loop IDs
   // Updated whenever a loop's active state changes
@@ -471,24 +483,24 @@ export const useAudioStore = defineStore('audio', () => {
       return
     }
 
-    console.log(`[updateScale] Changing global scale from "${currentScale.value}" to "${newScale}", intervals: [${scale}]`)
+    console.log(`${new Date().toISOString()} [updateScale] Changing global scale from "${currentScale.value}" to "${newScale}", intervals: [${scale}]`)
     currentScale.value = newScale
 
     // Scale is now managed by audioStore only - removed setGlobalScale call
 
     if (!audioEngine.audioInitialized.value) {
-      console.log('[updateScale] Audio not initialized, only updating scale reference')
+      console.log(`${new Date().toISOString()} [updateScale] Audio not initialized, only updating scale reference`)
       return
     }
 
     // Cuantizar notas existentes manteniendo patrón y baseNote
     // Pass both scale intervals and scale name to loopManager
-    console.log(`[updateScale] Quantizing ${loopManager.loops.value.length} loops to new scale`)
+    console.log(`${new Date().toISOString()} [updateScale] Quantizing ${loopManager.loops.value.length} loops to new scale`)
     loopManager.loops.value.forEach(loop => {
       loopManager.quantizeLoopNotes(loop, scale, newScale)
     })
 
-    console.log(`[updateScale] Scale update complete, all loops now using "${newScale}"`)
+    console.log(`${new Date().toISOString()} [updateScale] Scale update complete, all loops now using "${newScale}"`)
     notifyPresetChanges()
   }
 
@@ -825,6 +837,16 @@ export const useAudioStore = defineStore('audio', () => {
     updateMasterVolume,
     updateScale,
     updateDelayDivision,
+    // Tonal cycles control
+    // Tonal cycles control
+    startTonalCycle: (cfg) => startCycle(cfg),
+    stopTonalCycle: (id) => stopCycle(id),
+    stepTonalCycle: (id) => stepCycle(id),
+    pauseTonalCycle: (id) => pauseCycle(id),
+    resumeTonalCycle: (id) => resumeCycle(id),
+    listTonalCycles: () => listCycles(),
+    // reactive tonal cycles list (updated via subscription)
+    activeTonalCycles: tonalCyclesList,
     updateGlobalDensityBias,
     // Sincronización
     resetLoopCounters,

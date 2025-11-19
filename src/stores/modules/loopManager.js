@@ -1,8 +1,8 @@
 import { ref, shallowRef, triggerRef } from 'vue'
 import * as Tone from 'tone'
-import { useScales, useNoteUtils } from '../../composables/useMusic'
-import { generatePossibleNotes } from '../../utils/noteUtils'
-import { useMelodicGenerator } from '../../composables/useMelodicGenerator'
+import { useScales, useNoteUtils } from '../../composables/useMusic.js'
+import { generatePossibleNotes } from '../../utils/noteUtils.js'
+import { useMelodicGenerator } from '../../composables/useMelodicGenerator.js'
 import { clampToMidiRange } from '../../composables/musicUtils.js'
 
 
