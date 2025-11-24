@@ -94,16 +94,21 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
 
   const adjustLoopDensity = (loop, targetDensity, globalScaleIntervals) => {
     const loopNotes = notesMatrix.getLoopNotes(loop.id)
-    if (loopNotes.length === 0) return false
+    const totalLen = loopNotes.length
+    if (totalLen === 0) return false
 
-    const desiredActive = Math.max(1, Math.round(loopNotes.length * targetDensity))
+    const desiredActive = Math.max(0, Math.round(totalLen * targetDensity))
     const activeIndices = []
     const inactiveIndices = []
 
-    loopNotes.forEach((note, index) => {
-      activeIndices.push(index)
-      inactiveIndices.push(index)
-    })
+    for (let index = 0; index < totalLen; index++) {
+      const note = loopNotes[index]
+      if (note !== null && note !== undefined) {
+        activeIndices.push(index)
+      } else {
+        inactiveIndices.push(index)
+      }
+    }
 
     // Shuffle inactive indices for better distribution
     for (let i = inactiveIndices.length - 1; i > 0; i--) {
@@ -387,6 +392,7 @@ export const useEvolutionSystem = (notesMatrix = null, melodicGenerator = null) 
     evolveMultipleMatrixLoops,
     applyMatrixMutation,
     evolveMatrixWithStrategy,
+    adjustLoopDensity,
 
     // Control de tiempo handled by audioStore
 

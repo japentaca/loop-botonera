@@ -649,6 +649,15 @@ export const useAudioStore = defineStore('audio', () => {
         }
       })
 
+      applyDynamicDensities()
+      const loopsToBalance = loopManager.loops.value.filter(l => l && l.isActive)
+      loopsToBalance.forEach(loop => {
+        const target = typeof notesMatrix.getEffectiveDensity === 'function' ? notesMatrix.getEffectiveDensity(loop.id) : 0.3
+        if (evolutionSystem && typeof evolutionSystem.adjustLoopDensity === 'function') {
+          evolutionSystem.adjustLoopDensity(loop, target, currentScaleIntervals)
+        }
+      })
+
       // No metadata application step here to ensure evolver cannot alter metadata.
 
       // Quantize intents are ignored for evolution to avoid modifying metadata.
