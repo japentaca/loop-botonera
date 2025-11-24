@@ -649,7 +649,20 @@ export const useAudioStore = defineStore('audio', () => {
         }
       })
 
+      // Critical fix: Apply the same global density calculation as manual regeneration
+      // This ensures the evolution cycle uses the correct global density bias
       applyDynamicDensities()
+
+      // Debug logging for density verification during evolution
+      const activeLoops = loopManager.loops.value.filter(l => l && l.isActive)
+      if (activeLoops.length > 0) {
+        console.log(`[Evolution] After applyDynamicDensities - global bias: ${globalDensityBias.value.toFixed(3)}`)
+        activeLoops.forEach(loop => {
+          const effectiveDensity = notesMatrix.getEffectiveDensity ? notesMatrix.getEffectiveDensity(loop.id) : 0.3
+          console.log(`  Loop ${loop.id}: effective density = ${effectiveDensity.toFixed(3)}`)
+        })
+      }
+
       const loopsToBalance = loopManager.loops.value.filter(l => l && l.isActive)
       loopsToBalance.forEach(loop => {
         const target = typeof notesMatrix.getEffectiveDensity === 'function' ? notesMatrix.getEffectiveDensity(loop.id) : 0.3
