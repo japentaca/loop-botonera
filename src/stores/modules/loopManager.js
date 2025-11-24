@@ -204,6 +204,9 @@ export const useLoopManager = (notesMatrix = null) => {
       panner: null,
       delaySend: null,
       reverbSend: null,
+      // LFO effects objects (will be created with synth)
+      tremoloLFO: null,
+      vibratoLFO: null,
       // Parámetros de efectos
       delayAmount: 0.2,
       reverbAmount: 0.3,
@@ -215,6 +218,16 @@ export const useLoopManager = (notesMatrix = null) => {
         sustain: 0.5,
         release: 0.8
       },
+      // LFO configurations (tremolo and vibrato)
+      tremolo: {
+        speed: '8n',     // Tone.js time unit (4n, 8n, 16n, 1m, etc.)
+        depth: 0.3       // 0-1
+      },
+      vibrato: {
+        speed: '4n',     // Tone.js time unit
+        depth: 10        // cents
+      },
+      glideTime: 0.02,  // seconds
       // Melodic generation fields
       noteRangeMin: 24,        // MIDI note min (default: full range)
       noteRangeMax: 96,        // MIDI note max (default: full range)
@@ -236,7 +249,8 @@ export const useLoopManager = (notesMatrix = null) => {
     // Crear cadena de audio usando el motor de audio
     const synthConfig = {
       oscillator: { type: basicLoop.synthType },
-      envelope: basicLoop.envelope
+      envelope: basicLoop.envelope,
+      portamento: basicLoop.glideTime
     }
 
     const effectsConfig = {
@@ -244,7 +258,9 @@ export const useLoopManager = (notesMatrix = null) => {
       reverbAmount: basicLoop.reverbAmount,
       pan: basicLoop.pan,
       volume: basicLoop.volume,
-      synthType: basicLoop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
+      synthType: basicLoop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth',
+      tremolo: basicLoop.tremolo,
+      vibrato: basicLoop.vibrato
     }
 
     const audioChain = audioEngine.createAudioChain(synthConfig, effectsConfig)
@@ -254,6 +270,8 @@ export const useLoopManager = (notesMatrix = null) => {
     basicLoop.panner = audioChain.panner
     basicLoop.delaySend = audioChain.delaySend
     basicLoop.reverbSend = audioChain.reverbSend
+    basicLoop.tremoloLFO = audioChain.tremoloLFO
+    basicLoop.vibratoLFO = audioChain.vibratoLFO
 
     return basicLoop
   }
@@ -297,7 +315,8 @@ export const useLoopManager = (notesMatrix = null) => {
       if (!loop.synth) {
         const synthConfig = {
           oscillator: { type: loop.synthType },
-          envelope: loop.envelope
+          envelope: loop.envelope,
+          portamento: loop.glideTime
         }
 
         const effectsConfig = {
@@ -305,7 +324,9 @@ export const useLoopManager = (notesMatrix = null) => {
           reverbAmount: loop.reverbAmount,
           pan: loop.pan,
           volume: loop.volume,
-          synthType: loop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth'
+          synthType: loop.synthModel === 'PolySynth' ? 'PolySynth' : 'Synth',
+          tremolo: loop.tremolo,
+          vibrato: loop.vibrato
         }
 
         const audioChain = audioEngine.createAudioChain(synthConfig, effectsConfig)
@@ -314,9 +335,12 @@ export const useLoopManager = (notesMatrix = null) => {
         loop.panner = audioChain.panner
         loop.delaySend = audioChain.delaySend
         loop.reverbSend = audioChain.reverbSend
+        loop.tremoloLFO = audioChain.tremoloLFO
+        loop.vibratoLFO = audioChain.vibratoLFO
       }
     })
-  }  // Activar/desactivar loop
+  }
+  // Activar/desactivar loop
   const toggleLoop = (id) => {
     const loop = loops.value[id]
     if (loop) {
@@ -399,6 +423,46 @@ export const useLoopManager = (notesMatrix = null) => {
       case 'synthType': {
         loop.synthType = value
         // Nota: cambiar el tipo de oscilador requiere recrear el sintetizador
+        break
+      }
+      case 'tremoloSpeed': {
+        const num = typeof value === 'number' ? value : parseFloat(value)
+        loop.tremolo.speed = isNaN(num) ? value : num
+        if (loop.tremoloLFO) {
+          loop.tremoloLFO.frequency.value = loop.tremolo.speed
+        }
+        break
+      }
+      case 'tremoloDepth': {
+        const num = typeof value === 'number' ? value : parseFloat(value)
+        loop.tremolo.depth = Math.max(0, Math.min(1, isNaN(num) ? value : num))
+        if (loop.tremoloLFO) {
+          loop.tremoloLFO.min = 1 - loop.tremolo.depth
+          loop.tremoloLFO.max = 1
+        }
+        break
+      }
+      case 'vibratoSpeed': {
+        const num = typeof value === 'number' ? value : parseFloat(value)
+        loop.vibrato.speed = isNaN(num) ? value : num
+        if (loop.vibratoLFO) {
+          loop.vibratoLFO.frequency.value = loop.vibrato.speed
+        }
+        break
+      }
+      case 'vibratoDepth': {
+        const num = typeof value === 'number' ? value : parseFloat(value)
+        loop.vibrato.depth = Math.max(0, isNaN(num) ? value : num)
+        if (loop.vibratoLFO) {
+          loop.vibratoLFO.min = -loop.vibrato.depth
+          loop.vibratoLFO.max = loop.vibrato.depth
+        }
+        break
+      }
+      case 'glideTime': {
+        const num = typeof value === 'number' ? value : parseFloat(value)
+        loop.glideTime = Math.max(0, isNaN(num) ? value : num)
+        // Note: actual glide change requires synth recreation for proper portamento
         break
       }
     }
@@ -674,6 +738,15 @@ export const useLoopManager = (notesMatrix = null) => {
       loop.reverbSend.disconnect()
       loop.reverbSend.dispose()
     }
+    // Clean up LFO effects
+    if (loop.tremoloLFO) {
+      loop.tremoloLFO.stop()
+      loop.tremoloLFO.dispose()
+    }
+    if (loop.vibratoLFO) {
+      loop.vibratoLFO.stop()
+      loop.vibratoLFO.dispose()
+    }
 
     // Actualizar la configuración del loop
     loop.synthModel = synthConfig.type || 'PolySynth'
@@ -685,10 +758,16 @@ export const useLoopManager = (notesMatrix = null) => {
       release: 0.8
     }
 
+    // Store LFO configurations on the loop
+    loop.tremolo = synthConfig.tremolo || loop.tremolo || { speed: '8n', depth: 0.3 }
+    loop.vibrato = synthConfig.vibrato || loop.vibrato || { speed: '4n', depth: 10 }
+    loop.glideTime = synthConfig.glideTime || loop.glideTime || 0.02
+
     // Preparar configuraciones para audioEngine.createAudioChain
     const newSynthConfig = {
       oscillator: { type: loop.synthType },
-      envelope: loop.envelope
+      envelope: loop.envelope,
+      portamento: loop.glideTime
     }
 
     // Agregar configuraciones específicas según el tipo de sintetizador
@@ -719,7 +798,9 @@ export const useLoopManager = (notesMatrix = null) => {
       reverbAmount: loop.reverbAmount,
       pan: loop.pan,
       volume: loop.volume,
-      synthType: loop.synthModel
+      synthType: loop.synthModel,
+      tremolo: loop.tremolo,
+      vibrato: loop.vibrato
     }
 
     // Crear nueva cadena de audio usando audioEngine
@@ -730,6 +811,8 @@ export const useLoopManager = (notesMatrix = null) => {
     loop.panner = audioChain.panner
     loop.delaySend = audioChain.delaySend
     loop.reverbSend = audioChain.reverbSend
+    loop.tremoloLFO = audioChain.tremoloLFO
+    loop.vibratoLFO = audioChain.vibratoLFO
   }
 
   // Force reactivity update for shallowRef loops

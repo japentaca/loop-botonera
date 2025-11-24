@@ -97,6 +97,65 @@
           </div>
         </div>
       </div>
+
+      <!-- Controles LFO (Tremolo y Vibrato) -->
+      <div class="control-section">
+        <h4>Efectos LFO (Sincronizados con Transporte)</h4>
+        <div class="lfo-controls">
+          <!-- Tremolo -->
+          <div class="lfo-group">
+            <h5>Tremolo (Amplitud)</h5>
+            <div class="lfo-param">
+              <label>Velocidad (Sincronizada)</label>
+              <Dropdown :modelValue="synthStore.tempSynthConfig.tremolo.speed"
+                @update:modelValue="synthStore.updateTremoloSpeed" :options="timeOptions" optionLabel="label"
+                optionValue="value" class="w-full" :disabled="!audioInitialized" />
+            </div>
+            <div class="lfo-param">
+              <label>Profundidad</label>
+              <div class="slider-container">
+                <Slider :min="0" :max="1" :step="0.01" :modelValue="synthStore.tempSynthConfig.tremolo.depth"
+                  @update:modelValue="synthStore.updateTremoloDepth" class="flex-1" :disabled="!audioInitialized" />
+                <span class="value-display">{{ synthStore.tempSynthConfig.tremolo.depth }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vibrato -->
+          <div class="lfo-group">
+            <h5>Vibrato (Frecuencia)</h5>
+            <div class="lfo-param">
+              <label>Velocidad (Sincronizada)</label>
+              <Dropdown :modelValue="synthStore.tempSynthConfig.vibrato.speed"
+                @update:modelValue="synthStore.updateVibratoSpeed" :options="timeOptions" optionLabel="label"
+                optionValue="value" class="w-full" :disabled="!audioInitialized" />
+            </div>
+            <div class="lfo-param">
+              <label>Profundidad</label>
+              <div class="slider-container">
+                <Slider :min="0" :max="50" :step="0.5" :modelValue="synthStore.tempSynthConfig.vibrato.depth"
+                  @update:modelValue="synthStore.updateVibratoDepth" class="flex-1" :disabled="!audioInitialized" />
+                <span class="value-display">{{ synthStore.tempSynthConfig.vibrato.depth }}¢</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Glide Time -->
+      <div class="control-section">
+        <h4>Glide (Portamento)</h4>
+        <div class="glide-control">
+          <div class="glide-param">
+            <label>Tiempo de Glide</label>
+            <div class="slider-container">
+              <Slider :min="0" :max="0.5" :step="0.001" :modelValue="synthStore.tempSynthConfig.glideTime"
+                @update:modelValue="synthStore.updateGlideTime" class="flex-1" :disabled="!audioInitialized" />
+              <span class="value-display">{{ synthStore.tempSynthConfig.glideTime }}s</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <template #footer>
@@ -140,6 +199,18 @@
     { label: 'PolySynth', value: 'PolySynth' },
     { label: 'AMSynth', value: 'AMSynth' },
     { label: 'FMSynth', value: 'FMSynth' }
+  ]
+
+  // Opciones de tiempo sincronizadas con Tone.js Transport
+  const timeOptions = [
+    { label: 'Whole (1m)', value: '1m' },
+    { label: 'Half (2n)', value: '2n' },
+    { label: 'Quarter (4n)', value: '4n' },
+    { label: 'Eighth (8n)', value: '8n' },
+    { label: 'Sixteenth (16n)', value: '16n' },
+    { label: 'Thirty-second (32n)', value: '32n' },
+    { label: 'Triplet (8nT)', value: '8nT' },
+    { label: 'Sixteenth Triplet (16nT)', value: '16nT' }
   ]
 </script>
 
@@ -205,14 +276,18 @@
   }
 
   .envelope-param,
-  .mod-param {
+  .mod-param,
+  .lfo-param,
+  .glide-param {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
 
   .envelope-param label,
-  .mod-param label {
+  .mod-param label,
+  .lfo-param label,
+  .glide-param label {
     font-weight: 600;
     color: #e0e0e0;
     font-size: 0.95rem;
@@ -247,6 +322,34 @@
 
   .w-full {
     width: 100%;
+  }
+
+  .lfo-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .lfo-group {
+    border: 1px solid rgba(0, 217, 255, 0.25);
+    border-radius: 8px;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .lfo-group h5 {
+    margin: 0 0 1rem 0;
+    color: #00d9ff;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .glide-control {
+    border: 1px solid rgba(0, 217, 255, 0.25);
+    border-radius: 8px;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.3);
   }
 
   /* Responsive design */

@@ -20,7 +20,17 @@ export const useSynthStore = defineStore('synth', () => {
       release: 0.8
     },
     harmonicity: 2,
-    modulationIndex: 10
+    modulationIndex: 10,
+    // LFO Controls (Time Units synced with Tone.js Transport)
+    tremolo: {
+      speed: '8n',     // Tone.js time unit (4n, 8n, 16n, 1m, etc.)
+      depth: 0.3       // 0-1
+    },
+    vibrato: {
+      speed: '4n',     // Tone.js time unit
+      depth: 10        // cents
+    },
+    glideTime: 0.02  // seconds
   })
 
   // Tipos de sintetizador disponibles
@@ -55,7 +65,10 @@ export const useSynthStore = defineStore('synth', () => {
         oscillatorType: loop.synthType || 'sine',
         envelope: { ...loop.envelope },
         harmonicity: loop.harmonicity || 3,
-        modulationIndex: loop.modulationIndex || 10
+        modulationIndex: loop.modulationIndex || 10,
+        tremolo: loop.tremolo || { speed: '8n', depth: 0.3 },
+        vibrato: loop.vibrato || { speed: '4n', depth: 10 },
+        glideTime: loop.glideTime || 0.02
       }
 
       // Inicializar temporal con el config actual
@@ -87,7 +100,10 @@ export const useSynthStore = defineStore('synth', () => {
           oscillator: { type: originalSynthConfig.value.oscillatorType },
           envelope: { ...originalSynthConfig.value.envelope },
           harmonicity: originalSynthConfig.value.harmonicity,
-          modulationIndex: originalSynthConfig.value.modulationIndex
+          modulationIndex: originalSynthConfig.value.modulationIndex,
+          tremolo: originalSynthConfig.value.tremolo,
+          vibrato: originalSynthConfig.value.vibrato,
+          glideTime: originalSynthConfig.value.glideTime
         }
         // Revertir el sintetizador del loop
         audioStore.updateLoopSynth(loopId, cfg)
@@ -119,7 +135,10 @@ export const useSynthStore = defineStore('synth', () => {
           oscillator: { type: tempSynthConfig.value.oscillatorType },
           envelope: { ...tempSynthConfig.value.envelope },
           harmonicity: selectedType !== 'PolySynth' ? tempSynthConfig.value.harmonicity : undefined,
-          modulationIndex: selectedType === 'FMSynth' ? tempSynthConfig.value.modulationIndex : undefined
+          modulationIndex: selectedType === 'FMSynth' ? tempSynthConfig.value.modulationIndex : undefined,
+          tremolo: tempSynthConfig.value.tremolo,
+          vibrato: tempSynthConfig.value.vibrato,
+          glideTime: tempSynthConfig.value.glideTime
         }
         audioStore.updateLoopSynth(loopId, cfg)
       } catch (e) {
@@ -170,6 +189,41 @@ export const useSynthStore = defineStore('synth', () => {
     scheduleApplySynthDebounced()
   }
 
+  // Actualizar tremolo speed
+  const updateTremoloSpeed = (value) => {
+    const num = typeof value === 'number' ? value : parseFloat(value)
+    tempSynthConfig.value.tremolo.speed = isNaN(num) ? value : num
+    scheduleApplySynthDebounced()
+  }
+
+  // Actualizar tremolo depth
+  const updateTremoloDepth = (value) => {
+    const num = typeof value === 'number' ? value : parseFloat(value)
+    tempSynthConfig.value.tremolo.depth = isNaN(num) ? value : num
+    scheduleApplySynthDebounced()
+  }
+
+  // Actualizar vibrato speed
+  const updateVibratoSpeed = (value) => {
+    const num = typeof value === 'number' ? value : parseFloat(value)
+    tempSynthConfig.value.vibrato.speed = isNaN(num) ? value : num
+    scheduleApplySynthDebounced()
+  }
+
+  // Actualizar vibrato depth
+  const updateVibratoDepth = (value) => {
+    const num = typeof value === 'number' ? value : parseFloat(value)
+    tempSynthConfig.value.vibrato.depth = isNaN(num) ? value : num
+    scheduleApplySynthDebounced()
+  }
+
+  // Actualizar glide time
+  const updateGlideTime = (value) => {
+    const num = typeof value === 'number' ? value : parseFloat(value)
+    tempSynthConfig.value.glideTime = isNaN(num) ? value : num
+    scheduleApplySynthDebounced()
+  }
+
   // Previsualizar configuración
   const previewSynth = () => {
     if (currentLoopId.value === null) return
@@ -181,34 +235,19 @@ export const useSynthStore = defineStore('synth', () => {
     if (!loop || !loop.synth) return
 
     try {
-      // Crear sintetizador temporal para preview
-      const tempSynth = createSynthFromConfig(tempSynthConfig.value)
+      // Create basic synth for preview (LFO effects are handled by the main audio engine)
+      const tempSynth = createBasicSynthForPreview(tempSynthConfig.value)
 
-      // Asegurar que el preview suene, sin tocar la cadena del loop
-      try {
-        if (typeof tempSynth.toDestination === 'function') {
-          tempSynth.toDestination()
-        } else {
-          tempSynth.connect(Tone.getContext().destination)
-        }
-      } catch { }
+      // Connect to destination
+      tempSynth.toDestination()
 
-      const DEBUG_VERBOSE = false
-      const ctxState = Tone.context?.state
-      const transportState = Tone.Transport?.state
-      if (DEBUG_VERBOSE) {
-        // Estado de transporte/sesión para preview (silenciado)
-      }
-
-      // Reproducir nota de prueba
+      // Play test note
       const testNote = 'C4'
-      const useTime = ctxState === 'running' ? Tone.Transport?.now?.() : undefined
-      tempSynth.triggerAttackRelease(testNote, '8n', useTime)
+      tempSynth.triggerAttackRelease(testNote, '8n')
 
-      // Limpiar después de un tiempo
+      // Cleanup after a short time
       setTimeout(() => {
-        try { tempSynth.disconnect() } catch { }
-        try { tempSynth.dispose() } catch { }
+        tempSynth.dispose()
       }, 2000)
     } catch (error) {
       console.error('Error en preview:', error)
@@ -231,7 +270,10 @@ export const useSynthStore = defineStore('synth', () => {
         oscillator: { type: tempSynthConfig.value.oscillatorType },
         envelope: { ...tempSynthConfig.value.envelope },
         harmonicity: selectedType !== 'PolySynth' ? tempSynthConfig.value.harmonicity : undefined,
-        modulationIndex: selectedType === 'FMSynth' ? tempSynthConfig.value.modulationIndex : undefined
+        modulationIndex: selectedType === 'FMSynth' ? tempSynthConfig.value.modulationIndex : undefined,
+        tremolo: tempSynthConfig.value.tremolo,
+        vibrato: tempSynthConfig.value.vibrato,
+        glideTime: tempSynthConfig.value.glideTime
       }
 
       audioStore.updateLoopSynth(loopId, cfg)
@@ -243,11 +285,12 @@ export const useSynthStore = defineStore('synth', () => {
     }
   }
 
-  // Crear sintetizador desde configuración
-  const createSynthFromConfig = (config) => {
+  // Create basic synth for preview without LFO (LFO is handled by audio engine)
+  const createBasicSynthForPreview = (config) => {
     const synthConfig = {
       oscillator: { type: config.oscillatorType },
-      envelope: config.envelope
+      envelope: config.envelope,
+      portamento: config.glideTime || 0
     }
 
     let synth
@@ -287,7 +330,8 @@ export const useSynthStore = defineStore('synth', () => {
         synth = new Tone.PluckSynth({
           attackNoise: 1,
           dampening: 4000,
-          resonance: 0.7
+          resonance: 0.7,
+          portamento: config.glideTime || 0
         })
         break
 
@@ -296,12 +340,16 @@ export const useSynthStore = defineStore('synth', () => {
           pitchDecay: 0.05,
           octaves: 10,
           oscillator: { type: config.oscillatorType },
-          envelope: config.envelope
+          envelope: config.envelope,
+          portamento: config.glideTime || 0
         })
         break
 
       default: // PolySynth
-        synth = new Tone.PolySynth(Tone.Synth, synthConfig)
+        synth = new Tone.PolySynth(Tone.Synth, {
+          ...synthConfig,
+          portamento: config.glideTime || 0
+        })
         break
     }
 
@@ -338,10 +386,15 @@ export const useSynthStore = defineStore('synth', () => {
     updateEnvelopeParam,
     updateHarmonicity,
     updateModulationIndex,
+    updateTremoloSpeed,
+    updateTremoloDepth,
+    updateVibratoSpeed,
+    updateVibratoDepth,
+    updateGlideTime,
     previewSynth,
     applySynthConfig,
     cancelSynthChanges,
-    createSynthFromConfig,
+    createBasicSynthForPreview,
     getSynthTypeDescription
   }
 })

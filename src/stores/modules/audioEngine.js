@@ -250,7 +250,9 @@ export const useAudioEngine = () => {
       reverbAmount = 0.3,
       pan = 0,
       volume = 0.5,
-      synthType = 'PolySynth'
+      synthType = 'PolySynth',
+      tremolo = null,
+      vibrato = null
     } = effectsConfig
 
     // Crear sintetizador según el tipo
@@ -284,10 +286,41 @@ export const useAudioEngine = () => {
     const delaySend = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Gain(delayAmount))
     const reverbSend = BYPASS_EFFECTS_FOR_TEST ? null : markRaw(new Tone.Gain(reverbAmount))
 
+    // Create LFO effects for vibrato and tremolo
+    let tremoloLFO = null
+    let vibratoLFO = null
+
+    // Add LFO effects if configured (sync with Tone.js Transport)
+    if (tremolo && tremolo.depth > 0) {
+      tremoloLFO = markRaw(new Tone.LFO({
+        frequency: tremolo.speed || '8n',  // Time unit synced with transport
+        min: 1 - tremolo.depth,
+        max: 1
+      }).start())
+    }
+
+    if (vibrato && vibrato.depth > 0) {
+      vibratoLFO = markRaw(new Tone.LFO({
+        frequency: vibrato.speed || '4n',  // Time unit synced with transport
+        min: -vibrato.depth,
+        max: vibrato.depth
+      }).start())
+    }
+
     // Conectar cadena de audio
     if (BYPASS_EFFECTS_FOR_TEST) {
       synth.connect(masterGain)
     } else {
+      // Connect LFOs to synth before connecting to effects
+      if (tremoloLFO && synth.volume) {
+        tremoloLFO.connect(synth.volume)
+      }
+
+      if (vibratoLFO && synth.detune) {
+        vibratoLFO.connect(synth.detune)
+      }
+
+      // Now connect synth to the main effects chain
       synth.connect(panner)
       synth.connect(delaySend)
       synth.connect(reverbSend)
@@ -305,7 +338,9 @@ export const useAudioEngine = () => {
       synth,
       panner,
       delaySend,
-      reverbSend
+      reverbSend,
+      tremoloLFO,
+      vibratoLFO
     }
   }
 
