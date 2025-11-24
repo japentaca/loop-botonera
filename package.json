@@ -15,17 +15,17 @@
   "description": "",
   "dependencies": {
     "@primevue/themes": "^4.4.1",
-    "@vitejs/plugin-vue": "^6.0.1",
-    "pinia": "^3.0.3",
+    "@vitejs/plugin-vue": "^6.0.2",
+    "pinia": "^3.0.4",
     "primeicons": "^7.0.0",
     "primevue": "^4.4.1",
     "tone": "^15.1.22",
-    "vite": "^7.1.10",
-    "vue": "^3.5.22",
+    "vite": "^7.2.4",
+    "vue": "^3.5.25",
     "vue-router": "^4.6.3",
-    "@tonaljs/note": "^4.0.0",
-    "@tonaljs/interval": "^4.0.0",
-    "@tonaljs/scale": "^4.0.0",
-    "@tonaljs/chord": "^4.0.0"
+    "@tonaljs/note": "^4.12.1",
+    "@tonaljs/interval": "^5.1.0",
+    "@tonaljs/scale": "^4.13.3",
+    "@tonaljs/chord": "^6.1.1"
   }
 }
